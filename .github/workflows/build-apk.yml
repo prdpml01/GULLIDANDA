@@ -18,11 +18,11 @@ jobs:
       with:
         node-version: 20
 
-    - name: Setup Java JDK
+    - name: Setup Java JDK 21
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
-        java-version: '17'
+        java-version: '21'
 
     - name: Create package.json
       run: npm init -y
