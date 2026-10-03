@@ -18,17 +18,17 @@ jobs:
       with:
         node-version: 20
 
-    - name: Setup Java JDK 21
+    - name: Setup Java JDK 17
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
-        java-version: '21'
+        java-version: '17'
 
     - name: Create package.json
       run: npm init -y
 
-    - name: Install Capacitor
-      run: npm install @capacitor/core @capacitor/cli @capacitor/android
+    - name: Install Capacitor 6
+      run: npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
 
     - name: Create www folder with redirect
       run: |
@@ -58,7 +58,7 @@ jobs:
       run: |
         cd android
         chmod +x gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug --stacktrace
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
