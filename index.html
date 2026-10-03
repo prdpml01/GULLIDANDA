@@ -401,7 +401,9 @@ const G = {
   splashTimer: 0,
   coinsEarned: 0, coinsBonus: false,
   marketTab: 'skins',
-  marketMsg: '', marketMsgTimer: 0
+  marketMsg: '', marketMsgTimer: 0,
+  botScore: 0,
+  botBattingTimer: 0
 };
 
 const gulli = { x:0, y:0, vx:0, vy:0, rot:0, rotV:0, grounded:true };
@@ -429,7 +431,12 @@ const NET = {
   oppLive: null, liveRef: null, lastSync: 0,
   tossWinner: null, currentBatsman: null,
   tossStartTime: 0, tossResultStart: 0,
-  tossDecided: false, turnHandedOver: false
+  tossDecided: false, turnHandedOver: false,
+  autopilot: false,
+  autopilotStart: 0,
+  autopilotBot: null,
+  joinPopup: null,
+  joinPopupTimer: 0
 };
 
 function initFirebase(){
@@ -458,6 +465,9 @@ function startOnlineMatchmaking(){
   NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppName = '';
   NET.oppLive = null; NET.tossWinner = null; NET.currentBatsman = null;
   NET.tossDecided = false; NET.turnHandedOver = false;
+  NET.autopilot = false; NET.autopilotStart = 0;
+  NET.autopilotBot = null;
+  NET.joinPopup = null; NET.joinPopupTimer = 0;
   if (!NET.ready && !initFirebase()){ G.banner = 'NETWORK ERROR'; G.bannerTimer = 2.5; setPhase('menu'); return; }
   setPhase('searching'); NET.searching = true;
   NET.searchStart = performance.now(); NET.statusMsg = 'Searching for players...';
@@ -535,8 +545,26 @@ function beginOnlineTurn(){
   initCrowd(); prepareTurn();
 }
 function reportOnlineScore(score){
-  if (!NET.roomRef) return;
+  if (!NET.roomRef && !NET.autopilot) return;
   NET.myDone = true;
+
+  if (NET.autopilot){
+    const playerScore = G.score;
+    let botScore;
+    if (playerScore < 50){
+      botScore = Math.round(30 + Math.random() * 80);
+    } else {
+      botScore = Math.round(playerScore * (0.55 + Math.random() * 0.75));
+    }
+    if (botScore < 20) botScore = 20 + Math.round(Math.random() * 40);
+    G.botScore = botScore;
+    NET.autopilotBot.score = botScore;
+    G.botBattingTimer = 5.0;
+    setPhase('botBatting');
+    beep(600, 0.12, 'triangle', 0.10);
+    return;
+  }
+
   const update = {};
   update[NET.role + '/score'] = score;
   update[NET.role + '/done'] = true;
@@ -583,6 +611,117 @@ function cleanupOnline(){
   NET.oppScore = null; NET.oppDone = false; NET.myDone = false; NET.roomRef = null;
   NET.tossWinner = null; NET.currentBatsman = null;
   NET.tossDecided = false; NET.turnHandedOver = false;
+  NET.autopilot = false; NET.autopilotStart = 0;
+  NET.autopilotBot = null;
+  NET.joinPopup = null; NET.joinPopupTimer = 0;
+}
+
+/* ==================== AUTOPILOT MODE ==================== */
+function startAutopilotMode(){
+  if (!NET.searching) return;
+  NET.searching = false;
+  NET.autopilot = true;
+  NET.autopilotStart = performance.now();
+  NET.autopilotBot = { name: '🤖 AUTO-PILOT', score: 0 };
+  NET.role = 'p1';
+  NET.oppName = NET.autopilotBot.name;
+  NET.myDone = false; NET.oppDone = false;
+  NET.turnHandedOver = false;
+
+  try {
+    if (NET.ready && NET.db){
+      const id = genRoomId();
+      NET.roomId = id;
+      NET.roomRef = NET.db.ref('rooms/' + id);
+      NET.roomRef.set({
+        status: 'autopilot',
+        createdAt: Date.now(),
+        p1: { name: NET.myName, score: 0, done: false },
+        p2: { name: '🤖 AUTO-PILOT', score: 0, done: false, isBot: true }
+      }).then(()=>{ watchAutopilotRoom(); }).catch(()=>{});
+    }
+  } catch(e){}
+
+  NET.tossWinner = 'p1';
+  NET.currentBatsman = 'p1';
+  NET.tossStartTime = performance.now();
+  NET.tossResultStart = 0;
+  setPhase('toss');
+  trackEvent('autopilot_start', {});
+}
+
+function watchAutopilotRoom(){
+  if (!NET.roomRef) return;
+  if (NET.listener){ try{ NET.roomRef.off('value', NET.listener); }catch(e){} }
+  NET.listener = NET.roomRef.on('value', snap => {
+    const data = snap.val();
+    if (!data || !data.p2) return;
+    const p2 = data.p2;
+    if (!p2.isBot && p2.name && p2.name.indexOf('🤖') === -1){
+      if (!NET.joinPopup || NET.joinPopup.name !== p2.name){
+        NET.joinPopup = { name: p2.name };
+        NET.joinPopupTimer = 15;
+        beep(1200, 0.12, 'triangle', 0.14);
+        setTimeout(()=>beep(1600, 0.15, 'triangle', 0.13), 120);
+        setTimeout(()=>beep(2000, 0.18, 'triangle', 0.12), 250);
+        trackEvent('autopilot_join_popup', { joiner: p2.name });
+      }
+    }
+  });
+}
+
+function acceptJoin(){
+  if (!NET.joinPopup) return;
+  const name = NET.joinPopup.name;
+  NET.joinPopup = null;
+  NET.joinPopupTimer = 0;
+  NET.autopilot = false;
+  NET.oppName = name;
+  NET.myDone = false; NET.oppDone = false;
+  NET.turnHandedOver = false;
+  NET.tossDecided = false;
+
+  if (NET.roomRef){
+    const winner = Math.random() < 0.5 ? 'p1' : 'p2';
+    NET.roomRef.update({
+      status: 'playing',
+      'p1/score': 0, 'p1/done': false,
+      'p2/score': 0, 'p2/done': false,
+      'p2/isBot': null,
+      tossWinner: winner,
+      currentBatsman: winner,
+      joinedAt: Date.now()
+    }).catch(()=>{});
+    NET.tossWinner = winner;
+    NET.currentBatsman = winner;
+  }
+
+  G.banner = '🎮 ' + name + ' JOINED!';
+  G.bannerTimer = 2.5;
+  crowdExcitement = 1.2;
+  playCheer(1.0);
+  beep(1400, 0.15, 'triangle', 0.13);
+  setTimeout(()=>beep(1800, 0.18, 'triangle', 0.13), 150);
+
+  NET.tossStartTime = performance.now();
+  setPhase('toss');
+}
+
+function finishBotMatch(){
+  const myScore = G.score;
+  const oppScore = G.botScore;
+  G.players = [
+    { name: NET.myName, color: getActiveSkin().color, score: myScore },
+    { name: NET.autopilotBot ? NET.autopilotBot.name : '🤖 AUTO-PILOT', color: PLAYER_COLORS[1], score: oppScore }
+  ];
+  G.gameOverWinner = myScore > oppScore ? 0 : (myScore < oppScore ? 1 : -1);
+  G.gameOverMsg = myScore === oppScore ? 'DRAW!' : (myScore > oppScore ? 'YOU WIN!' : 'YOU LOSE');
+  G.mode = 'onlineResults';
+  updateStatsOnline(myScore, myScore > oppScore);
+  G.celebrationTimer = 0; G.confettiTimer = 0;
+  setPhase('gameOver');
+  if (myScore >= oppScore){ crowdExcitement = 2; playCheer(1.4); }
+  else { beep(240,0.3,'sawtooth',0.10); }
 }
 
 const shotButtons = [];
@@ -1123,7 +1262,7 @@ function updateParticles(dt){
 /* ==================== UPDATE ==================== */
 function update(dt){
   NET.lastSync = (NET.lastSync || 0) + dt;
-  if (NET.lastSync > 0.15 && NET.roomRef && NET.role && G.mode === 'online'){
+  if (NET.lastSync > 0.15 && NET.roomRef && NET.role && G.mode === 'online' && !NET.autopilot){
     NET.lastSync = 0;
     let phaseLabel = G.phase;
     if (G.phase === 'power' || G.phase === 'air') phaseLabel = 'BATTING';
@@ -1203,6 +1342,33 @@ function update(dt){
     }
     return;
   }
+
+  // ===== AUTOPILOT 30-SEC TIMER =====
+  if (G.phase === 'searching' && NET.searching){
+    const elapsed = performance.now() - NET.searchStart;
+    const remaining = Math.max(0, 30 - Math.floor(elapsed / 1000));
+    NET.statusMsg = remaining > 0
+      ? 'Searching... Auto-pilot in ' + remaining + 's'
+      : 'Starting auto-pilot...';
+    if (elapsed >= 30000){
+      startAutopilotMode();
+      return;
+    }
+  }
+
+  // ===== JOIN POPUP COUNTDOWN =====
+  if (NET.joinPopupTimer > 0){
+    NET.joinPopupTimer -= dt;
+    if (NET.joinPopupTimer <= 0){ NET.joinPopup = null; NET.joinPopupTimer = 0; }
+  }
+
+  // ===== BOT BATTING PHASE =====
+  if (G.phase === 'botBatting'){
+    G.botBattingTimer -= dt;
+    if (G.botBattingTimer <= 0){ finishBotMatch(); }
+    return;
+  }
+
   if (G.phase === 'searching' || G.phase === 'waitingOpp' || G.phase === 'market'){ return; }
   if (G.phase === 'toss'){
     if (performance.now() - NET.tossStartTime > TOSS_DURATION){ NET.tossResultStart = performance.now(); setPhase('tossResult'); }
@@ -1377,7 +1543,6 @@ const AUTH_BOXES = {
 };
 function getLevelButtonRect(i){ const bw = 140, bh = 90, gap = 20; const total = bw*5 + gap*4, startX = W/2 - total/2; return { x: startX + i*(bw+gap), y: 200, w: bw, h: bh }; }
 
-/* Market item rects */
 function getMarketItemRects(tab, count){
   const cols = 3;
   const bw = 250, bh = 158, gapX = 24, gapY = 16;
@@ -1392,7 +1557,6 @@ function getMarketItemRects(tab, count){
   return rects;
 }
 
-/* Purchase/equip logic */
 function marketBuySkin(id){
   const item = SHOP_SKINS.find(s => s.id === id); if (!item) return;
   if (ACCOUNT.ownedSkins.indexOf(id) >= 0){ ACCOUNT.activeSkin = id; saveSession(); syncAccountStats(); playPurchaseSound(); G.marketMsg = 'Equipped: ' + item.name; G.marketMsgTimer = 1.5; return; }
@@ -1547,7 +1711,20 @@ function handleMenuClick(x, y){
 function onInput(e){
   if (!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(err){} }
   if (G.phase === 'splash'){ if (G.splashTimer > 0.7){ G.splashTimer = SPLASH_DURATION; } return; }
+
+  // ===== JOIN POPUP CLICK =====
+  if (NET.joinPopup && NET.joinPopupTimer > 0 && e){
+    const {x,y} = canvasCoordsFromEvent(e);
+    const bw = 440, bh = 80;
+    const bx = W/2 - bw/2, by = 90;
+    if (x >= bx && x <= bx+bw && y >= by && y <= by+bh){
+      acceptJoin();
+      return;
+    }
+  }
+
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
+  if (G.phase === 'botBatting') return;
   if (G.phase==='menu' || G.phase==='levelSelect' || G.phase==='playerSelect'
       || G.phase==='turnIntro' || G.phase==='turnEnd' || G.phase==='gameOver'
       || G.phase==='login' || G.phase==='register' || G.phase==='guest' || G.phase==='leaderboard'
@@ -1606,6 +1783,7 @@ window.addEventListener('keydown', e=>{
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
   if (G.phase === 'searching'){ if (e.key==='Escape'){ NET.searching = false; cleanupOnline(); setPhase('menu'); e.preventDefault(); } return; }
   if (G.phase === 'waitingOpp'){ return; }
+  if (G.phase === 'botBatting'){ return; }
   if (G.phase === 'nameEntry'){ handleNameEntryKey(e); return; }
   if (G.phase === 'menu'){
     if (e.key==='1'){ setPhase('levelSelect'); e.preventDefault(); return; }
@@ -1866,7 +2044,7 @@ function drawPlayer(){
     ctx.restore();
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   }
-  if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='waitingOpp' && G.phase!=='toss' && G.phase!=='tossResult' && G.phase!=='login' && G.phase!=='register' && G.phase!=='guest' && G.phase!=='leaderboard' && G.phase!=='profileView' && G.phase!=='market'){
+  if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='waitingOpp' && G.phase!=='toss' && G.phase!=='tossResult' && G.phase!=='login' && G.phase!=='register' && G.phase!=='guest' && G.phase!=='leaderboard' && G.phase!=='profileView' && G.phase!=='market' && G.phase!=='botBatting'){
     const ang = dandaAngle();
     const handX = x+6, handY = shoulderY+6;
     ctx.save(); ctx.translate(handX, handY); ctx.rotate(ang);
@@ -2156,7 +2334,7 @@ function drawCoinIcon(x, y, r, alpha){
   ctx.restore();
 }
 function drawCurrentPlayerBadge(){
-  if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView'||G.phase==='market') return;
+  if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView'||G.phase==='market'||G.phase==='botBatting') return;
   const p = G.players[G.currentPlayer];
   if (!p) return;
   const bw = 280, bh = 42; const bx = W/2 - bw/2, by = 14;
@@ -2187,7 +2365,7 @@ function drawOverlays(){
       ||G.phase==='turnIntro'||G.phase==='turnEnd'||G.phase==='gameOver'
       ||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'
       ||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'
-      ||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView'||G.phase==='market') return;
+      ||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView'||G.phase==='market'||G.phase==='botBatting') return;
   if (G.bannerTimer>0 && G.banner){
     const a = clamp(G.bannerTimer/0.4, 0, 1);
     ctx.globalAlpha = a;
@@ -2197,6 +2375,7 @@ function drawOverlays(){
     else if (G.banner==='SAFE!') c='#8affa0';
     else if (G.banner.indexOf('LOCKED') >= 0 || G.banner.indexOf('REGISTER') >= 0) c='#ff8a8a';
     else if (G.banner.indexOf('LIFE') >= 0) c='#ff6b8a';
+    else if (G.banner.indexOf('JOINED') >= 0) c='#8affa0';
     centerText(G.banner, 380, 54, c);
     ctx.globalAlpha=1;
   }
@@ -3398,8 +3577,109 @@ function drawSearching(){
   ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 5; ctx.lineCap='round';
   ctx.beginPath(); ctx.arc(cx, cy, r, t*4, t*4 + Math.PI*1.2); ctx.stroke();
   ctx.restore();
-  centerText(NET.statusMsg || 'Searching...', 460, 13, 'rgba(255,255,255,0.55)');
+  centerText(NET.statusMsg || 'Searching...', 460, 14, 'rgba(255,209,102,0.85)');
+  const elapsed = performance.now() - NET.searchStart;
+  const remain = Math.max(0, 30 - Math.floor(elapsed / 1000));
+  const barW = 300, barH = 5, barX = W/2 - barW/2, barY = 485;
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  rr(ctx, barX, barY, barW, barH, 2); ctx.fill();
+  ctx.fillStyle = remain > 10 ? '#8affa0' : remain > 5 ? '#ffbe0b' : '#ff8a8a';
+  rr(ctx, barX, barY, barW * (elapsed / 30000 > 1 ? 1 : elapsed / 30000), barH, 2); ctx.fill();
+  centerText('Auto-pilot bot in ' + remain + 's', 510, 12, 'rgba(255,255,255,0.65)');
   for (const b of menuButtons) drawMenuButton(b);
+}
+
+/* ==================== JOIN POPUP + BOT BATTING ==================== */
+function drawJoinPopup(){
+  if (!NET.joinPopup || NET.joinPopupTimer <= 0) return;
+  const popup = NET.joinPopup;
+  const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 200);
+  const bw = 440, bh = 80;
+  const bx = W/2 - bw/2, by = 90;
+
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, NET.joinPopupTimer);
+
+  ctx.shadowColor = 'rgba(138,255,160,' + (pulse * 0.9) + ')';
+  ctx.shadowBlur = 26 + pulse * 8;
+
+  rr(ctx, bx, by, bw, bh, 16);
+  const grd = ctx.createLinearGradient(bx, by, bx, by+bh);
+  grd.addColorStop(0, 'rgba(35,70,50,0.97)');
+  grd.addColorStop(1, 'rgba(15,30,25,0.97)');
+  ctx.fillStyle = grd; ctx.fill();
+  ctx.strokeStyle = '#8affa0'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.font = '900 26px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffd166';
+  ctx.fillText('🔔', bx + 18, by + bh/2);
+
+  ctx.font = '900 22px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#8affa0';
+  ctx.fillText(popup.name + ' IS ONLINE!', bx + 58, by + 26);
+
+  ctx.font = '700 13px system-ui,sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillText('Waiting to play — Tap here to JOIN now', bx + 58, by + 54);
+
+  const ax = bx + bw - 36 + Math.sin(performance.now()/280) * 5;
+  ctx.fillStyle = '#8affa0';
+  ctx.font = '900 30px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('▶', ax, by + bh/2);
+
+  const pbW = bw - 40, pbX = bx + 20, pbY = by + bh - 8;
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  rr(ctx, pbX, pbY, pbW, 4, 2); ctx.fill();
+  ctx.fillStyle = '#8affa0';
+  rr(ctx, pbX, pbY, pbW * (NET.joinPopupTimer / 15), 4, 2); ctx.fill();
+
+  ctx.restore();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+
+function drawBotBattingOverlay(){
+  if (G.phase !== 'botBatting') return;
+  ctx.fillStyle = 'rgba(12,16,28,0.88)';
+  ctx.fillRect(0, 0, W, H);
+
+  const t = performance.now() / 1000;
+  const cx = W/2, cy = 200;
+  const bob = Math.sin(t * 3) * 6;
+
+  ctx.save();
+  ctx.translate(cx, cy + bob);
+
+  const glow = ctx.createRadialGradient(0, 0, 10, 0, 0, 100);
+  glow.addColorStop(0, 'rgba(92,158,224,0.5)');
+  glow.addColorStop(1, 'rgba(92,158,224,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI*2); ctx.fill();
+
+  ctx.font = '900 84px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('🤖', 0, 0);
+  ctx.restore();
+
+  centerText('🤖 AUTO-PILOT IS BATTING...', 320, 30, '#5c9ee0');
+  centerText('Your score: ' + G.score + ' pts', 360, 22, '#ffd166');
+
+  const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
+  centerText('Simulating opponent innings' + dots, 400, 16, 'rgba(255,255,255,0.75)');
+
+  const pbW = 380, pbH = 6, pbX = W/2 - pbW/2, pbY = 440;
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  rr(ctx, pbX, pbY, pbW, pbH, 3); ctx.fill();
+  const progress = 1 - clamp(G.botBattingTimer / 5.0, 0, 1);
+  const pbGrd = ctx.createLinearGradient(pbX, 0, pbX + pbW, 0);
+  pbGrd.addColorStop(0, '#5c9ee0'); pbGrd.addColorStop(1, '#ffd166');
+  ctx.fillStyle = pbGrd;
+  rr(ctx, pbX, pbY, pbW * progress, pbH, 3); ctx.fill();
+
+  centerText('Get ready for results...', 480, 14, 'rgba(255,209,102,0.8)');
 }
 
 /* ==================== MAIN RENDER ==================== */
@@ -3427,6 +3707,7 @@ function draw(){
   else if (G.phase === 'toss'){ drawToss(); }
   else if (G.phase === 'tossResult'){ drawTossResult(); }
   else if (G.phase === 'waitingOpp'){ drawWaitingOpp(); }
+  else if (G.phase === 'botBatting'){ drawBotBattingOverlay(); }
   else if (G.phase === 'nameEntry'){ if (fielders.length === 0) buildFielders(); for (const f of fielders) drawFielder(f); drawPlayer(); drawNameEntry(); }
   else if (G.phase === 'turnIntro'){ drawDistanceMarkers(); for (const f of fielders) drawFielder(f); drawPlayer(); drawEffects(); drawTurnIntro(); }
   else if (G.phase === 'turnEnd'){ drawDistanceMarkers(); for (const f of fielders) drawFielder(f); drawPlayer(); drawEffects(); drawTurnEnd(); }
@@ -3445,6 +3726,7 @@ function draw(){
   vg.addColorStop(1,'rgba(0,0,0,0.32)');
   ctx.fillStyle=vg;
   ctx.fillRect(0,0,W,H);
+  drawJoinPopup();
 }
 
 /* ==================== HUD ==================== */
@@ -3460,7 +3742,7 @@ function updateHUD(){
       || G.phase === 'nameEntry' || G.phase === 'splash' || G.phase === 'login'
       || G.phase === 'register' || G.phase === 'guest' || G.phase === 'searching'
       || G.phase === 'toss' || G.phase === 'tossResult' || G.phase === 'leaderboard'
-      || G.phase === 'profileView' || G.phase === 'market'
+      || G.phase === 'profileView' || G.phase === 'market' || G.phase === 'botBatting'
       || (G.phase === 'waitingOpp' && !NET.myDone)){
     hud.style.display = 'none'; return;
   }
