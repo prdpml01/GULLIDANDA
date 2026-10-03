@@ -2138,4 +2138,899 @@ function drawSplash(){
   tg.addColorStop(0.7, '#e6a53d'); tg.addColorStop(1, '#a06b12');
   ctx.fillStyle = tg;
   ctx.shadowColor = 'rgba(255, 209, 102, 0.85)';
-  ctx.shadowBlur
+  ctx.shadowBlur = 22 + Math.sin(t * 4) * 8;
+  ctx.fillText('GULLI  DANDA', 0, 0);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(255,240,180,0.9)';
+  drawStar(-260, -6, 10, 4, 5);
+  drawStar( 260, -6, 10, 4, 5);
+  ctx.restore();
+  const divY = 250;
+  ctx.strokeStyle = 'rgba(255, 209, 102, 0.55)'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(W/2 - 220, divY); ctx.lineTo(W/2 - 60, divY);
+  ctx.moveTo(W/2 + 60, divY); ctx.lineTo(W/2 + 220, divY);
+  ctx.stroke();
+  ctx.font = '600 20px system-ui, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255,255,255,0.72)';
+  ctx.fillText('— POWERED BY —', W/2, divY);
+  const nameY = 320;
+  const namePulse = 1 + Math.sin(t * 2.4 + 0.8) * 0.025;
+  ctx.save();
+  ctx.translate(W/2, nameY); ctx.scale(namePulse, namePulse);
+  ctx.font = '900 58px system-ui, -apple-system, sans-serif';
+  ctx.lineJoin = 'round'; ctx.lineWidth = 12;
+  ctx.strokeStyle = 'rgba(10, 14, 24, 0.9)';
+  ctx.strokeText('PRADEEP  SINGH', 0, 0);
+  const ng = ctx.createLinearGradient(0, -35, 0, 30);
+  ng.addColorStop(0, '#ffffff'); ng.addColorStop(0.5, '#f0f4ff'); ng.addColorStop(1, '#a8c0ff');
+  ctx.fillStyle = ng;
+  ctx.shadowColor = 'rgba(180, 210, 255, 0.8)'; ctx.shadowBlur = 18;
+  ctx.fillText('PRADEEP  SINGH', 0, 0);
+  ctx.shadowBlur = 0; ctx.restore();
+  ctx.save();
+  ctx.translate(W/2, nameY - 58);
+  const cw = 30, ch = 22;
+  ctx.fillStyle = '#ffd166';
+  ctx.beginPath();
+  ctx.moveTo(-cw/2, ch/2); ctx.lineTo(-cw/2, -ch/3); ctx.lineTo(-cw/6, ch/6);
+  ctx.lineTo(0, -ch/2); ctx.lineTo(cw/6, ch/6); ctx.lineTo(cw/2, -ch/3);
+  ctx.lineTo(cw/2, ch/2); ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(140, 90, 20, 0.7)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.restore();
+  const pbW = 380, pbH = 4;
+  const pbX = W/2 - pbW/2, pbY = H - 48;
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  rr(ctx, pbX, pbY, pbW, pbH, 2); ctx.fill();
+  const progress = clamp(t / SPLASH_DURATION, 0, 1);
+  ctx.fillStyle = '#ffd166';
+  rr(ctx, pbX, pbY, pbW * progress, pbH, 2); ctx.fill();
+  if (t > 0.8 && t < SPLASH_DURATION - 0.4){
+    const hintPulse = 0.55 + 0.45 * Math.sin(t * 4);
+    ctx.globalAlpha = alpha * hintPulse;
+    ctx.font = '600 13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.fillText('click  or  press SPACE  to skip', W/2, pbY - 14);
+  }
+  ctx.restore();
+}
+function drawLoginScreen(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('🔓  LOGIN', 90, 42, '#ffd166');
+  centerText('Enter your mobile number to continue', 132, 16, 'rgba(255,255,255,0.7)');
+
+  const boxW = 440, boxH = 60;
+  const boxX = W/2 - boxW/2, boxY = 210;
+  const isFocusPhone = ACCOUNT.formFocus === 'phone';
+  ctx.save();
+  rr(ctx, boxX, boxY, boxW, boxH, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
+  ctx.strokeStyle = isFocusPhone ? '#ffd166' : 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = isFocusPhone ? 3 : 2; ctx.stroke();
+  ctx.font = '600 13px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(255,209,102,0.85)';
+  ctx.fillText('📱 MOBILE NUMBER', boxX + 20, boxY - 22);
+  ctx.font = '900 26px system-ui,sans-serif';
+  ctx.textBaseline = 'middle';
+  const phone = ACCOUNT.formPhone || '';
+  ctx.fillStyle = phone ? '#ffffff' : 'rgba(255,255,255,0.32)';
+  ctx.fillText(phone || '9876543210', boxX + 20, boxY + boxH/2);
+  if (isFocusPhone){
+    const blink = Math.sin(performance.now()/280) > 0;
+    if (blink && phone.length < 10){
+      const tw = ctx.measureText(phone).width;
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(boxX + 20 + tw + 3, boxY + 14, 3, boxH - 28);
+    }
+  }
+  ctx.restore();
+  centerText('Tap box to type  •  Enter to login', W/2, 300, 13, 'rgba(255,255,255,0.55)');
+
+  if (ACCOUNT.loading) centerText('Logging in...', 350, 18, 'rgba(255,209,102,0.9)');
+  else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 350, 16, '#ff8a8a');
+  for (const b of menuButtons) drawMenuButton(b, b.id === 'doLogin' ? '#ffd166' : '#ffffff');
+}
+function drawRegisterScreen(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('✍  REGISTER', 60, 36, '#ffd166');
+  centerText('Create your account — one-time setup', 100, 14, 'rgba(255,255,255,0.7)');
+
+  const nameBox = { x: W/2 - 220, y: 150, w: 440, h: 56 };
+  const isFocusName = ACCOUNT.formFocus === 'name';
+  ctx.save();
+  rr(ctx, nameBox.x, nameBox.y, nameBox.w, nameBox.h, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
+  ctx.strokeStyle = isFocusName ? '#ffd166' : 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = isFocusName ? 3 : 2; ctx.stroke();
+  ctx.font = '600 12px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(255,209,102,0.85)';
+  ctx.fillText('👤 YOUR NAME', nameBox.x + 20, nameBox.y - 20);
+  ctx.font = '900 24px system-ui,sans-serif';
+  ctx.textBaseline = 'middle';
+  const nm = ACCOUNT.formName || '';
+  ctx.fillStyle = nm ? '#ffffff' : 'rgba(255,255,255,0.32)';
+  ctx.fillText(nm || 'PLAYER', nameBox.x + 20, nameBox.y + nameBox.h/2);
+  if (isFocusName){
+    const blink = Math.sin(performance.now()/280) > 0;
+    if (blink && nm.length < 10){
+      const tw = ctx.measureText(nm || 'PLAYER').width;
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(nameBox.x + 20 + tw + 3, nameBox.y + 13, 3, nameBox.h - 26);
+    }
+  }
+  ctx.restore();
+
+  const phoneBox = { x: W/2 - 220, y: 250, w: 440, h: 56 };
+  const isFocusPhone = ACCOUNT.formFocus === 'phone';
+  ctx.save();
+  rr(ctx, phoneBox.x, phoneBox.y, phoneBox.w, phoneBox.h, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
+  ctx.strokeStyle = isFocusPhone ? '#ffd166' : 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = isFocusPhone ? 3 : 2; ctx.stroke();
+  ctx.font = '600 12px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(255,209,102,0.85)';
+  ctx.fillText('📱 MOBILE NUMBER (10 digits)', phoneBox.x + 20, phoneBox.y - 20);
+  ctx.font = '900 24px system-ui,sans-serif';
+  ctx.textBaseline = 'middle';
+  const ph = ACCOUNT.formPhone || '';
+  ctx.fillStyle = ph ? '#ffffff' : 'rgba(255,255,255,0.32)';
+  ctx.fillText(ph || '9876543210', phoneBox.x + 20, phoneBox.y + phoneBox.h/2);
+  if (isFocusPhone){
+    const blink = Math.sin(performance.now()/280) > 0;
+    if (blink && ph.length < 10){
+      const tw = ctx.measureText(ph).width;
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(phoneBox.x + 20 + tw + 3, phoneBox.y + 13, 3, phoneBox.h - 26);
+    }
+  }
+  ctx.restore();
+  centerText('Tap a box to type  •  Tab to switch', W/2, 328, 13, 'rgba(255,255,255,0.55)');
+  if (ACCOUNT.loading) centerText('Creating account...', 380, 18, 'rgba(255,209,102,0.9)');
+  else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 380, 15, '#ff8a8a');
+  for (const b of menuButtons) drawMenuButton(b, b.id === 'doRegister' ? '#ffd166' : '#ffffff');
+}
+function drawLeaderboard(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('🏆  GLOBAL LEADERBOARD', 55, 32, '#ffd166');
+  centerText('Top online scores worldwide', 92, 14, 'rgba(255,255,255,0.65)');
+
+  if (!LEADERBOARD.data){
+    centerText('Loading...', 260, 24, 'rgba(255,255,255,0.7)');
+  } else if (LEADERBOARD.data.length === 0){
+    centerText('No scores yet. Be the first!', 260, 20, 'rgba(255,255,255,0.7)');
+  } else {
+    const bw = 620, bh = 30, gap = 6;
+    const startY = 125, startX = W/2 - bw/2;
+    for (let i=0; i<LEADERBOARD.data.length; i++){
+      const p = LEADERBOARD.data[i];
+      const y = startY + i*(bh + gap);
+      const isMe = (p.phone === ACCOUNT.phone);
+      ctx.save();
+      rr(ctx, startX, y, bw, bh, 8);
+      ctx.fillStyle = isMe ? 'rgba(255,209,102,0.25)' : 'rgba(20,25,40,0.7)';
+      ctx.fill();
+      ctx.strokeStyle = isMe ? '#ffd166' : 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = isMe ? 2.5 : 1; ctx.stroke();
+      ctx.font = '900 13px system-ui,sans-serif';
+      ctx.textAlign='left'; ctx.textBaseline='middle';
+      const medal = i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : ('#'+(i+1));
+      ctx.fillStyle = i<3 ? '#ffd166' : 'rgba(255,255,255,0.7)';
+      ctx.fillText(medal, startX + 14, y + bh/2);
+      ctx.fillStyle = isMe ? '#ffd166' : '#ffffff';
+      ctx.font = '900 14px system-ui,sans-serif';
+      ctx.fillText(p.name || 'PLAYER', startX + 62, y + bh/2);
+      ctx.textAlign='right';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText((p.bestOnline||0) + ' m', startX + bw - 14, y + bh/2);
+      ctx.restore();
+    }
+  }
+  for (const b of menuButtons) drawMenuButton(b, '#ffd166');
+}
+function drawProfileView(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('👤  YOUR PROFILE', 55, 30, '#ffd166');
+
+  const cx = W/2, cy = 145, r = 46;
+  ctx.save();
+  const grd = ctx.createRadialGradient(cx - 15, cy - 15, 5, cx, cy, r);
+  grd.addColorStop(0, '#ffd166'); grd.addColorStop(1, '#c99a2e');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.font = '900 44px system-ui,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillText((ACCOUNT.name || 'P').charAt(0), cx, cy + 2);
+  ctx.restore();
+
+  centerText(ACCOUNT.name, 220, 30, '#ffffff');
+  centerText('📱 ' + ACCOUNT.phone, 252, 16, 'rgba(255,255,255,0.6)');
+
+  const stats = [
+    { label:'Best Single', value: ACCOUNT.bestSingle + 'm', color:'#ffd166' },
+    { label:'Best Online', value: ACCOUNT.bestOnline + 'm', color:'#8affa0' },
+    { label:'Wins', value: ACCOUNT.wins, color:'#5c9ee0' },
+    { label:'Losses', value: ACCOUNT.losses, color:'#ff8a8a' },
+    { label:'Matches', value: ACCOUNT.matchesPlayed, color:'#e0a95c' },
+    { label:'Total Runs', value: ACCOUNT.totalRuns + 'm', color:'#a06bff' }
+  ];
+  const cols = 3, bw = 170, bh = 62, gap = 12;
+  const totalW = cols*bw + (cols-1)*gap;
+  const startX = W/2 - totalW/2, startY = 285;
+  for (let i=0; i<stats.length; i++){
+    const col = i % cols, row = Math.floor(i / cols);
+    const x = startX + col*(bw+gap);
+    const y = startY + row*(bh+gap);
+    ctx.save();
+    rr(ctx, x, y, bw, bh, 10);
+    ctx.fillStyle = 'rgba(20,25,40,0.75)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.font = '700 11px system-ui,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillText(stats[i].label.toUpperCase(), x + bw/2, y + 18);
+    ctx.font = '900 22px system-ui,sans-serif';
+    ctx.fillStyle = stats[i].color;
+    ctx.fillText(String(stats[i].value), x + bw/2, y + 42);
+    ctx.restore();
+  }
+  for (const b of menuButtons) drawMenuButton(b, b.id === 'logout' ? '#ff8a8a' : '#ffffff');
+}
+function drawToss(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('🪙  TOSS', 100, 46, '#ffd166');
+  centerText('Deciding who bats first...', 155, 18, 'rgba(255,255,255,0.7)');
+  const elapsed = performance.now() - NET.tossStartTime;
+  const t = clamp(elapsed / TOSS_DURATION, 0, 1);
+  const cx = W/2, cy = 330;
+  const scaleY = Math.abs(Math.cos(t * Math.PI * 7));
+  const radius = 70;
+  ctx.save(); ctx.globalAlpha = 0.4; ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + radius + 20, radius * 0.7 * scaleY, 12 * scaleY, 0, 0, Math.PI*2);
+  ctx.fill(); ctx.restore();
+  ctx.save();
+  ctx.translate(cx, cy); ctx.scale(1, scaleY + 0.08);
+  const grd = ctx.createRadialGradient(-20, -20, 5, 0, 0, radius);
+  grd.addColorStop(0, '#fff4c2'); grd.addColorStop(0.55, '#ffd166'); grd.addColorStop(1, '#a06b12');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(120, 80, 20, 0.8)'; ctx.lineWidth = 4; ctx.stroke();
+  ctx.fillStyle = 'rgba(140, 90, 20, 0.7)';
+  drawStar(0, 0, radius * 0.55, radius * 0.22, 5);
+  ctx.restore();
+  const pbW = 320, pbH = 4, pbX = W/2 - pbW/2, pbY = 480;
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  rr(ctx, pbX, pbY, pbW, pbH, 2); ctx.fill();
+  ctx.fillStyle = '#ffd166';
+  rr(ctx, pbX, pbY, pbW * t, pbH, 2); ctx.fill();
+}
+function drawTossResult(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  const iWon = NET.tossWinner === NET.role;
+  centerText('🪙  TOSS RESULT', 100, 38, '#ffd166');
+  const cx = W/2, cy = 210, radius = 55;
+  ctx.save();
+  ctx.translate(cx, cy);
+  const grd = ctx.createRadialGradient(-15, -15, 5, 0, 0, radius);
+  grd.addColorStop(0, '#fff4c2'); grd.addColorStop(0.55, '#ffd166'); grd.addColorStop(1, '#a06b12');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(120, 80, 20, 0.8)'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = 'rgba(140, 90, 20, 0.7)';
+  drawStar(0, 0, radius * 0.55, radius * 0.22, 5);
+  ctx.restore();
+  if (iWon){
+    const pulse = 0.85 + 0.15 * Math.sin(performance.now()/280);
+    ctx.save(); ctx.globalAlpha = pulse;
+    centerText('✨  YOU WON THE TOSS!  ✨', 310, 36, '#8affa0');
+    ctx.restore();
+    centerText('You will bat FIRST', 360, 24, '#ffffff');
+    centerText('Get ready to smash some gullis!', 395, 17, 'rgba(255,255,255,0.7)');
+  } else {
+    centerText((NET.oppName || 'OPPONENT') + ' WON THE TOSS', 310, 30, '#ff8a8a');
+    centerText('They will bat FIRST', 360, 24, '#ffffff');
+    centerText('You field first — watch their innings!', 395, 17, 'rgba(255,255,255,0.7)');
+  }
+  const elapsed = performance.now() - NET.tossResultStart;
+  const remaining = Math.max(0, Math.ceil((TOSS_RESULT_DURATION - elapsed) / 1000));
+  centerText('Starting in ' + remaining + '...', 460, 22, 'rgba(255,209,102,0.9)');
+}
+function drawWaitingOpp(){
+  ctx.fillStyle = 'rgba(12,16,28,0.88)';
+  ctx.fillRect(0,0,W,H);
+  const opp = NET.oppLive;
+  const iAmWaitingForMyTurn = !NET.myDone;
+  const headerColor = iAmWaitingForMyTurn ? PLAYER_COLORS[1] : '#ffd166';
+  if (iAmWaitingForMyTurn){
+    centerText((NET.oppName || 'OPPONENT') + ' IS BATTING FIRST', 55, 26, headerColor);
+    centerText('Watch their innings below — you bat next!', 90, 15, 'rgba(255,255,255,0.7)');
+  } else {
+    centerText('🏏  YOUR INNINGS DONE', 50, 22, '#ffd166');
+    centerText('Your Score: ' + G.score + ' m', 82, 22, '#8affa0');
+    centerText('Watching ' + (NET.oppName || 'opponent') + ' bat', 112, 14, 'rgba(255,255,255,0.7)');
+  }
+  const px = 100, py = 135, pw = W - 200, ph = 330;
+  ctx.save();
+  rr(ctx, px, py, pw, ph, 16);
+  ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
+  ctx.strokeStyle = PLAYER_COLORS[1]; ctx.lineWidth = 3; ctx.stroke();
+  ctx.font = '900 18px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = PLAYER_COLORS[1];
+  ctx.fillText('LIVE: ' + (NET.oppName || 'OPPONENT'), px + pw/2, py + 12);
+  if (opp){
+    const oppScore = opp.score || 0;
+    const phaseLabel = opp.phase || 'BATTING';
+    ctx.font = '900 36px system-ui,sans-serif';
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText(oppScore + ' m', px + pw/2, py + 38);
+    ctx.font = '700 14px system-ui,sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText('Status: ' + phaseLabel, px + pw/2, py + 82);
+    const miniX = px + 40, miniY = py + 115;
+    const miniW = pw - 80, miniH = 130;
+    ctx.fillStyle = 'rgba(90,140,70,0.35)';
+    rr(ctx, miniX, miniY, miniW, miniH, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(miniX, miniY + miniH - 20);
+    ctx.lineTo(miniX + miniW, miniY + miniH - 20);
+    ctx.stroke();
+    ctx.fillStyle = '#b07c42';
+    ctx.fillRect(miniX + 18, miniY + miniH - 30, 8, 12);
+    const scaleX = (miniW - 40) / 1600;
+    const scaleY = (miniH - 40) / 500;
+    const gx = Math.max(0, Math.min(1600, opp.gulliX || 0));
+    const gy = Math.max(0, Math.min(500, opp.gulliY || 400));
+    const dotX = miniX + 20 + gx * scaleX;
+    const dotY = miniY + miniH - 30 - (500 - gy) * scaleY;
+    ctx.strokeStyle = 'rgba(255,209,102,0.35)'; ctx.lineWidth = 1.5;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath();
+    ctx.moveTo(miniX + 22, miniY + miniH - 24);
+    ctx.lineTo(dotX, dotY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.save();
+    ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 12;
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath(); ctx.arc(dotX, dotY, 6, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+    ctx.font = '600 10px system-ui,sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText('LIVE VIEW', miniX + miniW/2, miniY + 4);
+    if (NET.oppDone){
+      centerText('OPPONENT DONE!', py + ph + 20, 22, '#8affa0');
+    } else if (iAmWaitingForMyTurn){
+      const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
+      centerText('Opponent batting' + dots + ' you bat next!', py + ph + 20, 15, 'rgba(255,255,255,0.7)');
+    } else {
+      const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
+      centerText('Waiting for opponent to finish' + dots, py + ph + 20, 15, 'rgba(255,255,255,0.7)');
+    }
+  } else {
+    centerText('Connecting to opponent stream...', py + ph/2, 20, 'rgba(255,255,255,0.7)');
+  }
+  ctx.restore();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+function drawMenuScreen(){
+  ctx.fillStyle = 'rgba(12,16,28,0.55)';
+  ctx.fillRect(0,0,W,H);
+  centerText('GULLI  DANDA', 90, 58, '#ffd166');
+  centerText('CHAMPIONSHIP', 128, 22, 'rgba(255,255,255,0.85)');
+
+  // Account badge top-left
+  const bw = 260, bh = 52, bx = 18, by = 18;
+  ctx.save();
+  rr(ctx, bx, by, bw, bh, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
+  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.font='900 15px system-ui,sans-serif';
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillStyle='#ffd166';
+  ctx.fillText('👤 ' + ACCOUNT.name, bx + 14, by + 17);
+  ctx.font='700 10px system-ui,sans-serif';
+  ctx.fillStyle='rgba(255,255,255,0.65)';
+  ctx.fillText('📱 ' + ACCOUNT.phone + ' · W:' + ACCOUNT.wins + ' L:' + ACCOUNT.losses, bx + 14, by + 36);
+  ctx.restore();
+
+  // MY PROFILE + LOGOUT buttons top-right
+  const pvW = 130, pvH = 52, pvX = W - 18 - pvW, pvY = 18;
+  const loW = 110, loH = 52, loX = pvX - 12 - loW, loY = 18;
+  // MY PROFILE
+  ctx.save();
+  rr(ctx, pvX, pvY, pvW, pvH, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,209,102,0.7)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.font='900 12px system-ui,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#ffd166';
+  ctx.fillText('👤 PROFILE', pvX + pvW/2, pvY + pvH/2);
+  ctx.restore();
+  // LOGOUT
+  ctx.save();
+  rr(ctx, loX, loY, loW, loH, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,138,138,0.7)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.font='900 12px system-ui,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#ff8a8a';
+  ctx.fillText('🚪 LOGOUT', loX + loW/2, loY + loH/2);
+  ctx.restore();
+
+  const pulse = 0.6 + 0.4*Math.sin(performance.now()/320);
+  ctx.globalAlpha = pulse;
+  centerText('CHOOSE A MODE', 220, 16, 'rgba(255,255,255,0.7)');
+  ctx.globalAlpha = 1;
+  for (const b of menuButtons) drawMenuButton(b);
+
+  ctx.font = '700 11px system-ui,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,209,102,0.75)';
+  ctx.fillText('Powered by PRADEEP SINGH', W/2, H - 18);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+function drawLevelSelect(){
+  ctx.fillStyle = 'rgba(12,16,28,0.55)';
+  ctx.fillRect(0,0,W,H);
+  centerText('SELECT LEVEL', 140, 52, '#ffd166');
+  centerText('Faster fielders, deadlier throws. Unlimited gullis — 1 out ends innings.', 186, 17, 'rgba(255,255,255,0.75)');
+  centerText('Reach the target score to clear the level.', 210, 17, 'rgba(255,209,102,0.9)');
+  for (const b of menuButtons) drawMenuButton(b, b.id.startsWith('level') ? '#ffd166' : '#ffffff');
+}
+function drawPlayerSelect(){
+  ctx.fillStyle = 'rgba(12,16,28,0.55)';
+  ctx.fillRect(0,0,W,H);
+  centerText('LOCAL MULTIPLAYER', 140, 48, '#ffd166');
+  centerText('1 bats, the rest field. Each player gets their own crowd section!', 186, 17, 'rgba(255,255,255,0.75)');
+  centerText('Highest score wins the match!', 210, 17, 'rgba(255,209,102,0.9)');
+  for (const b of menuButtons) drawMenuButton(b);
+}
+function drawNameEntry(){
+  ctx.fillStyle = 'rgba(12,16,28,0.78)';
+  ctx.fillRect(0,0,W,H);
+  const idx = G.nameEntry.playerIndex;
+  const p = G.players[idx];
+  if (!p) return;
+  ctx.fillStyle = p.color;
+  ctx.globalAlpha = 0.18; ctx.fillRect(0, 0, W, 90); ctx.globalAlpha = 1;
+  centerText('ENTER PLAYER NAME', 60, 24, 'rgba(255,255,255,0.75)');
+  centerText(`PLAYER ${idx+1} of ${G.players.length}`, 92, 18, 'rgba(255,255,255,0.6)');
+  centerText('Tap anywhere to open keyboard', 116, 13, 'rgba(255,209,102,0.7)');
+  ctx.save();
+  const glow = ctx.createRadialGradient(W/2, 200, 5, W/2, 200, 110);
+  glow.addColorStop(0, p.color); glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(W/2, 200, 110, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = p.color;
+  ctx.beginPath(); ctx.arc(W/2, 200, 45, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.font = '900 44px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(String(idx + 1), W/2, 205);
+  const boxW = 440, boxH = 68;
+  const boxX = W/2 - boxW/2, boxY = 275;
+  ctx.fillStyle = 'rgba(20,25,40,0.9)';
+  rr(ctx, boxX, boxY, boxW, boxH, 12); ctx.fill();
+  ctx.strokeStyle = p.color; ctx.lineWidth = 3; ctx.stroke();
+  const pad = 24;
+  ctx.font = '900 32px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  const text = G.nameEntry.currentText;
+  const placeholder = PLAYER_NAMES[idx];
+  const displayText = text || placeholder;
+  ctx.fillStyle = text ? '#ffffff' : 'rgba(255,255,255,0.32)';
+  ctx.fillText(displayText, boxX + pad, boxY + boxH/2 + 2);
+  const blink = Math.sin(performance.now()/280) > 0;
+  if (blink && text.length < 10){
+    const tw = ctx.measureText(displayText).width;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(boxX + pad + tw + 3, boxY + 18, 3, boxH - 36);
+  }
+  ctx.font = '600 15px system-ui,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.65)';
+  ctx.fillText('Max 10 chars  •  Enter to continue', W/2, 385);
+  const isLast = (idx === G.players.length - 1);
+  const btnLabel = isLast ? '⚔  START MATCH' : 'NEXT PLAYER  ▶';
+  const btnW = 300, btnH = 56;
+  const btnX = W/2 - btnW/2, btnY = 415;
+  const pulse = 0.85 + 0.15 * Math.sin(performance.now()/400);
+  ctx.save();
+  ctx.globalAlpha = pulse;
+  rr(ctx, btnX, btnY, btnW, btnH, 12);
+  const grd = ctx.createLinearGradient(btnX, btnY, btnX, btnY+btnH);
+  grd.addColorStop(0, p.color); grd.addColorStop(1, shade(p.color, -50));
+  ctx.fillStyle = grd; ctx.fill();
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.font='900 22px system-ui,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#ffffff';
+  ctx.fillText(btnLabel, W/2, btnY + btnH/2);
+  ctx.restore();
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  const dotY = 500, dotGap = 22;
+  const startX = W/2 - ((G.players.length - 1) * dotGap) / 2;
+  for (let i = 0; i < G.players.length; i++){
+    const dx = startX + i * dotGap;
+    ctx.beginPath();
+    ctx.arc(dx, dotY, i === idx ? 7 : 5, 0, Math.PI*2);
+    if (i < idx){ ctx.fillStyle = G.players[i].color; ctx.fill(); }
+    else if (i === idx){
+      ctx.fillStyle = p.color; ctx.fill();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
+    } else { ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill(); }
+  }
+}
+function drawTurnIntro(){
+  ctx.fillStyle = 'rgba(12,16,28,0.68)';
+  ctx.fillRect(0,0,W,H);
+  const p = G.players[G.currentPlayer];
+  if (!p) return;
+  ctx.fillStyle = p.color;
+  ctx.globalAlpha = 0.15; ctx.fillRect(0, 0, W, 110); ctx.globalAlpha = 1;
+  centerText('NOW BATTING', 130, 22, 'rgba(255,255,255,0.75)');
+  if (G.mode === 'multi') centerText('PLAYER ' + (G.currentPlayer+1) + ' of ' + G.players.length, 190, 32, 'rgba(255,255,255,0.85)');
+  else if (G.mode === 'online') centerText('ONLINE MATCH', 190, 32, 'rgba(255,255,255,0.85)');
+  else centerText('SINGLE PLAYER', 190, 32, 'rgba(255,255,255,0.85)');
+  centerText(p.name, 262, 78, p.color);
+  let infoText;
+  if (G.mode === 'multi') infoText = 'Unlimited gullis · 1 out ends your turn · ' + fielders.length + ' fielder' + (fielders.length>1?'s':'') + ' ready';
+  else if (G.mode === 'online') infoText = 'You vs ' + (NET.oppName || 'OPPONENT') + ' · 1 out ends your innings';
+  else infoText = 'Level ' + G.level + ' — ' + LEVELS[clamp(G.level-1,0,4)].name + ' · Target: ' + LEVELS[clamp(G.level-1,0,4)].target + 'm';
+  centerText(infoText, 315, 18, 'rgba(255,255,255,0.7)');
+  for (const b of menuButtons) drawMenuButton(b, p.color);
+}
+function drawTurnEnd(){
+  ctx.fillStyle = 'rgba(12,16,28,0.72)';
+  ctx.fillRect(0,0,W,H);
+  const p = G.players[G.currentPlayer];
+  if (!p) return;
+  if (G.mode === 'single'){
+    const lv = LEVELS[clamp(G.level-1,0,4)];
+    const cleared = G.score >= lv.target;
+    centerText('LEVEL ' + G.level + ' — ' + (cleared ? 'CLEARED!' : 'FAILED'), 110, 44, cleared ? '#8affa0' : '#ff8a8a');
+    centerText('Your score', 168, 22, 'rgba(255,255,255,0.75)');
+    centerText(G.score + ' m', 240, 76, '#ffd166');
+    centerText('Target: ' + lv.target + ' m', 296, 22, cleared ? 'rgba(138,255,160,0.9)' : 'rgba(255,138,138,0.9)');
+  } else if (G.mode === 'online'){
+    centerText('INNINGS OVER', 110, 44, '#ffd166');
+    centerText('Your Final Score', 168, 22, 'rgba(255,255,255,0.75)');
+    centerText(G.score + ' m', 240, 76, '#ffd166');
+    centerText('Handing over to ' + (NET.oppName || 'opponent') + '…', 296, 22, 'rgba(255,209,102,0.9)');
+  } else {
+    centerText(p.name + ' — TURN OVER', 110, 42, p.color);
+    centerText('Final Score', 172, 22, 'rgba(255,255,255,0.75)');
+    centerText(G.score + ' m', 248, 76, '#ffd166');
+  }
+  if (G.mode === 'multi'){
+    centerText('SCOREBOARD', 340, 20, 'rgba(255,255,255,0.6)');
+    const n = G.players.length;
+    const bw = 150, gap = 14;
+    const total = n*bw + (n-1)*gap;
+    const startX = W/2 - total/2;
+    for (let i=0; i<n; i++){
+      const pl = G.players[i];
+      const x = startX + i*(bw+gap); const y = 360;
+      const isActive = (i === G.currentPlayer);
+      const isDone = (i <= G.currentPlayer);
+      ctx.save();
+      rr(ctx, x, y, bw, 58, 10);
+      ctx.fillStyle = 'rgba(20,25,40,0.75)'; ctx.fill();
+      ctx.strokeStyle = pl.color;
+      ctx.lineWidth = isActive ? 3.5 : 2; ctx.stroke();
+      ctx.font='900 12px system-ui,sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle = isDone ? pl.color : 'rgba(255,255,255,0.4)';
+      ctx.fillText(pl.name, x + bw/2, y + 17);
+      ctx.font='900 22px system-ui,sans-serif';
+      ctx.fillStyle = isDone ? '#ffffff' : 'rgba(255,255,255,0.35)';
+      ctx.fillText(isDone ? (pl.score+'m') : '—', x + bw/2, y + 40);
+      ctx.restore();
+    }
+  }
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  for (const b of menuButtons) drawMenuButton(b, '#ffd166');
+}
+function drawTrophy(cx, cy, scale, t){
+  ctx.save();
+  ctx.translate(cx, cy); ctx.scale(scale, scale);
+  const bob = Math.sin(t * 3) * 4;
+  ctx.translate(0, bob);
+  const glow = ctx.createRadialGradient(0, 0, 5, 0, 0, 90);
+  glow.addColorStop(0, 'rgba(255, 220, 100, 0.55)');
+  glow.addColorStop(1, 'rgba(255, 220, 100, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(0, 0, 90, 0, Math.PI*2); ctx.fill();
+  const grd = ctx.createLinearGradient(-30, -50, 30, 30);
+  grd.addColorStop(0, '#ffe17a'); grd.addColorStop(0.5, '#ffd166'); grd.addColorStop(1, '#c99a2e');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.moveTo(-30, -40);
+  ctx.bezierCurveTo(-32, 10, -22, 28, 0, 32);
+  ctx.bezierCurveTo(22, 28, 32, 10, 30, -40);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(120, 80, 20, 0.7)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.arc(-32, -22, 14, Math.PI*0.6, Math.PI*1.7); ctx.stroke();
+  ctx.beginPath(); ctx.arc(32, -22, 14, Math.PI*1.3, Math.PI*0.4, true); ctx.stroke();
+  ctx.fillStyle = '#c99a2e'; ctx.fillRect(-7, 32, 14, 12);
+  ctx.fillStyle = '#8a5a2b'; rr(ctx, -22, 44, 44, 10, 3); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-28, -38); ctx.lineTo(28, -38); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  drawStar(0, -10, 12, 5, 5);
+  ctx.restore();
+}
+function drawStar(cx, cy, outer, inner, points){
+  ctx.beginPath();
+  for (let i=0; i<points*2; i++){
+    const r = i % 2 === 0 ? outer : inner;
+    const a = (Math.PI / points) * i - Math.PI/2;
+    const x = cx + Math.cos(a) * r;
+    const y = cy + Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath(); ctx.fill();
+}
+function drawGameOver(){
+  ctx.fillStyle = 'rgba(12,16,28,0.72)';
+  ctx.fillRect(0,0,W,H);
+  const t = performance.now() / 1000;
+  if (G.mode === 'onlineResults'){
+    const w = G.players[G.gameOverWinner];
+    const isDraw = G.gameOverWinner === -1;
+    const winnerColor = isDraw ? '#ffd166' : (w ? w.color : '#ffd166');
+    if (!isDraw){
+      const glowPulse = 0.55 + 0.45 * Math.sin(t * 2.5);
+      ctx.save();
+      ctx.globalAlpha = glowPulse * 0.45;
+      const glow = ctx.createRadialGradient(W/2, 105, 5, W/2, 105, 260);
+      glow.addColorStop(0, winnerColor); glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow; ctx.fillRect(0, 0, W, 280);
+      ctx.restore();
+      drawTrophy(W/2, 100, 0.85, t);
+    }
+    centerText('🌐  ONLINE MATCH', 130, 24, 'rgba(255,255,255,0.7)');
+    const pulse = 0.88 + 0.12*Math.sin(t*5);
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    centerText(isDraw ? '✨  DRAW!  ✨' : ('✨  ' + G.gameOverMsg + '  ✨'), 200, 42, '#ffd166');
+    ctx.restore();
+    const bw = 260, bh = 58, gap = 22;
+    const total = bw*2 + gap;
+    const startX = W/2 - total/2;
+    for (let i=0; i<2; i++){
+      const p = G.players[i];
+      const x = startX + i*(bw+gap);
+      const y = 260;
+      const isWinner = (!isDraw && i === G.gameOverWinner);
+      ctx.save();
+      rr(ctx, x, y, bw, bh, 12);
+      ctx.fillStyle = isWinner ? 'rgba(255,209,102,0.20)' : 'rgba(20,25,40,0.78)';
+      ctx.fill();
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = isWinner ? 3.5 : 2; ctx.stroke();
+      ctx.font='900 12px system-ui,sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle = p.color;
+      ctx.fillText(i === 0 ? 'YOU' : 'OPPONENT', x + bw/2, y + 17);
+      ctx.font='900 26px system-ui,sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(p.score + ' m', x + bw/2, y + 40);
+      ctx.restore();
+    }
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    for (const b of menuButtons) drawMenuButton(b, '#ffd166');
+    return;
+  }
+  if (G.mode === 'single'){
+    if (G.levelCleared){
+      drawTrophy(W/2, 150, 1.15, t);
+      const pulse = 0.85 + 0.15*Math.sin(t*4);
+      ctx.save(); ctx.globalAlpha = pulse;
+      centerText('✨  CONGRATULATIONS!  ✨', 260, 36, '#ffd166');
+      ctx.restore();
+      centerText('LEVEL ' + G.level + ' CLEARED', 302, 22, 'rgba(255,255,255,0.85)');
+    } else {
+      centerText(G.gameOverMsg, 150, 48, '#ff8a8a');
+    }
+    centerText('Level ' + G.level + ' — Your Score', 352, 20, 'rgba(255,255,255,0.85)');
+    centerText(G.score + ' m', 400, 44, '#ffd166');
+  } else {
+    const w = G.players[G.gameOverWinner];
+    const glowPulse = 0.55 + 0.45 * Math.sin(t * 2.5);
+    ctx.save();
+    ctx.globalAlpha = glowPulse * 0.45;
+    const glow = ctx.createRadialGradient(W/2, 105, 5, W/2, 105, 260);
+    glow.addColorStop(0, w.color); glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, 280);
+    ctx.restore();
+    drawTrophy(W/2, 100, 0.85, t);
+    const pulse = 0.88 + 0.12*Math.sin(t*5);
+    ctx.save(); ctx.globalAlpha = pulse;
+    centerText('✨  CONGRATULATIONS  ✨', 200, 32, '#ffd166');
+    ctx.restore();
+    ctx.save();
+    ctx.font = '900 78px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.lineWidth = 14; ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(20,25,45,0.7)';
+    ctx.strokeText(w.name, W/2, 275);
+    ctx.shadowColor = w.color; ctx.shadowBlur = 30;
+    ctx.fillStyle = w.color; ctx.fillText(w.name, W/2, 275);
+    ctx.shadowBlur = 0; ctx.restore();
+    centerText('WINS THE MATCH!', 315, 26, '#ffffff');
+    const sorted = G.players.map((p, i)=>({p, i})).sort((a,b)=>b.p.score - a.p.score);
+    const bw = 240, bh = 34, gap = 8;
+    const startY = 335;
+    for (let k=0; k<sorted.length; k++){
+      const {p, i} = sorted[k];
+      const y = startY + k*(bh + gap);
+      const isWinner = (i === G.gameOverWinner);
+      ctx.save();
+      rr(ctx, W/2 - bw/2, y, bw, bh, 8);
+      ctx.fillStyle = isWinner ? 'rgba(255,209,102,0.20)' : 'rgba(20,25,40,0.78)';
+      ctx.fill();
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = isWinner ? 3 : 1.5; ctx.stroke();
+      ctx.font = '900 14px system-ui,sans-serif';
+      ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillStyle = p.color;
+      const medal = k===0 ? '🥇' : k===1 ? '🥈' : k===2 ? '🥉' : '  ';
+      ctx.fillText(medal + '  ' + p.name, W/2 - bw/2 + 16, y + bh/2);
+      ctx.textAlign='right';
+      ctx.fillStyle = isWinner ? '#ffd166' : '#ffffff';
+      ctx.font = '900 16px system-ui,sans-serif';
+      ctx.fillText(p.score + ' m', W/2 + bw/2 - 16, y + bh/2);
+      ctx.restore();
+    }
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  }
+  for (const b of menuButtons) drawMenuButton(b, '#ffd166');
+}
+function drawSearching(){
+  ctx.fillStyle = 'rgba(12,16,28,0.88)';
+  ctx.fillRect(0,0,W,H);
+  centerText('🌐  SEARCHING FOR PLAYERS', 170, 38, '#ffd166');
+  const dots = '.'.repeat(1 + (Math.floor(performance.now()/300) % 3));
+  centerText('Looking for an opponent' + dots, 235, 22, 'rgba(255,255,255,0.85)');
+  centerText('Name: ' + NET.myName, 285, 17, 'rgba(255,209,102,0.9)');
+  const t = performance.now()/1000;
+  const r = 34, cx = W/2, cy = 380;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,209,102,0.35)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.arc(cx, cy, r, t*4, t*4 + Math.PI*1.2); ctx.stroke();
+  ctx.restore();
+  centerText(NET.statusMsg || 'Searching...', 460, 13, 'rgba(255,255,255,0.55)');
+  for (const b of menuButtons) drawMenuButton(b);
+}
+
+/* ==================== MAIN RENDER ==================== */
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  if (G.phase === 'splash'){ drawSplash(); return; }
+  if (G.phase === 'login'){ drawLoginScreen(); return; }
+  if (G.phase === 'register'){ drawRegisterScreen(); return; }
+  if (G.phase === 'leaderboard'){ drawLeaderboard(); return; }
+  if (G.phase === 'profileView'){ drawProfileView(); return; }
+  ctx.save();
+  if (shake > 0.002){
+    const m = shake * shake * 9;
+    ctx.translate((Math.random()-0.5)*m, (Math.random()-0.5)*m);
+  }
+  drawSky();
+  if (G.players.length > 0){ drawStadium(); }
+  else {
+    ctx.fillStyle = '#2a3142';
+    ctx.fillRect(0, STADIUM_TOP, W, STADIUM_BOTTOM - STADIUM_TOP);
+  }
+  drawField();
+  if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'){
+    if (G.phase === 'menu') drawMenuScreen();
+    else if (G.phase === 'levelSelect') drawLevelSelect();
+    else drawPlayerSelect();
+  }
+  else if (G.phase === 'searching'){ drawSearching(); }
+  else if (G.phase === 'toss'){ drawToss(); }
+  else if (G.phase === 'tossResult'){ drawTossResult(); }
+  else if (G.phase === 'waitingOpp'){ drawWaitingOpp(); }
+  else if (G.phase === 'nameEntry'){
+    if (fielders.length === 0) buildFielders();
+    for (const f of fielders) drawFielder(f);
+    drawPlayer(); drawNameEntry();
+  }
+  else if (G.phase === 'turnIntro'){
+    drawDistanceMarkers();
+    for (const f of fielders) drawFielder(f);
+    drawPlayer(); drawEffects(); drawTurnIntro();
+  }
+  else if (G.phase === 'turnEnd'){
+    drawDistanceMarkers();
+    for (const f of fielders) drawFielder(f);
+    drawPlayer(); drawEffects(); drawTurnEnd();
+  }
+  else if (G.phase === 'gameOver'){
+    drawDistanceMarkers();
+    for (const f of fielders) drawFielder(f);
+    drawPlayer(); drawEffects(); drawGameOver();
+  }
+  else {
+    drawDistanceMarkers();
+    if (G.phase==='fielding'||G.phase==='throw'||G.phase==='result') drawDandaOnGround();
+    drawZone();
+    for (const f of fielders) drawFielder(f);
+    drawGulli(); drawPlayer(); drawEffects();
+    drawPowerMeter(); drawShotSelector(); drawCurrentPlayerBadge(); drawOverlays();
+  }
+  ctx.restore();
+  const vg = ctx.createRadialGradient(W/2,H/2,H*0.45,W/2,H/2,H*1.0);
+  vg.addColorStop(0,'rgba(0,0,0,0)');
+  vg.addColorStop(1,'rgba(0,0,0,0.32)');
+  ctx.fillStyle=vg;
+  ctx.fillRect(0,0,W,H);
+}
+
+/* ==================== HUD ==================== */
+const uiScore = document.getElementById('uiScore');
+const uiBest = document.getElementById('uiBest');
+const uiOuts = document.getElementById('uiOuts');
+const uiTurn = document.getElementById('uiTurn');
+function updateHUD(){
+  const hud = document.getElementById('hud');
+  if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'
+      || G.phase === 'nameEntry' || G.phase === 'splash' || G.phase === 'login'
+      || G.phase === 'register' || G.phase === 'searching' || G.phase === 'toss'
+      || G.phase === 'tossResult' || G.phase === 'leaderboard' || G.phase === 'profileView'
+      || (G.phase === 'waitingOpp' && !NET.myDone)){
+    hud.style.display = 'none'; return;
+  }
+  hud.style.display = 'flex';
+  uiScore.textContent = G.score;
+  uiBest.textContent = G.best;
+  uiOuts.textContent = G.outs + '/1';
+  uiTurn.textContent = (G.currentPlayer + 1) + '/' + G.players.length;
+}
+
+/* ==================== LOOP ==================== */
+let last = performance.now();
+function loop(now){
+  let dt = (now-last)/1000;
+  last = now;
+  if (dt>0.05) dt=0.05;
+  update(dt); draw(); updateHUD();
+  requestAnimationFrame(loop);
+}
+
+/* ==================== BOOT ==================== */
+resetGulli();
+rebuildMenuButtons();
+initFirebase();
+setTimeout(()=>{ try{ playSplashChime(); } catch(e){} }, 120);
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
