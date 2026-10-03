@@ -41,8 +41,8 @@
 <body>
 <div id="wrap">
   <canvas id="game" width="960" height="540"></canvas>
-  <input id="mobileNameInput" type="text" maxlength="10" 
-         autocomplete="off" autocorrect="off" autocapitalize="characters" 
+  <input id="mobileNameInput" type="text" maxlength="20" 
+         autocomplete="off" autocorrect="off" autocapitalize="none" 
          spellcheck="false" aria-hidden="true">
   <div id="hud">
     <div class="right">
@@ -100,22 +100,38 @@ const PLAYER_NAMES  = ['RED',     'BLUE',    'GREEN',   'YELLOW',  'PURPLE'];
 const CONFETTI_COLORS = ['#ffd166','#ff8a8a','#8affa0','#5c9ee0','#e0a95c','#ff6bcb','#ffffff','#a06bff'];
 
 /* ==================== ACCOUNT SYSTEM ==================== */
-const SESSION_KEY = 'gulli_danda_session_v1';
+const SESSION_KEY = 'gulli_danda_session_v2';
 
 const ACCOUNT = {
   loggedIn: false,
-  name: '', phone: '',
+  isGuest: false,
+  name: '',
+  username: '',
+  passwordHash: '',
   bestSingle: 0, bestOnline: 0,
   matchesPlayed: 0, onlineMatches: 0,
   wins: 0, losses: 0, totalRuns: 0,
   loading: false, error: '',
-  formName: '', formPhone: '',
-  formFocus: 'name',
+  formUsername: '',
+  formPassword: '',
+  formName: '',  // guest name
+  formFocus: 'username',
   mode: 'login'
 };
 
+// Suggestion state
+let usernameSuggestions = [];
+let suggestionTimer = null;
+let suggestionsOpen = false;
+
 function saveSession(){
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ phone: ACCOUNT.phone, name: ACCOUNT.name })); } catch(e){}
+  try {
+    if (ACCOUNT.isGuest){
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ isGuest: true, name: ACCOUNT.name }));
+    } else {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ username: ACCOUNT.username, isGuest: false }));
+    }
+  } catch(e){}
 }
 function clearSession(){
   try { localStorage.removeItem(SESSION_KEY); } catch(e){}
@@ -124,7 +140,23 @@ function loadSession(){
   try { const raw = localStorage.getItem(SESSION_KEY); if (raw) return JSON.parse(raw); } catch(e){}
   return null;
 }
-function normalizePhone(p){ return String(p || '').replace(/\D/g, '').slice(0, 10); }
+function normalizeUsername(u){
+  return String(u || '').toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 15);
+}
+function usernameKey(u){ return 'u_' + String(u || '').toLowerCase(); }
+function isValidUsername(u){ return u && u.length >= 3 && u.length <= 15; }
+function isValidPassword(p){ return p && p.length >= 4 && p.length <= 20; }
+
+function hashPassword(pw){
+  // Simple hash (djb2) — not cryptographically secure, casual game only
+  let h = 5381;
+  const str = 'gd:' + pw;
+  for (let i = 0; i < str.length; i++){
+    h = ((h << 5) + h) + str.charCodeAt(i);
+    h = h & 0xffffffff;
+  }
+  return 'h' + (h >>> 0).toString(36);
+}
 
 function trackEvent(name, params){
   try {
@@ -134,61 +166,137 @@ function trackEvent(name, params){
   } catch(e){}
 }
 
-function registerUser(name, phone){
+/* ==================== USERNAME SUGGESTIONS ==================== */
+function onUsernameChange(){
+  if (suggestionTimer) clearTimeout(suggestionTimer);
+  suggestionsOpen = true;
+  const typed = ACCOUNT.formUsername;
+  if (!typed || typed.length < 2){ usernameSuggestions = []; return; }
+  suggestionTimer = setTimeout(() => {
+    fetchUsernameSuggestions(typed);
+  }, 250);
+}
+
+function fetchUsernameSuggestions(prefix){
+  if (!NET.ready){ usernameSuggestions = []; return; }
+  const keyLow = 'u_' + prefix.toLowerCase();
+  NET.db.ref('accounts').orderByKey()
+    .startAt(keyLow).endAt(keyLow + '\uf8ff').limitToFirst(5)
+    .once('value').then(snap => {
+      const out = [];
+      snap.forEach(ch => {
+        const v = ch.val();
+        if (v && v.username){ out.push(v.username); }
+      });
+      usernameSuggestions = out;
+    }).catch(() => { usernameSuggestions = []; });
+}
+
+/* ==================== AUTH ==================== */
+function registerUserAccount(username, password){
   if (!NET.ready){ ACCOUNT.error = 'Network not ready'; return; }
+  if (!isValidUsername(username)){ ACCOUNT.error = 'Username must be 3-15 chars (A-Z, 0-9, _)'; return; }
+  if (!isValidPassword(password)){ ACCOUNT.error = 'Password must be 4-20 chars'; return; }
   ACCOUNT.error = ''; ACCOUNT.loading = true;
-  const key = 'user_' + phone;
+  const key = usernameKey(username);
   NET.db.ref('accounts/' + key).once('value').then(snap => {
-    if (snap.exists()){ ACCOUNT.error = 'Number already registered. Please login.'; ACCOUNT.loading = false; return; }
+    if (snap.exists()){ ACCOUNT.error = 'Username already taken. Try another.'; ACCOUNT.loading = false; return; }
     const data = {
-      name, phone,
+      username: username,
+      passwordHash: hashPassword(password),
+      name: username,
       bestSingle: 0, bestOnline: 0,
       matchesPlayed: 0, onlineMatches: 0,
       wins: 0, losses: 0, totalRuns: 0,
       createdAt: Date.now(), updatedAt: Date.now()
     };
     return NET.db.ref('accounts/' + key).set(data).then(() => {
-      Object.assign(ACCOUNT, data);
-      ACCOUNT.loggedIn = true; ACCOUNT.loading = false;
+      ACCOUNT.username = username;
+      ACCOUNT.name = username;
+      ACCOUNT.passwordHash = data.passwordHash;
+      ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
+      ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
+      ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
+      ACCOUNT.loggedIn = true;
+      ACCOUNT.isGuest = false;
+      ACCOUNT.loading = false;
       saveSession(); setPhase('menu');
       beep(880, 0.1, 'triangle', 0.11);
       setTimeout(()=>beep(1200, 0.15, 'triangle', 0.11), 120);
-      trackEvent('sign_up', { method: 'phone' });
+      trackEvent('sign_up', { method: 'username' });
     });
   }).catch(() => { ACCOUNT.error = 'Connection error. Try again.'; ACCOUNT.loading = false; });
 }
 
-function loginUser(phone){
+function loginUserAccount(username, password){
   if (!NET.ready){ ACCOUNT.error = 'Network not ready'; return; }
+  if (!isValidUsername(username)){ ACCOUNT.error = 'Enter a valid username'; return; }
+  if (!isValidPassword(password)){ ACCOUNT.error = 'Enter your password'; return; }
   ACCOUNT.error = ''; ACCOUNT.loading = true;
-  const key = 'user_' + phone;
+  const key = usernameKey(username);
   NET.db.ref('accounts/' + key).once('value').then(snap => {
-    if (!snap.exists()){ ACCOUNT.error = 'Not registered. Please register first.'; ACCOUNT.loading = false; return; }
+    if (!snap.exists()){ ACCOUNT.error = 'Username not found. Register first.'; ACCOUNT.loading = false; return; }
     const data = snap.val();
-    Object.assign(ACCOUNT, data);
-    ACCOUNT.loggedIn = true; ACCOUNT.loading = false;
+    if (data.passwordHash !== hashPassword(password)){
+      ACCOUNT.error = 'Wrong password. Try again.';
+      ACCOUNT.loading = false;
+      return;
+    }
+    ACCOUNT.username = data.username || username;
+    ACCOUNT.name = data.name || ACCOUNT.username;
+    ACCOUNT.passwordHash = data.passwordHash;
+    ACCOUNT.bestSingle = data.bestSingle || 0;
+    ACCOUNT.bestOnline = data.bestOnline || 0;
+    ACCOUNT.matchesPlayed = data.matchesPlayed || 0;
+    ACCOUNT.onlineMatches = data.onlineMatches || 0;
+    ACCOUNT.wins = data.wins || 0;
+    ACCOUNT.losses = data.losses || 0;
+    ACCOUNT.totalRuns = data.totalRuns || 0;
+    ACCOUNT.loggedIn = true;
+    ACCOUNT.isGuest = false;
+    ACCOUNT.loading = false;
     saveSession(); setPhase('menu');
     beep(880, 0.1, 'triangle', 0.11);
-    trackEvent('login', { method: 'phone' });
+    trackEvent('login', { method: 'username' });
   }).catch(() => { ACCOUNT.error = 'Connection error. Try again.'; ACCOUNT.loading = false; });
+}
+
+function guestLogin(name){
+  const nm = normalizeUsername(name) || ('GUEST' + Math.floor(1000 + Math.random()*9000));
+  ACCOUNT.loggedIn = true;
+  ACCOUNT.isGuest = true;
+  ACCOUNT.username = '';
+  ACCOUNT.name = nm;
+  ACCOUNT.passwordHash = '';
+  ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
+  ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
+  ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
+  ACCOUNT.error = '';
+  saveSession();
+  setPhase('menu');
+  beep(880, 0.1, 'triangle', 0.11);
+  trackEvent('guest_login', {});
 }
 
 function logoutUser(){
   trackEvent('logout', {});
   ACCOUNT.loggedIn = false;
-  ACCOUNT.name = ''; ACCOUNT.phone = '';
+  ACCOUNT.isGuest = false;
+  ACCOUNT.name = ''; ACCOUNT.username = ''; ACCOUNT.passwordHash = '';
   ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
   ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
   ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
-  ACCOUNT.formName = ''; ACCOUNT.formPhone = ''; ACCOUNT.formFocus = 'phone';
+  ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.formName = '';
+  ACCOUNT.formFocus = 'username';
   ACCOUNT.mode = 'login'; ACCOUNT.error = '';
+  usernameSuggestions = []; suggestionsOpen = false;
   clearSession();
   setPhase('login');
 }
 
 function syncAccountStats(){
-  if (!NET.ready || !ACCOUNT.loggedIn) return;
-  const key = 'user_' + ACCOUNT.phone;
+  if (!NET.ready || !ACCOUNT.loggedIn || ACCOUNT.isGuest || !ACCOUNT.username) return;
+  const key = usernameKey(ACCOUNT.username);
   NET.db.ref('accounts/' + key).update({
     name: ACCOUNT.name,
     bestSingle: ACCOUNT.bestSingle, bestOnline: ACCOUNT.bestOnline,
@@ -218,7 +326,10 @@ function fetchLeaderboard(cb){
   LEADERBOARD.loading = true;
   NET.db.ref('accounts').orderByChild('bestOnline').limitToLast(10).once('value').then(snap => {
     const arr = [];
-    snap.forEach(child => { const v = child.val(); if (v && v.name) arr.push(v); });
+    snap.forEach(child => {
+      const v = child.val();
+      if (v && v.username && !v.isGuest) arr.push(v);
+    });
     arr.sort((a,b) => (b.bestOnline||0) - (a.bestOnline||0));
     LEADERBOARD.data = arr; LEADERBOARD.loading = false;
     if (cb) cb(arr);
@@ -300,6 +411,11 @@ function genRoomId(){ return 'GD-' + Math.random().toString(36).slice(2,7).toUpp
 
 function startOnlineMatchmaking(){
   if (!ACCOUNT.loggedIn){ setPhase('login'); return; }
+  if (ACCOUNT.isGuest){
+    G.banner = 'REGISTER TO PLAY ONLINE';
+    G.bannerTimer = 2.5;
+    return;
+  }
   NET.myName = ACCOUNT.name;
   NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppName = '';
   NET.oppLive = null;
@@ -543,13 +659,13 @@ function hexA(hex, a){
 }
 function setPhase(p){
   G.phase = p;
-  // Auto-focus phone on login screen
-  if (p === 'login'){ ACCOUNT.formFocus = 'phone'; }
-  if (p === 'register'){ ACCOUNT.formFocus = 'name'; }
-  if (p==='menu'||p==='levelSelect'||p==='playerSelect'||p==='turnIntro'||p==='turnEnd'||p==='gameOver'||p==='leaderboard'||p==='login'||p==='register'||p==='profileView'){
+  if (p === 'login'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = false; usernameSuggestions = []; }
+  if (p === 'register'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = false; usernameSuggestions = []; }
+  if (p === 'guest'){ ACCOUNT.formFocus = 'guestName'; }
+  if (p==='menu'||p==='levelSelect'||p==='playerSelect'||p==='turnIntro'||p==='turnEnd'||p==='gameOver'||p==='leaderboard'||p==='login'||p==='register'||p==='guest'||p==='profileView'){
     rebuildMenuButtons();
   }
-  if (p === 'menu' || p === 'login' || p === 'register'){
+  if (p === 'menu' || p === 'login' || p === 'register' || p === 'guest'){
     trackEvent('screen_view', { screen_name: p });
   }
 }
@@ -613,12 +729,16 @@ function rebuildMenuButtons(){
     menuButtons.push({ id:'cancelSearch', label:'✖  CANCEL', x: W/2 - 100, y: H - 70, w: 200, h: 50 });
   }
   else if (G.phase === 'login'){
-    menuButtons.push({ id:'doLogin',    label:'🔓  LOGIN',   x: W/2 - 160, y: 400, w: 320, h: 56 });
-    menuButtons.push({ id:'goRegister', label:'NEW? REGISTER →', x: W/2 - 160, y: 466, w: 320, h: 40 });
+    menuButtons.push({ id:'doLogin',    label:'🔓  LOGIN',            x: W/2 - 180, y: 340, w: 360, h: 54 });
+    menuButtons.push({ id:'goRegister', label:'NEW? REGISTER  →',     x: W/2 - 180, y: 458, w: 360, h: 40 });
   }
   else if (G.phase === 'register'){
-    menuButtons.push({ id:'doRegister', label:'✅  REGISTER',  x: W/2 - 160, y: 420, w: 320, h: 56 });
-    menuButtons.push({ id:'goLogin',    label:'← BACK TO LOGIN', x: W/2 - 160, y: 486, w: 320, h: 40 });
+    menuButtons.push({ id:'doRegister', label:'✅  CREATE ACCOUNT',   x: W/2 - 180, y: 400, w: 360, h: 54 });
+    menuButtons.push({ id:'goLogin',    label:'← BACK TO LOGIN',      x: W/2 - 180, y: 468, w: 360, h: 40 });
+  }
+  else if (G.phase === 'guest'){
+    menuButtons.push({ id:'doGuest',    label:'🎮  PLAY AS GUEST',    x: W/2 - 180, y: 300, w: 360, h: 54 });
+    menuButtons.push({ id:'goLoginFromGuest', label:'← BACK TO LOGIN', x: W/2 - 180, y: 386, w: 360, h: 40 });
   }
   else if (G.phase === 'leaderboard'){
     menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 460, w: 160, h: 46 });
@@ -1082,16 +1202,33 @@ function update(dt){
     if (Math.random() < 0.7) spawnSplashSpark();
     if (G.splashTimer >= SPLASH_DURATION){
       const session = loadSession();
-      if (session && session.phone && NET.ready){
-        NET.db.ref('accounts/user_' + session.phone).once('value').then(snap => {
-          if (snap.exists()){
-            const data = snap.val();
-            Object.assign(ACCOUNT, data);
-            ACCOUNT.loggedIn = true;
-            saveSession();
-            setPhase('menu');
-          } else { setPhase('login'); }
-        }).catch(()=>{ setPhase('login'); });
+      if (session){
+        if (session.isGuest){
+          ACCOUNT.loggedIn = true;
+          ACCOUNT.isGuest = true;
+          ACCOUNT.name = session.name || 'GUEST';
+          setPhase('menu');
+        } else if (session.username && NET.ready){
+          const key = usernameKey(session.username);
+          NET.db.ref('accounts/' + key).once('value').then(snap => {
+            if (snap.exists()){
+              const data = snap.val();
+              ACCOUNT.username = data.username || session.username;
+              ACCOUNT.name = data.name || ACCOUNT.username;
+              ACCOUNT.passwordHash = data.passwordHash;
+              ACCOUNT.bestSingle = data.bestSingle || 0;
+              ACCOUNT.bestOnline = data.bestOnline || 0;
+              ACCOUNT.matchesPlayed = data.matchesPlayed || 0;
+              ACCOUNT.onlineMatches = data.onlineMatches || 0;
+              ACCOUNT.wins = data.wins || 0;
+              ACCOUNT.losses = data.losses || 0;
+              ACCOUNT.totalRuns = data.totalRuns || 0;
+              ACCOUNT.loggedIn = true;
+              ACCOUNT.isGuest = false;
+              setPhase('menu');
+            } else { setPhase('login'); }
+          }).catch(()=>{ setPhase('login'); });
+        } else { setPhase('login'); }
       } else { setPhase('login'); }
       beep(880, 0.1, 'triangle', 0.08);
     }
@@ -1116,7 +1253,7 @@ function update(dt){
 
   if (G.phase==='turnEnd' || G.phase==='gameOver' || G.phase==='turnIntro'
       || G.phase==='menu' || G.phase==='levelSelect' || G.phase==='playerSelect'
-      || G.phase==='nameEntry' || G.phase==='login' || G.phase==='register'
+      || G.phase==='nameEntry' || G.phase==='login' || G.phase==='register' || G.phase==='guest'
       || G.phase==='leaderboard' || G.phase==='profileView'){
     camX += (0 - camX) * Math.min(1, dt*3);
     if (G.phase === 'gameOver'){
@@ -1299,6 +1436,21 @@ const FOOTER_LINKS = [
   { id: 'contact', label: 'Contact',        x: W/2 + 60,  w: 80  }
 ];
 
+// Login/Register/Guest field boxes (shared coordinates)
+const AUTH_BOXES = {
+  login: {
+    username: { x: W/2 - 220, y: 175, w: 440, h: 52 },
+    password: { x: W/2 - 220, y: 250, w: 440, h: 52 }
+  },
+  register: {
+    username: { x: W/2 - 220, y: 145, w: 440, h: 52 },
+    password: { x: W/2 - 220, y: 220, w: 440, h: 52 }
+  },
+  guest: {
+    name: { x: W/2 - 220, y: 200, w: 440, h: 52 }
+  }
+};
+
 function handleMenuClick(x, y){
   for (const b of menuButtons){
     if (pointInButton(x, y, b)){
@@ -1308,19 +1460,29 @@ function handleMenuClick(x, y){
       if (b.id === 'online'){ startOnlineMatchmaking(); return true; }
       if (b.id === 'leaderboard'){ LEADERBOARD.data = null; fetchLeaderboard(); setPhase('leaderboard'); return true; }
       if (b.id === 'doLogin'){
-        const p = normalizePhone(ACCOUNT.formPhone);
-        if (p.length !== 10){ ACCOUNT.error = 'Enter valid 10-digit number'; return true; }
-        loginUser(p); return true;
+        loginUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
+        return true;
       }
       if (b.id === 'doRegister'){
-        const nm = (ACCOUNT.formName || '').trim().toUpperCase().slice(0,10);
-        const p = normalizePhone(ACCOUNT.formPhone);
-        if (!nm){ ACCOUNT.error = 'Enter your name'; return true; }
-        if (p.length !== 10){ ACCOUNT.error = 'Enter valid 10-digit number'; return true; }
-        registerUser(nm, p); return true;
+        registerUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
+        return true;
       }
-      if (b.id === 'goRegister'){ ACCOUNT.mode = 'register'; ACCOUNT.error = ''; ACCOUNT.formFocus='name'; setPhase('register'); return true; }
-      if (b.id === 'goLogin'){ ACCOUNT.mode = 'login'; ACCOUNT.error = ''; ACCOUNT.formFocus='phone'; setPhase('login'); return true; }
+      if (b.id === 'doGuest'){
+        guestLogin(ACCOUNT.formName);
+        return true;
+      }
+      if (b.id === 'goRegister'){
+        ACCOUNT.formUsername = ''; ACCOUNT.formPassword = '';
+        ACCOUNT.error = ''; usernameSuggestions = []; suggestionsOpen = false;
+        setPhase('register');
+        return true;
+      }
+      if (b.id === 'goLogin' || b.id === 'goLoginFromGuest'){
+        ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.formName = '';
+        ACCOUNT.error = ''; usernameSuggestions = []; suggestionsOpen = false;
+        setPhase('login');
+        return true;
+      }
       if (b.id === 'logout'){ cleanupOnline(); logoutUser(); return true; }
       if (b.id === 'cancelSearch'){ NET.searching = false; cleanupOnline(); setPhase('menu'); return true; }
       if (b.id === 'onlineAgain'){ cleanupOnline(); startOnlineMatchmaking(); return true; }
@@ -1342,7 +1504,7 @@ function handleMenuClick(x, y){
       }
     }
   }
-  // Menu screen: MY PROFILE + LOGOUT buttons (custom coords)
+  // Menu screen: MY PROFILE + LOGOUT buttons
   if (G.phase === 'menu'){
     const pvW = 130, pvH = 52, pvX = W - 18 - pvW, pvY = 18;
     const loW = 110, loH = 52, loX = pvX - 12 - loW, loY = 18;
@@ -1354,7 +1516,6 @@ function handleMenuClick(x, y){
       beep(880, 0.06, 'triangle', 0.09);
       setPhase('profileView'); return true;
     }
-    // Footer links
     if (Math.abs(y - FOOTER_LINK_Y) < 16){
       for (const lnk of FOOTER_LINKS){
         if (x >= lnk.x - lnk.w/2 && x <= lnk.x + lnk.w/2){
@@ -1366,22 +1527,80 @@ function handleMenuClick(x, y){
       }
     }
   }
-  // Login/register field taps - FIXED
+  // Login screen field taps
   if (G.phase === 'login'){
-    // Login screen: phone box at y=210
-    const loginPhoneBox = { x: W/2 - 220, y: 210, w: 440, h: 60 };
-    if (pointInButton(x,y,loginPhoneBox)){
-      ACCOUNT.formFocus = 'phone';
+    if (pointInButton(x,y,AUTH_BOXES.login.username)){
+      ACCOUNT.formFocus = 'username';
+      suggestionsOpen = true;
+      if (ACCOUNT.formUsername && ACCOUNT.formUsername.length >= 2) onUsernameChange();
       openMobileKeyboard();
       return true;
     }
+    if (pointInButton(x,y,AUTH_BOXES.login.password)){
+      ACCOUNT.formFocus = 'password';
+      suggestionsOpen = false;
+      openMobileKeyboard();
+      return true;
+    }
+    // Suggestion click
+    if (suggestionsOpen && usernameSuggestions.length > 0){
+      const box = AUTH_BOXES.login.username;
+      const sugX = box.x + box.w + 8;
+      const sugW = 200;
+      const sugStartY = box.y;
+      for (let i = 0; i < usernameSuggestions.length; i++){
+        const ry = sugStartY + i * 36;
+        if (pointInButton(x,y,{x:sugX, y:ry, w:sugW, h:32})){
+          ACCOUNT.formUsername = usernameSuggestions[i];
+          ACCOUNT.formFocus = 'password';
+          suggestionsOpen = false;
+          usernameSuggestions = [];
+          beep(880, 0.05, 'triangle', 0.08);
+          return true;
+        }
+      }
+    }
   }
+  // Register screen field taps
   if (G.phase === 'register'){
-    // Register screen: name box at y=150, phone box at y=250
-    const regNameBox = { x: W/2 - 220, y: 150, w: 440, h: 56 };
-    const regPhoneBox = { x: W/2 - 220, y: 250, w: 440, h: 56 };
-    if (pointInButton(x,y,regNameBox)){ ACCOUNT.formFocus = 'name'; openMobileKeyboard(); return true; }
-    if (pointInButton(x,y,regPhoneBox)){ ACCOUNT.formFocus = 'phone'; openMobileKeyboard(); return true; }
+    if (pointInButton(x,y,AUTH_BOXES.register.username)){
+      ACCOUNT.formFocus = 'username';
+      suggestionsOpen = true;
+      if (ACCOUNT.formUsername && ACCOUNT.formUsername.length >= 2) onUsernameChange();
+      openMobileKeyboard();
+      return true;
+    }
+    if (pointInButton(x,y,AUTH_BOXES.register.password)){
+      ACCOUNT.formFocus = 'password';
+      suggestionsOpen = false;
+      openMobileKeyboard();
+      return true;
+    }
+    if (suggestionsOpen && usernameSuggestions.length > 0){
+      const box = AUTH_BOXES.register.username;
+      const sugX = box.x + box.w + 8;
+      const sugW = 200;
+      const sugStartY = box.y;
+      for (let i = 0; i < usernameSuggestions.length; i++){
+        const ry = sugStartY + i * 36;
+        if (pointInButton(x,y,{x:sugX, y:ry, w:sugW, h:32})){
+          ACCOUNT.formUsername = usernameSuggestions[i];
+          ACCOUNT.formFocus = 'password';
+          suggestionsOpen = false;
+          usernameSuggestions = [];
+          beep(880, 0.05, 'triangle', 0.08);
+          return true;
+        }
+      }
+    }
+  }
+  // Guest screen field taps
+  if (G.phase === 'guest'){
+    if (pointInButton(x,y,AUTH_BOXES.guest.name)){
+      ACCOUNT.formFocus = 'guestName';
+      openMobileKeyboard();
+      return true;
+    }
   }
   return false;
 }
@@ -1391,7 +1610,7 @@ function onInput(e){
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
   if (G.phase==='menu' || G.phase==='levelSelect' || G.phase==='playerSelect'
       || G.phase==='turnIntro' || G.phase==='turnEnd' || G.phase==='gameOver'
-      || G.phase==='login' || G.phase==='register' || G.phase==='leaderboard'
+      || G.phase==='login' || G.phase==='register' || G.phase==='guest' || G.phase==='leaderboard'
       || G.phase==='profileView' || G.phase==='searching'){
     if (e){ const {x,y} = canvasCoordsFromEvent(e); handleMenuClick(x, y); }
     return;
@@ -1420,36 +1639,52 @@ function handleNameEntryKey(e){
   }
 }
 function handleAuthKey(e){
+  const focus = ACCOUNT.formFocus;
   if (e.key === 'Escape'){ setPhase('menu'); e.preventDefault(); return; }
-  const target = ACCOUNT.formFocus;
   if (e.key === 'Tab'){
-    ACCOUNT.formFocus = target === 'name' ? 'phone' : 'name';
+    // Switch between username / password
+    if (G.phase === 'register'){
+      if (focus === 'username'){ ACCOUNT.formFocus = 'password'; suggestionsOpen = false; }
+      else if (focus === 'password'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = true; if (ACCOUNT.formUsername.length >= 2) onUsernameChange(); }
+    } else if (G.phase === 'login'){
+      ACCOUNT.formFocus = focus === 'username' ? 'password' : 'username';
+      suggestionsOpen = (ACCOUNT.formFocus === 'username');
+      if (suggestionsOpen && ACCOUNT.formUsername.length >= 2) onUsernameChange();
+    }
     openMobileKeyboard(); e.preventDefault(); return;
   }
   if (e.key === 'Enter'){
     if (G.phase === 'login'){
-      const p = normalizePhone(ACCOUNT.formPhone);
-      if (p.length === 10) loginUser(p);
-      else ACCOUNT.error = 'Enter valid 10-digit number';
+      loginUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
     } else if (G.phase === 'register'){
-      const nm = (ACCOUNT.formName || '').trim().toUpperCase().slice(0,10);
-      const p = normalizePhone(ACCOUNT.formPhone);
-      if (!nm) ACCOUNT.error = 'Enter your name';
-      else if (p.length !== 10) ACCOUNT.error = 'Enter valid 10-digit number';
-      else registerUser(nm, p);
+      registerUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
+    } else if (G.phase === 'guest'){
+      guestLogin(ACCOUNT.formName);
     }
     e.preventDefault(); return;
   }
   if (e.key === 'Backspace'){
-    if (target === 'name') ACCOUNT.formName = ACCOUNT.formName.slice(0, -1);
-    else ACCOUNT.formPhone = ACCOUNT.formPhone.slice(0, -1);
+    if (focus === 'username'){
+      ACCOUNT.formUsername = ACCOUNT.formUsername.slice(0, -1);
+      onUsernameChange();
+    } else if (focus === 'password'){
+      ACCOUNT.formPassword = ACCOUNT.formPassword.slice(0, -1);
+    } else if (focus === 'guestName'){
+      ACCOUNT.formName = ACCOUNT.formName.slice(0, -1);
+    }
     e.preventDefault(); return;
   }
   if (e.key.length === 1){
-    if (target === 'name' && /[A-Za-z0-9 _-]/.test(e.key) && ACCOUNT.formName.length < 10){
-      ACCOUNT.formName += e.key.toUpperCase(); e.preventDefault();
-    } else if (target === 'phone' && /[0-9]/.test(e.key) && ACCOUNT.formPhone.length < 10){
-      ACCOUNT.formPhone += e.key; e.preventDefault();
+    if (focus === 'username' && /[A-Za-z0-9_]/.test(e.key) && ACCOUNT.formUsername.length < 15){
+      ACCOUNT.formUsername += e.key.toUpperCase();
+      onUsernameChange();
+      e.preventDefault();
+    } else if (focus === 'password' && ACCOUNT.formPassword.length < 20){
+      ACCOUNT.formPassword += e.key;
+      e.preventDefault();
+    } else if (focus === 'guestName' && /[A-Za-z0-9 _-]/.test(e.key) && ACCOUNT.formName.length < 12){
+      ACCOUNT.formName += e.key.toUpperCase();
+      e.preventDefault();
     }
   }
 }
@@ -1459,7 +1694,7 @@ window.addEventListener('keydown', e=>{
     if (e.code==='Space'||e.code==='Enter'||e.key===' '){ onInput(null); e.preventDefault(); }
     return;
   }
-  if (G.phase === 'login' || G.phase === 'register'){ handleAuthKey(e); return; }
+  if (G.phase === 'login' || G.phase === 'register' || G.phase === 'guest'){ handleAuthKey(e); return; }
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
   if (G.phase === 'searching'){
     if (e.key==='Escape'){ NET.searching = false; cleanupOnline(); setPhase('menu'); e.preventDefault(); }
@@ -1515,18 +1750,22 @@ window.addEventListener('keydown', e=>{
 
 /* ========== MOBILE KEYBOARD ========== */
 const mobileInput = document.getElementById('mobileNameInput');
-function isTypingPhase(){ return G.phase === 'nameEntry' || G.phase === 'login' || G.phase === 'register'; }
+function isTypingPhase(){
+  return G.phase === 'nameEntry' || G.phase === 'login' || G.phase === 'register' || G.phase === 'guest';
+}
 function openMobileKeyboard(){
   mobileInput.style.pointerEvents = 'auto';
   mobileInput.style.zIndex = '999';
+  const focus = ACCOUNT.formFocus;
   if (G.phase === 'login'){
-    // Login always uses phone
-    ACCOUNT.formFocus = 'phone';
-    mobileInput.value = ACCOUNT.formPhone;
-    mobileInput.setAttribute('inputmode', 'numeric');
+    if (focus === 'username'){ mobileInput.value = ACCOUNT.formUsername; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'characters'); }
+    else if (focus === 'password'){ mobileInput.value = ACCOUNT.formPassword; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'none'); }
   } else if (G.phase === 'register'){
-    mobileInput.value = (ACCOUNT.formFocus === 'name') ? ACCOUNT.formName : ACCOUNT.formPhone;
-    mobileInput.setAttribute('inputmode', ACCOUNT.formFocus === 'phone' ? 'numeric' : 'text');
+    if (focus === 'username'){ mobileInput.value = ACCOUNT.formUsername; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'characters'); }
+    else if (focus === 'password'){ mobileInput.value = ACCOUNT.formPassword; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'none'); }
+  } else if (G.phase === 'guest'){
+    mobileInput.value = ACCOUNT.formName;
+    mobileInput.setAttribute('inputmode', 'text');
   } else if (G.phase === 'nameEntry'){
     mobileInput.value = G.nameEntry.currentText || '';
     mobileInput.setAttribute('inputmode', 'text');
@@ -1537,34 +1776,33 @@ function openMobileKeyboard(){
 
 canvas.addEventListener('pointerdown', e=>{
   e.preventDefault();
-  if (isTypingPhase()){
-    if (G.phase === 'login'){
-      ACCOUNT.formFocus = 'phone'; // Login always phone
-    } else if (G.phase === 'register'){
-      const {x,y} = canvasCoordsFromEvent(e);
-      const regNameBox = { x: W/2 - 220, y: 150, w: 440, h: 56 };
-      const regPhoneBox = { x: W/2 - 220, y: 250, w: 440, h: 56 };
-      if (pointInButton(x,y,regNameBox)) ACCOUNT.formFocus = 'name';
-      else if (pointInButton(x,y,regPhoneBox)) ACCOUNT.formFocus = 'phone';
-    }
-    openMobileKeyboard();
-  }
   onInput(e);
 });
 
 mobileInput.addEventListener('input', ()=>{
   const raw = mobileInput.value || '';
+  const focus = ACCOUNT.formFocus;
   if (G.phase === 'login'){
-    ACCOUNT.formPhone = raw.replace(/\D/g,'').slice(0,10);
-    mobileInput.value = ACCOUNT.formPhone;
-  } else if (G.phase === 'register'){
-    if (ACCOUNT.formFocus === 'name'){
-      ACCOUNT.formName = raw.toUpperCase().slice(0,10);
-      mobileInput.value = ACCOUNT.formName;
-    } else {
-      ACCOUNT.formPhone = raw.replace(/\D/g,'').slice(0,10);
-      mobileInput.value = ACCOUNT.formPhone;
+    if (focus === 'username'){
+      ACCOUNT.formUsername = raw.toUpperCase().replace(/[^A-Z0-9_]/g,'').slice(0,15);
+      mobileInput.value = ACCOUNT.formUsername;
+      onUsernameChange();
+    } else if (focus === 'password'){
+      ACCOUNT.formPassword = raw.slice(0,20);
+      mobileInput.value = ACCOUNT.formPassword;
     }
+  } else if (G.phase === 'register'){
+    if (focus === 'username'){
+      ACCOUNT.formUsername = raw.toUpperCase().replace(/[^A-Z0-9_]/g,'').slice(0,15);
+      mobileInput.value = ACCOUNT.formUsername;
+      onUsernameChange();
+    } else if (focus === 'password'){
+      ACCOUNT.formPassword = raw.slice(0,20);
+      mobileInput.value = ACCOUNT.formPassword;
+    }
+  } else if (G.phase === 'guest'){
+    ACCOUNT.formName = raw.toUpperCase().replace(/[^A-Z0-9 _-]/g,'').slice(0,12);
+    mobileInput.value = ACCOUNT.formName;
   } else if (G.phase === 'nameEntry'){
     G.nameEntry.currentText = raw.toUpperCase().slice(0,10);
     mobileInput.value = G.nameEntry.currentText;
@@ -1577,15 +1815,11 @@ mobileInput.addEventListener('keydown', e=>{
     mobileInput.style.pointerEvents = 'none';
     mobileInput.style.zIndex = '-1';
     if (G.phase === 'login'){
-      const p = normalizePhone(ACCOUNT.formPhone);
-      if (p.length === 10) loginUser(p);
-      else ACCOUNT.error = 'Enter valid 10-digit number';
+      loginUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
     } else if (G.phase === 'register'){
-      const nm = (ACCOUNT.formName || '').trim().toUpperCase().slice(0,10);
-      const p = normalizePhone(ACCOUNT.formPhone);
-      if (!nm) ACCOUNT.error = 'Enter your name';
-      else if (p.length !== 10) ACCOUNT.error = 'Enter valid 10-digit number';
-      else registerUser(nm, p);
+      registerUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
+    } else if (G.phase === 'guest'){
+      guestLogin(ACCOUNT.formName);
     } else if (G.phase === 'nameEntry'){ commitName(); }
     e.preventDefault();
   }
@@ -1786,7 +2020,7 @@ function drawPlayer(){
     ctx.restore();
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   }
-  if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='waitingOpp' && G.phase!=='toss' && G.phase!=='tossResult' && G.phase!=='login' && G.phase!=='register' && G.phase!=='leaderboard' && G.phase!=='profileView'){
+  if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='waitingOpp' && G.phase!=='toss' && G.phase!=='tossResult' && G.phase!=='login' && G.phase!=='register' && G.phase!=='guest' && G.phase!=='leaderboard' && G.phase!=='profileView'){
     const ang = dandaAngle();
     const handX = x+6, handY = shoulderY+6;
     ctx.save(); ctx.translate(handX, handY); ctx.rotate(ang);
@@ -2107,7 +2341,7 @@ function drawMenuButton(b, highlightColor){
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
 function drawCurrentPlayerBadge(){
-  if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'||G.phase==='login'||G.phase==='register'||G.phase==='leaderboard'||G.phase==='profileView') return;
+  if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView') return;
   const p = G.players[G.currentPlayer];
   if (!p) return;
   const bw = 280, bh = 42;
@@ -2141,7 +2375,7 @@ function drawOverlays(){
       ||G.phase==='turnIntro'||G.phase==='turnEnd'||G.phase==='gameOver'
       ||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'
       ||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'
-      ||G.phase==='login'||G.phase==='register'||G.phase==='leaderboard'||G.phase==='profileView') return;
+      ||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView') return;
   if (G.bannerTimer>0 && G.banner){
     const a = clamp(G.bannerTimer/0.4, 0, 1);
     ctx.globalAlpha = a;
@@ -2283,102 +2517,124 @@ function drawSplash(){
   }
   ctx.restore();
 }
-function drawLoginScreen(){
-  ctx.fillStyle = 'rgba(12,16,28,0.94)';
-  ctx.fillRect(0,0,W,H);
-  centerText('🔓  LOGIN', 90, 42, '#ffd166');
-  centerText('Enter your mobile number to continue', 132, 16, 'rgba(255,255,255,0.7)');
-  const boxW = 440, boxH = 60;
-  const boxX = W/2 - boxW/2, boxY = 210;
-  const isFocusPhone = ACCOUNT.formFocus === 'phone';
+
+/* ===== Auth screens ===== */
+function drawSuggestionDropdown(box){
+  if (!suggestionsOpen || usernameSuggestions.length === 0) return;
+  const sugX = box.x + box.w + 8;
+  const sugW = 200;
+  const sugStartY = box.y;
   ctx.save();
-  rr(ctx, boxX, boxY, boxW, boxH, 12);
+  for (let i = 0; i < usernameSuggestions.length; i++){
+    const ry = sugStartY + i * 36;
+    rr(ctx, sugX, ry, sugW, 32, 6);
+    ctx.fillStyle = 'rgba(30,40,60,0.95)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,209,102,0.6)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.font = '700 14px system-ui,sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('👤 ' + usernameSuggestions[i], sugX + 10, ry + 16);
+  }
+  ctx.restore();
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+}
+
+function drawInputBox(box, label, value, isFocused, isPassword){
+  ctx.save();
+  rr(ctx, box.x, box.y, box.w, box.h, 12);
   ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
-  ctx.strokeStyle = isFocusPhone ? '#ffd166' : 'rgba(255,255,255,0.35)';
-  ctx.lineWidth = isFocusPhone ? 3 : 2; ctx.stroke();
-  ctx.font = '600 13px system-ui,sans-serif';
+  ctx.strokeStyle = isFocused ? '#ffd166' : 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = isFocused ? 3 : 2; ctx.stroke();
+
+  ctx.font = '600 12px system-ui,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(255,209,102,0.85)';
-  ctx.fillText('📱 MOBILE NUMBER', boxX + 20, boxY - 22);
-  ctx.font = '900 26px system-ui,sans-serif';
+  ctx.fillText(label, box.x + 18, box.y - 20);
+
+  ctx.font = '900 22px system-ui,sans-serif';
   ctx.textBaseline = 'middle';
-  const phone = ACCOUNT.formPhone || '';
-  ctx.fillStyle = phone ? '#ffffff' : 'rgba(255,255,255,0.32)';
-  ctx.fillText(phone || '9876543210', boxX + 20, boxY + boxH/2);
-  if (isFocusPhone){
+  const showVal = isPassword ? '•'.repeat((value || '').length) : (value || '');
+  const ph = isPassword ? '••••••' : '';
+  ctx.fillStyle = value ? '#ffffff' : 'rgba(255,255,255,0.32)';
+  ctx.fillText(showVal || ph, box.x + 18, box.y + box.h/2);
+  if (isFocused){
     const blink = Math.sin(performance.now()/280) > 0;
-    if (blink && phone.length < 10){
-      const tw = ctx.measureText(phone).width;
+    if (blink){
+      const tw = ctx.measureText(showVal || ph).width;
       ctx.fillStyle = '#ffd166';
-      ctx.fillRect(boxX + 20 + tw + 3, boxY + 14, 3, boxH - 28);
+      ctx.fillRect(box.x + 18 + tw + 3, box.y + 12, 3, box.h - 24);
     }
   }
   ctx.restore();
-  centerText('Tap box to type  •  Enter to login', W/2, 300, 13, 'rgba(255,255,255,0.55)');
-  if (ACCOUNT.loading) centerText('Logging in...', 350, 18, 'rgba(255,209,102,0.9)');
-  else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 350, 16, '#ff8a8a');
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+}
+
+function drawLoginScreen(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('🔓  LOGIN', 70, 38, '#ffd166');
+  centerText('Enter username & password to continue', 110, 15, 'rgba(255,255,255,0.7)');
+
+  drawInputBox(AUTH_BOXES.login.username, '👤 USERNAME', ACCOUNT.formUsername, ACCOUNT.formFocus === 'username', false);
+  drawSuggestionDropdown(AUTH_BOXES.login.username);
+  drawInputBox(AUTH_BOXES.login.password, '🔒 PASSWORD', ACCOUNT.formPassword, ACCOUNT.formFocus === 'password', true);
+
+  centerText('Suggestion: tap username box to see existing', W/2, 320, 11, 'rgba(255,209,102,0.6)');
+
+  if (ACCOUNT.loading) centerText('Logging in...', 315, 14, 'rgba(255,209,102,0.9)');
+  else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 315, 14, '#ff8a8a');
+
+  // Guest button (extra, not in menuButtons)
+  const gbW = 360, gbH = 46, gbX = W/2 - gbW/2, gbY = 398;
+  ctx.save();
+  rr(ctx, gbX, gbY, gbW, gbH, 12);
+  const grd = ctx.createLinearGradient(gbX, gbY, gbX, gbY+gbH);
+  grd.addColorStop(0, 'rgba(60,70,90,0.85)');
+  grd.addColorStop(1, 'rgba(30,40,55,0.85)');
+  ctx.fillStyle = grd; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.font='900 15px system-ui,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#ffffff';
+  ctx.fillText('👤  CONTINUE AS GUEST  →', W/2, gbY + gbH/2);
+  ctx.restore();
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+
   for (const b of menuButtons) drawMenuButton(b, b.id === 'doLogin' ? '#ffd166' : '#ffffff');
 }
 function drawRegisterScreen(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
-  centerText('✍  REGISTER', 60, 36, '#ffd166');
-  centerText('Create your account — one-time setup', 100, 14, 'rgba(255,255,255,0.7)');
-  const nameBox = { x: W/2 - 220, y: 150, w: 440, h: 56 };
-  const isFocusName = ACCOUNT.formFocus === 'name';
-  ctx.save();
-  rr(ctx, nameBox.x, nameBox.y, nameBox.w, nameBox.h, 12);
-  ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
-  ctx.strokeStyle = isFocusName ? '#ffd166' : 'rgba(255,255,255,0.35)';
-  ctx.lineWidth = isFocusName ? 3 : 2; ctx.stroke();
-  ctx.font = '600 12px system-ui,sans-serif';
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillStyle = 'rgba(255,209,102,0.85)';
-  ctx.fillText('👤 YOUR NAME', nameBox.x + 20, nameBox.y - 20);
-  ctx.font = '900 24px system-ui,sans-serif';
-  ctx.textBaseline = 'middle';
-  const nm = ACCOUNT.formName || '';
-  ctx.fillStyle = nm ? '#ffffff' : 'rgba(255,255,255,0.32)';
-  ctx.fillText(nm || 'PLAYER', nameBox.x + 20, nameBox.y + nameBox.h/2);
-  if (isFocusName){
-    const blink = Math.sin(performance.now()/280) > 0;
-    if (blink && nm.length < 10){
-      const tw = ctx.measureText(nm || 'PLAYER').width;
-      ctx.fillStyle = '#ffd166';
-      ctx.fillRect(nameBox.x + 20 + tw + 3, nameBox.y + 13, 3, nameBox.h - 26);
-    }
-  }
-  ctx.restore();
-  const phoneBox = { x: W/2 - 220, y: 250, w: 440, h: 56 };
-  const isFocusPhone = ACCOUNT.formFocus === 'phone';
-  ctx.save();
-  rr(ctx, phoneBox.x, phoneBox.y, phoneBox.w, phoneBox.h, 12);
-  ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
-  ctx.strokeStyle = isFocusPhone ? '#ffd166' : 'rgba(255,255,255,0.35)';
-  ctx.lineWidth = isFocusPhone ? 3 : 2; ctx.stroke();
-  ctx.font = '600 12px system-ui,sans-serif';
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillStyle = 'rgba(255,209,102,0.85)';
-  ctx.fillText('📱 MOBILE NUMBER (10 digits)', phoneBox.x + 20, phoneBox.y - 20);
-  ctx.font = '900 24px system-ui,sans-serif';
-  ctx.textBaseline = 'middle';
-  const ph = ACCOUNT.formPhone || '';
-  ctx.fillStyle = ph ? '#ffffff' : 'rgba(255,255,255,0.32)';
-  ctx.fillText(ph || '9876543210', phoneBox.x + 20, phoneBox.y + phoneBox.h/2);
-  if (isFocusPhone){
-    const blink = Math.sin(performance.now()/280) > 0;
-    if (blink && ph.length < 10){
-      const tw = ctx.measureText(ph).width;
-      ctx.fillStyle = '#ffd166';
-      ctx.fillRect(phoneBox.x + 20 + tw + 3, phoneBox.y + 13, 3, phoneBox.h - 26);
-    }
-  }
-  ctx.restore();
-  centerText('Tap a box to type  •  Tab to switch', W/2, 328, 13, 'rgba(255,255,255,0.55)');
-  if (ACCOUNT.loading) centerText('Creating account...', 380, 18, 'rgba(255,209,102,0.9)');
-  else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 380, 15, '#ff8a8a');
+  centerText('✍  CREATE ACCOUNT', 55, 34, '#ffd166');
+  centerText('Pick a username & password — one-time setup', 90, 14, 'rgba(255,255,255,0.7)');
+
+  drawInputBox(AUTH_BOXES.register.username, '👤 USERNAME (3-15, A-Z 0-9 _)', ACCOUNT.formUsername, ACCOUNT.formFocus === 'username', false);
+  drawSuggestionDropdown(AUTH_BOXES.register.username);
+  drawInputBox(AUTH_BOXES.register.password, '🔒 PASSWORD (4-20 chars)', ACCOUNT.formPassword, ACCOUNT.formFocus === 'password', true);
+
+  centerText('Suggestion: existing usernames shown as you type', W/2, 295, 11, 'rgba(255,209,102,0.6)');
+
+  if (ACCOUNT.loading) centerText('Creating account...', 350, 14, 'rgba(255,209,102,0.9)');
+  else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 350, 14, '#ff8a8a');
+
   for (const b of menuButtons) drawMenuButton(b, b.id === 'doRegister' ? '#ffd166' : '#ffffff');
 }
+function drawGuestScreen(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('🎮  GUEST MODE', 90, 38, '#ffd166');
+  centerText('Play without account — stats are NOT saved', 130, 15, 'rgba(255,255,255,0.75)');
+  centerText('No online matches as guest', 158, 13, 'rgba(255,138,138,0.85)');
+
+  drawInputBox(AUTH_BOXES.guest.name, '👤 YOUR NAME', ACCOUNT.formName, ACCOUNT.formFocus === 'guestName', false);
+
+  centerText('Type any name to play  •  Register later to save', W/2, 270, 12, 'rgba(255,209,102,0.7)');
+
+  if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 335, 14, '#ff8a8a');
+
+  for (const b of menuButtons) drawMenuButton(b, b.id === 'doGuest' ? '#ffd166' : '#ffffff');
+}
+
 function drawLeaderboard(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
@@ -2394,7 +2650,7 @@ function drawLeaderboard(){
     for (let i=0; i<LEADERBOARD.data.length; i++){
       const p = LEADERBOARD.data[i];
       const y = startY + i*(bh + gap);
-      const isMe = (p.phone === ACCOUNT.phone);
+      const isMe = (p.username === ACCOUNT.username && !ACCOUNT.isGuest);
       ctx.save();
       rr(ctx, startX, y, bw, bh, 8);
       ctx.fillStyle = isMe ? 'rgba(255,209,102,0.25)' : 'rgba(20,25,40,0.7)';
@@ -2408,7 +2664,7 @@ function drawLeaderboard(){
       ctx.fillText(medal, startX + 14, y + bh/2);
       ctx.fillStyle = isMe ? '#ffd166' : '#ffffff';
       ctx.font = '900 14px system-ui,sans-serif';
-      ctx.fillText(p.name || 'PLAYER', startX + 62, y + bh/2);
+      ctx.fillText(p.username || p.name || 'PLAYER', startX + 62, y + bh/2);
       ctx.textAlign='right';
       ctx.fillStyle = '#ffffff';
       ctx.fillText((p.bestOnline||0) + ' m', startX + bw - 14, y + bh/2);
@@ -2424,7 +2680,8 @@ function drawProfileView(){
   const cx = W/2, cy = 145, r = 46;
   ctx.save();
   const grd = ctx.createRadialGradient(cx - 15, cy - 15, 5, cx, cy, r);
-  grd.addColorStop(0, '#ffd166'); grd.addColorStop(1, '#c99a2e');
+  grd.addColorStop(0, ACCOUNT.isGuest ? '#8a8a8a' : '#ffd166');
+  grd.addColorStop(1, ACCOUNT.isGuest ? '#5a5a5a' : '#c99a2e');
   ctx.fillStyle = grd;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 3; ctx.stroke();
@@ -2433,8 +2690,13 @@ function drawProfileView(){
   ctx.fillStyle = '#1a1a1a';
   ctx.fillText((ACCOUNT.name || 'P').charAt(0), cx, cy + 2);
   ctx.restore();
-  centerText(ACCOUNT.name, 220, 30, '#ffffff');
-  centerText('📱 ' + ACCOUNT.phone, 252, 16, 'rgba(255,255,255,0.6)');
+  centerText(ACCOUNT.name, 218, 30, '#ffffff');
+  if (ACCOUNT.isGuest){
+    centerText('🎮 GUEST — stats not saved', 250, 15, 'rgba(255,138,138,0.9)');
+    centerText('Register to save your progress', 274, 13, 'rgba(255,255,255,0.6)');
+  } else {
+    centerText('👤 ' + ACCOUNT.username, 250, 16, 'rgba(255,255,255,0.6)');
+  }
   const stats = [
     { label:'Best Single', value: ACCOUNT.bestSingle + 'm', color:'#ffd166' },
     { label:'Best Online', value: ACCOUNT.bestOnline + 'm', color:'#8affa0' },
@@ -2617,14 +2879,16 @@ function drawMenuScreen(){
   ctx.save();
   rr(ctx, bx, by, bw, bh, 12);
   ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
-  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.strokeStyle = ACCOUNT.isGuest ? 'rgba(180,180,180,0.8)' : '#ffd166';
+  ctx.lineWidth = 2.5; ctx.stroke();
   ctx.font='900 15px system-ui,sans-serif';
   ctx.textAlign='left'; ctx.textBaseline='middle';
-  ctx.fillStyle='#ffd166';
-  ctx.fillText('👤 ' + ACCOUNT.name, bx + 14, by + 17);
+  ctx.fillStyle= ACCOUNT.isGuest ? '#c8c8c8' : '#ffd166';
+  ctx.fillText((ACCOUNT.isGuest ? '🎮 ' : '👤 ') + ACCOUNT.name, bx + 14, by + 17);
   ctx.font='700 10px system-ui,sans-serif';
   ctx.fillStyle='rgba(255,255,255,0.65)';
-  ctx.fillText('📱 ' + ACCOUNT.phone + ' · W:' + ACCOUNT.wins + ' L:' + ACCOUNT.losses, bx + 14, by + 36);
+  const sub = ACCOUNT.isGuest ? 'GUEST · stats not saved' : ('@' + ACCOUNT.username + ' · W:' + ACCOUNT.wins + ' L:' + ACCOUNT.losses);
+  ctx.fillText(sub, bx + 14, by + 36);
   ctx.restore();
 
   const pvW = 130, pvH = 52, pvX = W - 18 - pvW, pvY = 18;
@@ -3030,6 +3294,7 @@ function draw(){
   if (G.phase === 'splash'){ drawSplash(); return; }
   if (G.phase === 'login'){ drawLoginScreen(); return; }
   if (G.phase === 'register'){ drawRegisterScreen(); return; }
+  if (G.phase === 'guest'){ drawGuestScreen(); return; }
   if (G.phase === 'leaderboard'){ drawLeaderboard(); return; }
   if (G.phase === 'profileView'){ drawProfileView(); return; }
   ctx.save();
@@ -3098,8 +3363,9 @@ function updateHUD(){
   const hud = document.getElementById('hud');
   if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'
       || G.phase === 'nameEntry' || G.phase === 'splash' || G.phase === 'login'
-      || G.phase === 'register' || G.phase === 'searching' || G.phase === 'toss'
-      || G.phase === 'tossResult' || G.phase === 'leaderboard' || G.phase === 'profileView'
+      || G.phase === 'register' || G.phase === 'guest' || G.phase === 'searching'
+      || G.phase === 'toss' || G.phase === 'tossResult' || G.phase === 'leaderboard'
+      || G.phase === 'profileView'
       || (G.phase === 'waitingOpp' && !NET.myDone)){
     hud.style.display = 'none'; return;
   }
