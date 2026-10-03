@@ -81,18 +81,38 @@ const SWEET_LO = 62, SWEET_HI = 88;
 const SKY_BOTTOM = 148, STADIUM_TOP = 140, STADIUM_BOTTOM = 300, HORIZON = 300;
 const SPLASH_DURATION = 2.6, TOSS_DURATION = 2500, TOSS_RESULT_DURATION = 2400;
 
+/* ==================== UNLIMITED LEVELS ==================== */
+const LEVEL_NAMES = [
+  'ROOKIE','AMATEUR','PRO','EXPERT','LEGEND',
+  'MASTER','GRANDMASTER','CHAMPION','ELITE','SUPREME',
+  'TITAN','IMMORTAL','GODLIKE','UNSTOPPABLE','PHENOMENAL'
+];
+// Target formula:
+//  L1 = 100, L2 = 250, L3 = 500, L4 = 1000, L5 = 2000, L6 = 4000, ...
+//  i.e. from L3 onwards: 500 * 2^(n-3)
+function getLevelTarget(n){
+  n = Math.max(1, Math.floor(n));
+  if (n === 1) return 100;
+  if (n === 2) return 250;
+  return 500 * Math.pow(2, n - 3);
+}
+function getLevel(n){
+  n = Math.max(1, Math.floor(n));
+  const target = getLevelTarget(n);
+  const speed1 = Math.min(600 + (n-1) * 100, 2400);
+  const speed2 = Math.min(560 + (n-1) * 95, 2300);
+  const error  = Math.max(52 - (n-1) * 2.5, 6);
+  let name;
+  if (n <= LEVEL_NAMES.length) name = LEVEL_NAMES[n-1];
+  else name = 'LEGEND ' + n;
+  return { level: n, target, speed:[speed1, speed2], error, name };
+}
+
 const SHOTS = {
   PUSH:  { vxBase:  560, vyBase: -260, label:'PUSH',  sub:'SAFE',  color:'#3fa35a' },
   DRIVE: { vxBase:  980, vyBase: -580, label:'DRIVE', sub:'MID',   color:'#c99a2e' },
   LOFT:  { vxBase: 1380, vyBase: -840, label:'LOFT',  sub:'RISKY', color:'#a53939' }
 };
-const LEVELS = [
-  { speed:[600,  560], error:52, name:'ROOKIE',  target: 50  },
-  { speed:[750,  700], error:44, name:'AMATEUR', target: 80  },
-  { speed:[900,  840], error:36, name:'PRO',     target: 120 },
-  { speed:[1050, 980], error:28, name:'EXPERT',  target: 170 },
-  { speed:[1200, 1120],error:20, name:'LEGEND',  target: 250 }
-];
 const PLAYER_COLORS = ['#e63946', '#3a86ff', '#06d6a0', '#ffbe0b', '#a06bff'];
 const PLAYER_NAMES  = ['RED',     'BLUE',    'GREEN',   'YELLOW',  'PURPLE'];
 const CONFETTI_COLORS = ['#ffd166','#ff8a8a','#8affa0','#5c9ee0','#e0a95c','#ff6bcb','#ffffff','#a06bff'];
@@ -108,6 +128,7 @@ const ACCOUNT = {
   bestSingle: 0, bestOnline: 0,
   matchesPlayed: 0, onlineMatches: 0,
   wins: 0, losses: 0, totalRuns: 0,
+  highestUnlockedLevel: 1,
   loading: false, error: '',
   formUsername: '',
   formPassword: '',
@@ -123,7 +144,10 @@ let suggestionsOpen = false;
 function saveSession(){
   try {
     if (ACCOUNT.isGuest){
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ isGuest: true, name: ACCOUNT.name }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        isGuest: true, name: ACCOUNT.name,
+        highestUnlockedLevel: ACCOUNT.highestUnlockedLevel
+      }));
     } else {
       localStorage.setItem(SESSION_KEY, JSON.stringify({ username: ACCOUNT.username, isGuest: false }));
     }
@@ -201,6 +225,7 @@ function registerUserAccount(username, password){
       bestSingle: 0, bestOnline: 0,
       matchesPlayed: 0, onlineMatches: 0,
       wins: 0, losses: 0, totalRuns: 0,
+      highestUnlockedLevel: 1,
       createdAt: Date.now(), updatedAt: Date.now()
     };
     return NET.db.ref('accounts/' + key).set(data).then(() => {
@@ -210,6 +235,7 @@ function registerUserAccount(username, password){
       ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
       ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
       ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
+      ACCOUNT.highestUnlockedLevel = 1;
       ACCOUNT.loggedIn = true;
       ACCOUNT.isGuest = false;
       ACCOUNT.loading = false;
@@ -245,6 +271,7 @@ function loginUserAccount(username, password){
     ACCOUNT.wins = data.wins || 0;
     ACCOUNT.losses = data.losses || 0;
     ACCOUNT.totalRuns = data.totalRuns || 0;
+    ACCOUNT.highestUnlockedLevel = Math.max(1, data.highestUnlockedLevel || 1);
     ACCOUNT.loggedIn = true;
     ACCOUNT.isGuest = false;
     ACCOUNT.loading = false;
@@ -264,6 +291,7 @@ function guestLogin(name){
   ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
   ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
   ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
+  ACCOUNT.highestUnlockedLevel = 1;
   ACCOUNT.error = '';
   saveSession();
   setPhase('menu');
@@ -279,6 +307,7 @@ function logoutUser(){
   ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
   ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
   ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
+  ACCOUNT.highestUnlockedLevel = 1;
   ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.formName = '';
   ACCOUNT.formFocus = 'username';
   ACCOUNT.mode = 'login'; ACCOUNT.error = '';
@@ -295,6 +324,7 @@ function syncAccountStats(){
     bestSingle: ACCOUNT.bestSingle, bestOnline: ACCOUNT.bestOnline,
     matchesPlayed: ACCOUNT.matchesPlayed, onlineMatches: ACCOUNT.onlineMatches,
     wins: ACCOUNT.wins, losses: ACCOUNT.losses, totalRuns: ACCOUNT.totalRuns,
+    highestUnlockedLevel: ACCOUNT.highestUnlockedLevel,
     updatedAt: Date.now()
   }).catch(()=>{});
 }
@@ -331,6 +361,7 @@ function fetchLeaderboard(cb){
 const G = {
   phase: 'splash',
   mode: 'single', level: 1,
+  levelPage: 0,
   score: 0, best: 0, outs: 0,
   power: 0, powerDir: 1,
   quality: 0, accuracy: 0,
@@ -650,6 +681,10 @@ function setPhase(p){
   if (p === 'login'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = false; usernameSuggestions = []; }
   if (p === 'register'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = false; usernameSuggestions = []; }
   if (p === 'guest'){ ACCOUNT.formFocus = 'guestName'; }
+  if (p === 'levelSelect'){
+    // Show page containing current highest unlocked level
+    G.levelPage = Math.max(0, Math.floor((ACCOUNT.highestUnlockedLevel - 1) / 5));
+  }
   if (p==='menu'||p==='levelSelect'||p==='playerSelect'||p==='turnIntro'||p==='turnEnd'||p==='gameOver'||p==='leaderboard'||p==='login'||p==='register'||p==='guest'||p==='profileView'){
     rebuildMenuButtons();
   }
@@ -666,14 +701,13 @@ function rebuildMenuButtons(){
     menuButtons.push({ id:'leaderboard', label:'🏆  LEADERBOARD', x: W/2 - 190, y: 432, w: 380, h: 50 });
   }
   else if (G.phase === 'levelSelect'){
-    const bw = 140, bh = 90, gap = 20;
-    const total = bw*5 + gap*4, startX = W/2 - total/2;
-    for (let i=0; i<5; i++){
-      menuButtons.push({ id: 'level'+(i+1), label:'LEVEL '+(i+1),
-        sub: LEVELS[i].name + ' · ' + LEVELS[i].target + 'm',
-        x: startX + i*(bw+gap), y: 300, w: bw, h: bh });
+    // Pagination + Back only — level buttons are drawn manually with lock state
+    const page = G.levelPage || 0;
+    if (page > 0){
+      menuButtons.push({ id:'pagePrev', label:'◀ PREV', x: W/2 - 260, y: 390, w: 140, h: 42 });
     }
-    menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 430, w: 160, h: 46 });
+    menuButtons.push({ id:'pageNext', label:'NEXT ▶', x: W/2 + 120, y: 390, w: 140, h: 42 });
+    menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 452, w: 160, h: 42 });
   }
   else if (G.phase === 'playerSelect'){
     const bw = 150, bh = 100, gap = 18;
@@ -699,11 +733,9 @@ function rebuildMenuButtons(){
       return;
     }
     if (G.mode === 'single'){
-      if (G.levelCleared && G.level < 5){
-        menuButtons.push({ id:'nextLevel', label:'NEXT LEVEL  ▶', x: W/2 - 240, y: 440, w: 220, h: 56 });
+      if (G.levelCleared){
+        menuButtons.push({ id:'nextLevel', label:'NEXT LEVEL ' + (G.level+1) + '  ▶', x: W/2 - 240, y: 440, w: 220, h: 56 });
         menuButtons.push({ id:'menu',      label:'MAIN MENU',     x: W/2 + 20,  y: 440, w: 220, h: 56 });
-      } else if (G.levelCleared && G.level === 5){
-        menuButtons.push({ id:'menu', label:'MAIN MENU', x: W/2 - 110, y: 440, w: 220, h: 56 });
       } else {
         menuButtons.push({ id:'retry', label:'RETRY LEVEL', x: W/2 - 240, y: 440, w: 220, h: 56 });
         menuButtons.push({ id:'menu',  label:'MAIN MENU',   x: W/2 + 20,  y: 440, w: 220, h: 56 });
@@ -861,7 +893,7 @@ function getFieldingPositions(n){
 }
 function buildFielders(){
   fielders.length = 0;
-  const lv = LEVELS[clamp(G.level - 1, 0, LEVELS.length - 1)];
+  const lv = getLevel(G.level);
   G.throwErrorBase = lv.error;
   if (G.mode === 'single' || G.mode === 'online'){
     fielders.push({
@@ -904,6 +936,14 @@ function buildFielders(){
   }
 }
 function startSinglePlayer(level){
+  level = Math.max(1, Math.floor(level));
+  // Enforce progression — only unlocked levels can be played
+  if (level > ACCOUNT.highestUnlockedLevel){
+    G.banner = 'LOCKED — CLEAR LEVEL ' + (level-1) + ' FIRST';
+    G.bannerTimer = 2.2;
+    beep(200, 0.2, 'sawtooth', 0.10);
+    return;
+  }
   G.mode = 'single'; G.level = level;
   G.players = [{ name: ACCOUNT.name || 'YOU', color: PLAYER_COLORS[0], score:0, outs:0 }];
   G.currentPlayer = 0;
@@ -1044,12 +1084,20 @@ function endTurn(){
 function advanceFromTurnEnd(){
   if (G.mode === 'online'){ reportOnlineScore(G.score); return; }
   if (G.mode === 'single'){
-    const lv = LEVELS[clamp(G.level-1,0,4)];
+    const lv = getLevel(G.level);
     G.levelCleared = (G.score >= lv.target);
     G.gameOverWinner = G.levelCleared ? 0 : -1;
-    G.gameOverMsg = G.levelCleared ? 'LEVEL ' + G.level + ' CLEARED!' : 'LEVEL FAILED';
+    G.gameOverMsg = G.levelCleared ? ('LEVEL ' + G.level + ' CLEARED!') : 'LEVEL FAILED';
     G.celebrationTimer = 0; G.confettiTimer = 0;
     updateStatsSingle(G.score);
+    // Unlock next level on clear
+    if (G.levelCleared){
+      if (G.level + 1 > ACCOUNT.highestUnlockedLevel){
+        ACCOUNT.highestUnlockedLevel = G.level + 1;
+        saveSession();
+        syncAccountStats();
+      }
+    }
     setPhase('gameOver');
     if (G.levelCleared){
       crowdExcitement = 2.0; playCheer(1.4);
@@ -1191,6 +1239,7 @@ function update(dt){
           ACCOUNT.loggedIn = true;
           ACCOUNT.isGuest = true;
           ACCOUNT.name = session.name || 'GUEST';
+          ACCOUNT.highestUnlockedLevel = Math.max(1, session.highestUnlockedLevel || 1);
           setPhase('menu');
         } else if (session.username && NET.ready){
           const key = usernameKey(session.username);
@@ -1207,6 +1256,7 @@ function update(dt){
               ACCOUNT.wins = data.wins || 0;
               ACCOUNT.losses = data.losses || 0;
               ACCOUNT.totalRuns = data.totalRuns || 0;
+              ACCOUNT.highestUnlockedLevel = Math.max(1, data.highestUnlockedLevel || 1);
               ACCOUNT.loggedIn = true;
               ACCOUNT.isGuest = false;
               setPhase('menu');
@@ -1432,7 +1482,33 @@ const AUTH_BOXES = {
   }
 };
 
+// Level button hit-test rectangles (same as drawLevelSelect)
+function getLevelButtonRect(i){
+  const bw = 140, bh = 90, gap = 20;
+  const total = bw*5 + gap*4, startX = W/2 - total/2;
+  return { x: startX + i*(bw+gap), y: 200, w: bw, h: bh };
+}
+
 function handleMenuClick(x, y){
+  // Custom level buttons first (levelSelect)
+  if (G.phase === 'levelSelect'){
+    const page = G.levelPage || 0;
+    for (let i=0; i<5; i++){
+      const rect = getLevelButtonRect(i);
+      if (pointInButton(x, y, rect)){
+        const lvlNum = page*5 + i + 1;
+        if (lvlNum > ACCOUNT.highestUnlockedLevel){
+          beep(200, 0.2, 'sawtooth', 0.10);
+          G.banner = 'LOCKED — CLEAR LEVEL ' + (lvlNum-1) + ' FIRST';
+          G.bannerTimer = 2.2;
+          return true;
+        }
+        beep(880, 0.06, 'triangle', 0.09);
+        startSinglePlayer(lvlNum);
+        return true;
+      }
+    }
+  }
   for (const b of menuButtons){
     if (pointInButton(x, y, b)){
       beep(880, 0.06, 'triangle', 0.09);
@@ -1464,15 +1540,34 @@ function handleMenuClick(x, y){
         setPhase('login');
         return true;
       }
+      if (b.id === 'pagePrev'){
+        G.levelPage = Math.max(0, (G.levelPage || 0) - 1);
+        rebuildMenuButtons();
+        return true;
+      }
+      if (b.id === 'pageNext'){
+        G.levelPage = (G.levelPage || 0) + 1;
+        rebuildMenuButtons();
+        return true;
+      }
       if (b.id === 'logout'){ cleanupOnline(); logoutUser(); return true; }
       if (b.id === 'cancelSearch'){ NET.searching = false; cleanupOnline(); setPhase('menu'); return true; }
       if (b.id === 'onlineAgain'){ cleanupOnline(); startOnlineMatchmaking(); return true; }
-      if (b.id.startsWith('level')){ startSinglePlayer(parseInt(b.id.slice(5),10)); return true; }
       if (b.id.startsWith('pc')){ startMultiPlayer(parseInt(b.id.slice(2),10)); return true; }
       if (b.id === 'back'){ setPhase('menu'); return true; }
       if (b.id === 'startBat'){ beginBatting(); return true; }
       if (b.id === 'continue'){ advanceFromTurnEnd(); return true; }
-      if (b.id === 'nextLevel'){ startSinglePlayer(Math.min(G.level+1,5)); return true; }
+      if (b.id === 'nextLevel'){
+        const next = G.level + 1;
+        if (next <= ACCOUNT.highestUnlockedLevel){
+          startSinglePlayer(next);
+        } else {
+          G.banner = 'LOCKED — CLEAR LEVEL ' + G.level + ' FIRST';
+          G.bannerTimer = 2;
+          beep(200, 0.2, 'sawtooth', 0.10);
+        }
+        return true;
+      }
       if (b.id === 'retry'){ startSinglePlayer(G.level); return true; }
       if (b.id === 'playAgain'){
         if (G.mode === 'single') startSinglePlayer(G.level);
@@ -1507,7 +1602,6 @@ function handleMenuClick(x, y){
       }
     }
   }
-  // ===== GUEST BUTTON on login screen =====
   if (G.phase === 'login'){
     const gbW = 360, gbH = 46, gbX = W/2 - gbW/2, gbY = 398;
     if (pointInButton(x,y,{x:gbX, y:gbY, w:gbW, h:gbH})){
@@ -1696,7 +1790,19 @@ window.addEventListener('keydown', e=>{
     if (e.key==='l' || e.key==='L'){ cleanupOnline(); logoutUser(); e.preventDefault(); return; }
   }
   if (G.phase === 'levelSelect'){
-    if (e.key>='1' && e.key<='5'){ startSinglePlayer(parseInt(e.key,10)); e.preventDefault(); return; }
+    if (e.key>='1' && e.key<='5'){
+      const lvlNum = (G.levelPage || 0) * 5 + parseInt(e.key, 10);
+      if (lvlNum > ACCOUNT.highestUnlockedLevel){
+        G.banner = 'LOCKED — CLEAR LEVEL ' + (lvlNum-1) + ' FIRST';
+        G.bannerTimer = 2.2;
+        beep(200, 0.2, 'sawtooth', 0.10);
+        e.preventDefault(); return;
+      }
+      startSinglePlayer(lvlNum);
+      e.preventDefault(); return;
+    }
+    if (e.key==='ArrowLeft'){ G.levelPage = Math.max(0, (G.levelPage||0) - 1); rebuildMenuButtons(); e.preventDefault(); return; }
+    if (e.key==='ArrowRight'){ G.levelPage = (G.levelPage||0) + 1; rebuildMenuButtons(); e.preventDefault(); return; }
     if (e.key==='Escape'){ setPhase('menu'); e.preventDefault(); return; }
   }
   if (G.phase === 'playerSelect'){
@@ -1713,9 +1819,10 @@ window.addEventListener('keydown', e=>{
   if (G.phase==='gameOver' && (e.code==='Space'||e.code==='Enter')){
     if (G.mode==='onlineResults'){ cleanupOnline(); startOnlineMatchmaking(); e.preventDefault(); return; }
     if (G.mode==='single'){
-      if (G.levelCleared && G.level<5) startSinglePlayer(G.level+1);
-      else if (!G.levelCleared) startSinglePlayer(G.level);
-      else setPhase('menu');
+      if (G.levelCleared){
+        const next = G.level + 1;
+        if (next <= ACCOUNT.highestUnlockedLevel) startSinglePlayer(next);
+      } else startSinglePlayer(G.level);
     } else { startMultiPlayer(G.players.length); }
     e.preventDefault(); return;
   }
@@ -2341,14 +2448,14 @@ function drawCurrentPlayerBadge(){
   ctx.fillStyle = '#ffffff';
   const label = (G.mode==='multi')
     ? 'BATTING: ' + p.name + '  (' + (G.currentPlayer+1) + '/' + G.players.length + ')'
-    : (G.mode==='online') ? 'BATTING ONLINE' : 'BATTING';
+    : (G.mode==='online') ? 'BATTING ONLINE' : ('BATTING · LV' + G.level);
   ctx.fillText(label, bx + 44, by + bh/2 - 6);
   ctx.font='700 11px system-ui,sans-serif';
   ctx.fillStyle='rgba(255,255,255,0.65)';
   let sub;
   if (G.mode==='multi') sub = fielders.length + ' fielder' + (fielders.length>1?'s':'') + ' on field';
   else if (G.mode==='online') sub = 'vs ' + (NET.oppName || 'OPPONENT');
-  else sub = 'Level '+G.level+' · Target '+LEVELS[clamp(G.level-1,0,4)].target+'m';
+  else { const lv = getLevel(G.level); sub = lv.name + ' · Target ' + lv.target + ' pts'; }
   ctx.fillText(sub, bx + 44, by + bh/2 + 10);
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
@@ -2363,10 +2470,11 @@ function drawOverlays(){
     const a = clamp(G.bannerTimer/0.4, 0, 1);
     ctx.globalAlpha = a;
     let c='#ffffff';
-    if (G.banner==='MISS!'||G.banner==='OUT!'||G.banner==='CAUGHT!'||G.banner==='REGISTER TO PLAY ONLINE') c='#ff8a8a';
+    if (G.banner==='MISS!'||G.banner==='OUT!'||G.banner==='CAUGHT!') c='#ff8a8a';
     else if (G.banner==='PERFECT!') c='#ffd166';
     else if (G.banner==='SAFE!') c='#8affa0';
-    centerText(G.banner, 380, G.banner === 'REGISTER TO PLAY ONLINE' ? 32 : 54, c);
+    else if (G.banner.indexOf('LOCKED') >= 0 || G.banner.indexOf('REGISTER') >= 0) c='#ff8a8a';
+    centerText(G.banner, 380, 54, c);
     ctx.globalAlpha=1;
   }
   if (G.phase==='air' && gulli.vy > 0){
@@ -2408,7 +2516,7 @@ function drawOverlays(){
                    : 'MISSED THE GULLI — OUT!';
       centerText(reason, 380, 44, '#ff8a8a');
     } else {
-      centerText('+ '+d+' METRES', 380, 52, '#ffd166');
+      centerText('+ '+d+' m', 380, 52, '#ffd166');
     }
   }
 }
@@ -2657,8 +2765,8 @@ function drawLeaderboard(){
 function drawProfileView(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
-  centerText('👤  YOUR PROFILE', 55, 30, '#ffd166');
-  const cx = W/2, cy = 145, r = 46;
+  centerText('👤  YOUR PROFILE', 50, 30, '#ffd166');
+  const cx = W/2, cy = 135, r = 42;
   ctx.save();
   const grd = ctx.createRadialGradient(cx - 15, cy - 15, 5, cx, cy, r);
   grd.addColorStop(0, ACCOUNT.isGuest ? '#8a8a8a' : '#ffd166');
@@ -2666,18 +2774,22 @@ function drawProfileView(){
   ctx.fillStyle = grd;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 3; ctx.stroke();
-  ctx.font = '900 44px system-ui,sans-serif';
+  ctx.font = '900 40px system-ui,sans-serif';
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillStyle = '#1a1a1a';
   ctx.fillText((ACCOUNT.name || 'P').charAt(0), cx, cy + 2);
   ctx.restore();
-  centerText(ACCOUNT.name, 218, 30, '#ffffff');
+  centerText(ACCOUNT.name, 200, 28, '#ffffff');
   if (ACCOUNT.isGuest){
-    centerText('🎮 GUEST — stats not saved', 250, 15, 'rgba(255,138,138,0.9)');
-    centerText('Register to save your progress', 274, 13, 'rgba(255,255,255,0.6)');
+    centerText('🎮 GUEST — stats not saved', 228, 14, 'rgba(255,138,138,0.9)');
+    centerText('Register to save your progress', 248, 12, 'rgba(255,255,255,0.6)');
   } else {
-    centerText('👤 ' + ACCOUNT.username, 250, 16, 'rgba(255,255,255,0.6)');
+    centerText('👤 ' + ACCOUNT.username, 228, 15, 'rgba(255,255,255,0.6)');
   }
+  // Highest unlocked level banner
+  const lv = getLevel(ACCOUNT.highestUnlockedLevel);
+  centerText('🏆 HIGHEST UNLOCKED: LEVEL ' + ACCOUNT.highestUnlockedLevel + ' (' + lv.name + ')', 268, 14, '#ffd166');
+
   const stats = [
     { label:'Best Single', value: ACCOUNT.bestSingle + 'm', color:'#ffd166' },
     { label:'Best Online', value: ACCOUNT.bestOnline + 'm', color:'#8affa0' },
@@ -2686,9 +2798,9 @@ function drawProfileView(){
     { label:'Matches', value: ACCOUNT.matchesPlayed, color:'#e0a95c' },
     { label:'Total Runs', value: ACCOUNT.totalRuns + 'm', color:'#a06bff' }
   ];
-  const cols = 3, bw = 170, bh = 62, gap = 12;
+  const cols = 3, bw = 170, bh = 58, gap = 12;
   const totalW = cols*bw + (cols-1)*gap;
-  const startX = W/2 - totalW/2, startY = 285;
+  const startX = W/2 - totalW/2, startY = 295;
   for (let i=0; i<stats.length; i++){
     const col = i % cols, row = Math.floor(i / cols);
     const x = startX + col*(bw+gap);
@@ -2700,10 +2812,10 @@ function drawProfileView(){
     ctx.font = '700 11px system-ui,sans-serif';
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillText(stats[i].label.toUpperCase(), x + bw/2, y + 18);
-    ctx.font = '900 22px system-ui,sans-serif';
+    ctx.fillText(stats[i].label.toUpperCase(), x + bw/2, y + 16);
+    ctx.font = '900 20px system-ui,sans-serif';
     ctx.fillStyle = stats[i].color;
-    ctx.fillText(String(stats[i].value), x + bw/2, y + 42);
+    ctx.fillText(String(stats[i].value), x + bw/2, y + 38);
     ctx.restore();
   }
   for (const b of menuButtons) drawMenuButton(b, b.id === 'logout' ? '#ff8a8a' : '#ffffff');
@@ -2868,7 +2980,9 @@ function drawMenuScreen(){
   ctx.fillText((ACCOUNT.isGuest ? '🎮 ' : '👤 ') + ACCOUNT.name, bx + 14, by + 17);
   ctx.font='700 10px system-ui,sans-serif';
   ctx.fillStyle='rgba(255,255,255,0.65)';
-  const sub = ACCOUNT.isGuest ? 'GUEST · stats not saved' : ('@' + ACCOUNT.username + ' · W:' + ACCOUNT.wins + ' L:' + ACCOUNT.losses);
+  const sub = ACCOUNT.isGuest
+    ? ('GUEST · Level ' + ACCOUNT.highestUnlockedLevel + ' unlocked')
+    : ('@' + ACCOUNT.username + ' · Lv' + ACCOUNT.highestUnlockedLevel + ' · W:' + ACCOUNT.wins + ' L:' + ACCOUNT.losses);
   ctx.fillText(sub, bx + 14, by + 36);
   ctx.restore();
 
@@ -2931,10 +3045,78 @@ function drawMenuScreen(){
 function drawLevelSelect(){
   ctx.fillStyle = 'rgba(12,16,28,0.55)';
   ctx.fillRect(0,0,W,H);
-  centerText('SELECT LEVEL', 140, 52, '#ffd166');
-  centerText('Faster fielders, deadlier throws. Unlimited gullis — 1 out ends innings.', 186, 17, 'rgba(255,255,255,0.75)');
-  centerText('Reach the target score to clear the level.', 210, 17, 'rgba(255,209,102,0.9)');
-  for (const b of menuButtons) drawMenuButton(b, b.id.startsWith('level') ? '#ffd166' : '#ffffff');
+  centerText('SELECT LEVEL', 100, 42, '#ffd166');
+  const page = G.levelPage || 0;
+  centerText('Page ' + (page+1) + '  ·  Levels ' + (page*5+1) + ' - ' + (page*5+5), 136, 15, 'rgba(255,255,255,0.75)');
+  centerText('Clear each level to unlock the next', 160, 13, 'rgba(255,209,102,0.85)');
+
+  // Draw 5 level buttons manually with lock state
+  for (let i=0; i<5; i++){
+    const lvlNum = page*5 + i + 1;
+    const lvl = getLevel(lvlNum);
+    const isLocked = lvlNum > ACCOUNT.highestUnlockedLevel;
+    const isCurrent = lvlNum === ACCOUNT.highestUnlockedLevel;
+    const rect = getLevelButtonRect(i);
+    const {x, y, w, h} = rect;
+
+    ctx.save();
+    rr(ctx, x, y, w, h, 12);
+    if (isLocked){
+      ctx.fillStyle = 'rgba(15,18,28,0.78)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(100,100,100,0.5)';
+      ctx.lineWidth = 2; ctx.stroke();
+    } else {
+      const grd = ctx.createLinearGradient(x, y, x, y+h);
+      grd.addColorStop(0, 'rgba(255,209,102,0.18)');
+      grd.addColorStop(1, 'rgba(255,209,102,0.05)');
+      ctx.fillStyle = grd; ctx.fill();
+      ctx.strokeStyle = isCurrent ? '#8affa0' : '#ffd166';
+      ctx.lineWidth = isCurrent ? 3 : 2.5; ctx.stroke();
+    }
+
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+    if (isLocked){
+      ctx.font = '900 32px system-ui,sans-serif';
+      ctx.fillStyle = 'rgba(160,160,160,0.7)';
+      ctx.fillText('🔒', x + w/2, y + 30);
+      ctx.font = '700 12px system-ui,sans-serif';
+      ctx.fillStyle = 'rgba(160,160,160,0.7)';
+      ctx.fillText('LEVEL ' + lvlNum, x + w/2, y + 60);
+      ctx.font = '600 10px system-ui,sans-serif';
+      ctx.fillStyle = 'rgba(140,140,140,0.65)';
+      ctx.fillText('Clear LV ' + (lvlNum-1), x + w/2, y + 76);
+    } else {
+      ctx.font = '900 15px system-ui,sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('LEVEL ' + lvlNum, x + w/2, y + 20);
+      ctx.font = '900 22px system-ui,sans-serif';
+      ctx.fillStyle = '#ffd166';
+      ctx.fillText(lvl.target + ' pts', x + w/2, y + 46);
+      ctx.font = '700 11px system-ui,sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillText(lvl.name, x + w/2, y + 68);
+      if (isCurrent){
+        ctx.font = '900 9px system-ui,sans-serif';
+        ctx.fillStyle = '#8affa0';
+        ctx.fillText('▶ PLAY NOW', x + w/2, y + 82);
+      } else {
+        // Show a check for cleared levels
+        ctx.font = '900 11px system-ui,sans-serif';
+        ctx.fillStyle = 'rgba(138,255,160,0.8)';
+        ctx.fillText('✓ CLEARED', x + w/2, y + 82);
+      }
+    }
+    ctx.restore();
+  }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+
+  for (const b of menuButtons){
+    let col = '#ffffff';
+    if (b.id === 'pagePrev' || b.id === 'pageNext') col = '#8affa0';
+    drawMenuButton(b, col);
+  }
 }
 function drawPlayerSelect(){
   ctx.fillStyle = 'rgba(12,16,28,0.55)';
@@ -3033,12 +3215,15 @@ function drawTurnIntro(){
   centerText('NOW BATTING', 130, 22, 'rgba(255,255,255,0.75)');
   if (G.mode === 'multi') centerText('PLAYER ' + (G.currentPlayer+1) + ' of ' + G.players.length, 190, 32, 'rgba(255,255,255,0.85)');
   else if (G.mode === 'online') centerText('ONLINE MATCH', 190, 32, 'rgba(255,255,255,0.85)');
-  else centerText('SINGLE PLAYER', 190, 32, 'rgba(255,255,255,0.85)');
+  else {
+    const lv = getLevel(G.level);
+    centerText('LEVEL ' + G.level + ' — ' + lv.name, 190, 32, 'rgba(255,255,255,0.85)');
+  }
   centerText(p.name, 262, 78, p.color);
   let infoText;
   if (G.mode === 'multi') infoText = 'Unlimited gullis · 1 out ends your turn · ' + fielders.length + ' fielder' + (fielders.length>1?'s':'') + ' ready';
   else if (G.mode === 'online') infoText = 'You vs ' + (NET.oppName || 'OPPONENT') + ' · 1 out ends your innings';
-  else infoText = 'Level ' + G.level + ' — ' + LEVELS[clamp(G.level-1,0,4)].name + ' · Target: ' + LEVELS[clamp(G.level-1,0,4)].target + 'm';
+  else { const lv = getLevel(G.level); infoText = '🎯 Target: ' + lv.target + ' pts  ·  Reach it to unlock Level ' + (G.level+1); }
   centerText(infoText, 315, 18, 'rgba(255,255,255,0.7)');
   for (const b of menuButtons) drawMenuButton(b, p.color);
 }
@@ -3048,21 +3233,21 @@ function drawTurnEnd(){
   const p = G.players[G.currentPlayer];
   if (!p) return;
   if (G.mode === 'single'){
-    const lv = LEVELS[clamp(G.level-1,0,4)];
+    const lv = getLevel(G.level);
     const cleared = G.score >= lv.target;
     centerText('LEVEL ' + G.level + ' — ' + (cleared ? 'CLEARED!' : 'FAILED'), 110, 44, cleared ? '#8affa0' : '#ff8a8a');
     centerText('Your score', 168, 22, 'rgba(255,255,255,0.75)');
-    centerText(G.score + ' m', 240, 76, '#ffd166');
-    centerText('Target: ' + lv.target + ' m', 296, 22, cleared ? 'rgba(138,255,160,0.9)' : 'rgba(255,138,138,0.9)');
+    centerText(G.score + ' pts', 240, 76, '#ffd166');
+    centerText('Target: ' + lv.target + ' pts', 296, 22, cleared ? 'rgba(138,255,160,0.9)' : 'rgba(255,138,138,0.9)');
   } else if (G.mode === 'online'){
     centerText('INNINGS OVER', 110, 44, '#ffd166');
     centerText('Your Final Score', 168, 22, 'rgba(255,255,255,0.75)');
-    centerText(G.score + ' m', 240, 76, '#ffd166');
+    centerText(G.score + ' pts', 240, 76, '#ffd166');
     centerText('Handing over to ' + (NET.oppName || 'opponent') + '…', 296, 22, 'rgba(255,209,102,0.9)');
   } else {
     centerText(p.name + ' — TURN OVER', 110, 42, p.color);
     centerText('Final Score', 172, 22, 'rgba(255,255,255,0.75)');
-    centerText(G.score + ' m', 248, 76, '#ffd166');
+    centerText(G.score + ' pts', 248, 76, '#ffd166');
   }
   if (G.mode === 'multi'){
     centerText('SCOREBOARD', 340, 20, 'rgba(255,255,255,0.6)');
@@ -3086,7 +3271,7 @@ function drawTurnEnd(){
       ctx.fillText(pl.name, x + bw/2, y + 17);
       ctx.font='900 22px system-ui,sans-serif';
       ctx.fillStyle = isDone ? '#ffffff' : 'rgba(255,255,255,0.35)';
-      ctx.fillText(isDone ? (pl.score+'m') : '—', x + bw/2, y + 40);
+      ctx.fillText(isDone ? (pl.score+'pts') : '—', x + bw/2, y + 40);
       ctx.restore();
     }
   }
@@ -3187,18 +3372,21 @@ function drawGameOver(){
     return;
   }
   if (G.mode === 'single'){
+    const lv = getLevel(G.level);
     if (G.levelCleared){
-      drawTrophy(W/2, 150, 1.15, t);
+      drawTrophy(W/2, 130, 0.95, t);
       const pulse = 0.85 + 0.15*Math.sin(t*4);
       ctx.save(); ctx.globalAlpha = pulse;
-      centerText('✨  CONGRATULATIONS!  ✨', 260, 36, '#ffd166');
+      centerText('✨  LEVEL ' + G.level + ' CLEARED!  ✨', 240, 32, '#ffd166');
       ctx.restore();
-      centerText('LEVEL ' + G.level + ' CLEARED', 302, 22, 'rgba(255,255,255,0.85)');
+      const nextLv = getLevel(G.level + 1);
+      centerText('Level ' + G.level + ': ' + G.score + ' pts (target ' + lv.target + ')', 285, 17, 'rgba(255,255,255,0.85)');
+      centerText('🔓 UNLOCKED: Level ' + (G.level + 1) + ' — ' + nextLv.name + ' (' + nextLv.target + ' pts)', 315, 16, '#8affa0');
     } else {
-      centerText(G.gameOverMsg, 150, 48, '#ff8a8a');
+      centerText('LEVEL ' + G.level + ' FAILED', 150, 42, '#ff8a8a');
+      centerText('You scored ' + G.score + ' pts — needed ' + lv.target + ' pts', 205, 20, 'rgba(255,255,255,0.85)');
+      centerText('Try again to unlock next level!', 240, 16, 'rgba(255,255,255,0.6)');
     }
-    centerText('Level ' + G.level + ' — Your Score', 352, 20, 'rgba(255,255,255,0.85)');
-    centerText(G.score + ' m', 400, 44, '#ffd166');
   } else {
     const w = G.players[G.gameOverWinner];
     const glowPulse = 0.55 + 0.45 * Math.sin(t * 2.5);
