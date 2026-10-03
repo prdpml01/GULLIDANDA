@@ -57,17 +57,16 @@
 "use strict";
 
 /* ==================== FIREBASE CONFIG ==================== */
-/* apna config yahan paste karo */
-const firebaseConfig = const firebaseConfig = {
-  apiKey: "AIzaSyDG1YzutTMVnCRoVZMsFW3HNJvL1S1Q5Y",
+const firebaseConfig = {
+  apiKey: "AIzaSyDG1YzutTMVnCRoVZMsFW3HNJVzLlSlQ5Y",
   authDomain: "gulli-danda-c4e39.firebaseapp.com",
   databaseURL: "https://gulli-danda-c4e39-default-rtdb.firebaseio.com",
   projectId: "gulli-danda-c4e39",
   storageBucket: "gulli-danda-c4e39.firebasestorage.app",
   messagingSenderId: "531759654343",
-  appId: "1:531759654343:web:2748d946ddbd1d3fdee5e2",
+  appId: "1:531759654343:web:2748d946dddb1d3fdee5e2",
   measurementId: "G-QE22357WNQ"
-};;
+};
 /* ========================================================== */
 
 const canvas = document.getElementById('game');
@@ -146,26 +145,17 @@ let shake = 0;
 
 /* ==================== ONLINE NETWORK ==================== */
 const NET = {
-  ready: false,
-  db: null,
-  roomId: null,
-  role: null,
-  myName: '',
-  oppName: '',
-  oppScore: null,
-  oppDone: false,
-  myDone: false,
-  roomRef: null,
-  listener: null,
-  searching: false,
-  searchStart: 0,
+  ready: false, db: null, roomId: null, role: null,
+  myName: '', oppName: '', oppScore: null,
+  oppDone: false, myDone: false,
+  roomRef: null, listener: null,
+  searching: false, searchStart: 0,
   statusMsg: 'Searching...'
 };
 
 function initFirebase(){
   try{
     if (typeof firebase === 'undefined') return false;
-    if (firebaseConfig.apiKey === 'PASTE_YAHAN') return false;
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     NET.db = firebase.database();
     NET.ready = true;
@@ -204,11 +194,8 @@ function tryFindRoom(){
       }
     });
     if (!joined){
-      if (performance.now() - NET.searchStart > 4000){
-        createRoom();
-      } else {
-        setTimeout(()=>{ if (NET.searching) tryFindRoom(); }, 1800);
-      }
+      if (performance.now() - NET.searchStart > 4000){ createRoom(); }
+      else { setTimeout(()=>{ if (NET.searching) tryFindRoom(); }, 1800); }
     }
   }).catch(()=>{ createRoom(); });
 }
@@ -219,8 +206,7 @@ function createRoom(){
   NET.roomId = id; NET.role = 'p1';
   NET.roomRef = NET.db.ref('rooms/' + id);
   NET.roomRef.set({
-    status: 'waiting',
-    createdAt: Date.now(),
+    status: 'waiting', createdAt: Date.now(),
     p1: { name: NET.myName, score: 0, done: false },
     p2: null
   }).then(()=>{
@@ -236,10 +222,7 @@ function joinRoom(id, room){
   NET.roomRef.update({
     status: 'playing',
     p2: { name: NET.myName, score: 0, done: false }
-  }).then(()=>{
-    watchRoom();
-    beginOnlineTurn();
-  });
+  }).then(()=>{ watchRoom(); beginOnlineTurn(); });
 }
 
 function watchRoom(){
@@ -268,8 +251,7 @@ function beginOnlineTurn(){
   G.currentPlayer = 0;
   G.gameOverWinner = null; G.gameOverMsg = ''; G.levelCleared = false;
   G.celebrationTimer = 0; G.confettiTimer = 0;
-  initCrowd();
-  prepareTurn();
+  initCrowd(); prepareTurn();
 }
 
 function reportOnlineScore(score){
@@ -290,9 +272,7 @@ function checkFinish(){
   NET.roomRef.once('value').then(snap => {
     const d = snap.val();
     if (!d) return;
-    if (d.p1 && d.p2 && d.p1.done && d.p2.done){
-      showOnlineResults(d);
-    }
+    if (d.p1 && d.p2 && d.p1.done && d.p2.done){ showOnlineResults(d); }
   });
 }
 
@@ -321,15 +301,10 @@ function cleanupOnline(){
     try { NET.roomRef.off('value', NET.listener); } catch(e){}
     NET.listener = null;
   }
-  if (NET.roomRef && NET.roomId && NET.myDone && NET.role){
-    const upd = {}; upd[NET.role + '/done'] = true;
-    NET.roomRef.update(upd).catch(()=>{});
-  }
   NET.roomId = null; NET.role = null; NET.oppName = '';
   NET.oppScore = null; NET.oppDone = false; NET.myDone = false;
   NET.roomRef = null;
 }
-/* ===================================================== */
 
 const shotButtons = [];
 function layoutShotButtons(){
@@ -934,16 +909,8 @@ function update(dt){
     if (G.splashTimer >= SPLASH_DURATION){ setPhase('menu'); beep(880, 0.1, 'triangle', 0.08); }
     return;
   }
-
-  /* online searching animation only */
-  if (G.phase === 'searching'){
-    if (!NET.searching) return;
-    return;
-  }
-  if (G.phase === 'waitingOpp'){
-    if (NET.oppDone && !NET.myDone) return;
-    return;
-  }
+  if (G.phase === 'searching'){ return; }
+  if (G.phase === 'waitingOpp'){ return; }
 
   if (G.phase==='turnEnd' || G.phase==='gameOver' || G.phase==='turnIntro'
       || G.phase==='menu' || G.phase==='levelSelect' || G.phase==='playerSelect'
@@ -1146,10 +1113,7 @@ function handleMenuClick(x, y){
       }
       if (b.id.startsWith('level')){ startSinglePlayer(parseInt(b.id.slice(5),10)); return true; }
       if (b.id.startsWith('pc')){ startMultiPlayer(parseInt(b.id.slice(2),10)); return true; }
-      if (b.id === 'back'){
-        if (G.phase === 'onlineName'){ setPhase('menu'); return true; }
-        setPhase('menu'); return true;
-      }
+      if (b.id === 'back'){ setPhase('menu'); return true; }
       if (b.id === 'startBat'){ beginBatting(); return true; }
       if (b.id === 'continue'){ advanceFromTurnEnd(); return true; }
       if (b.id === 'nextLevel'){ startSinglePlayer(Math.min(G.level+1,5)); return true; }
@@ -1170,7 +1134,6 @@ function handleMenuClick(x, y){
 }
 function onInput(e){
   if (!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(err){} }
-
   if (G.phase === 'splash'){
     if (G.splashTimer > 0.7){ G.splashTimer = SPLASH_DURATION; }
     return;
@@ -1268,7 +1231,7 @@ window.addEventListener('keydown', e=>{
 });
 canvas.addEventListener('pointerdown', e=>{ e.preventDefault(); onInput(e); });
 
-/* ==================== DRAW: ENV ==================== */
+/* ==================== DRAW ==================== */
 const clouds = [
   { x:140, y:58, s:0.9 }, { x:470, y:98, s:0.65 },
   { x:780, y:50, s:0.85 }, { x:1120, y:105, s:0.55 },
@@ -1592,21 +1555,6 @@ function drawFielder(f){
   ctx.fillStyle=f.color;
   ctx.beginPath(); ctx.ellipse(x + dir*5, headY - 5, 11, 3.2, 0, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth=1; ctx.stroke();
-  if (f.playerName && G.mode === 'multi'){
-    ctx.save();
-    ctx.font = '700 11px system-ui,sans-serif';
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    const tw = ctx.measureText(f.playerName).width;
-    const pillW = tw + 14, pillH = 17;
-    const pillY = headY - headR - 64;
-    rr(ctx, x - pillW/2, pillY, pillW, pillH, 8);
-    ctx.fillStyle = 'rgba(20,25,40,0.82)'; ctx.fill();
-    ctx.strokeStyle = f.color; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.fillText(f.playerName, x, pillY + pillH/2);
-    ctx.restore();
-    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-  }
   if (f === activeFielder && (G.phase==='fielding'||G.phase==='throw')){
     const pulse = 0.5 + 0.5*Math.sin(performance.now()/150);
     ctx.save(); ctx.globalAlpha = 0.4 + pulse*0.5;
@@ -1888,8 +1836,6 @@ function drawOverlays(){
     }
   }
 }
-
-/* ==================== SPLASH ==================== */
 function drawSplash(){
   const t = G.splashTimer;
   let alpha = 1;
@@ -1978,8 +1924,6 @@ function drawSplash(){
   }
   ctx.restore();
 }
-
-/* ==================== MENUS ==================== */
 function drawMenuScreen(){
   ctx.fillStyle = 'rgba(12,16,28,0.55)';
   ctx.fillRect(0,0,W,H);
@@ -2323,8 +2267,6 @@ function drawGameOver(){
   }
   for (const b of menuButtons) drawMenuButton(b, '#ffd166');
 }
-
-/* ==================== ONLINE DRAW ==================== */
 function drawOnlineNameEntry(){
   ctx.fillStyle = 'rgba(12,16,28,0.82)';
   ctx.fillRect(0,0,W,H);
@@ -2416,21 +2358,18 @@ function drawWaitingOpp(){
 function draw(){
   ctx.clearRect(0,0,W,H);
   if (G.phase === 'splash'){ drawSplash(); return; }
-
   ctx.save();
   if (shake > 0.002){
     const m = shake * shake * 9;
     ctx.translate((Math.random()-0.5)*m, (Math.random()-0.5)*m);
   }
   drawSky();
-  if (G.players.length > 0){
-    drawStadium();
-  } else {
+  if (G.players.length > 0){ drawStadium(); }
+  else {
     ctx.fillStyle = '#2a3142';
     ctx.fillRect(0, STADIUM_TOP, W, STADIUM_BOTTOM - STADIUM_TOP);
   }
   drawField();
-
   if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'){
     if (G.phase === 'menu') drawMenuScreen();
     else if (G.phase === 'levelSelect') drawLevelSelect();
@@ -2468,7 +2407,6 @@ function draw(){
     drawPowerMeter(); drawShotSelector(); drawCurrentPlayerBadge(); drawOverlays();
   }
   ctx.restore();
-
   const vg = ctx.createRadialGradient(W/2,H/2,H*0.45,W/2,H/2,H*1.0);
   vg.addColorStop(0,'rgba(0,0,0,0)');
   vg.addColorStop(1,'rgba(0,0,0,0.32)');
