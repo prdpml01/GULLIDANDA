@@ -88,23 +88,27 @@ const COIN_DIVISOR = 10;
 
 /* ==================== SHOP CATALOG ==================== */
 const SHOP_SKINS = [
-  { id:'red',    name:'Classic Red',   color:'#e63946', price:0   },
-  { id:'blue',   name:'Ocean Blue',    color:'#3a86ff', price:50  },
-  { id:'green',  name:'Forest Green',  color:'#06d6a0', price:100 },
-  { id:'gold',   name:'Golden Player', color:'#ffbe0b', price:250 },
-  { id:'purple', name:'Royal Purple',  color:'#a06bff', price:500 }
+  { id:'red',    name:'Classic Red',   color:'#e63946', price:0     },
+  { id:'blue',   name:'Ocean Blue',    color:'#3a86ff', price:500   },
+  { id:'green',  name:'Forest Green',  color:'#06d6a0', price:2500  },
+  { id:'gold',   name:'Golden Player', color:'#ffbe0b', price:10000 },
+  { id:'purple', name:'Royal Purple',  color:'#a06bff', price:40000 }
 ];
 const SHOP_DANDAS = [
-  { id:'brown',   name:'Classic Wood',   color:'#b07c42', accent:'#8a5a2b', price:0   },
-  { id:'gold',    name:'Golden Danda',   color:'#ffd166', accent:'#c99a2e', price:150 },
-  { id:'diamond', name:'Diamond Danda',  color:'#a8d8ff', accent:'#5c9ee0', price:400 }
+  { id:'brown',   name:'Classic Wood',   color:'#b07c42', accent:'#8a5a2b', price:0      },
+  { id:'gold',    name:'Golden Danda',   color:'#ffd166', accent:'#c99a2e', price:2000   },
+  { id:'diamond', name:'Diamond Danda',  color:'#a8d8ff', accent:'#5c9ee0', price:10000  },
+  { id:'emerald', name:'Emerald Danda',  color:'#06d6a0', accent:'#049e77', price:40000  },
+  { id:'ruby',    name:'Ruby Danda',     color:'#ff4d6d', accent:'#c9184a', price:160000 }
 ];
 const SHOP_BOOSTS = [
-  { id:'normal', name:'Normal',       bonus:0,    price:0   },
-  { id:'turbo',  name:'Turbo Boost',  bonus:0.15, price:200, desc:'+15% speed' },
-  { id:'rocket', name:'Rocket Boost', bonus:0.30, price:600, desc:'+30% speed' }
+  { id:'normal',  name:'Normal',       bonus:0,    price:0     },
+  { id:'boost5',  name:'Boost +5%',    bonus:0.05, price:5000,  desc:'+5% speed'  },
+  { id:'boost10', name:'Boost +10%',   bonus:0.10, price:10000, desc:'+10% speed' },
+  { id:'boost15', name:'Boost +15%',   bonus:0.15, price:20000, desc:'+15% speed' },
+  { id:'boost20', name:'Boost +20%',   bonus:0.20, price:40000, desc:'+20% speed' }
 ];
-const LIFE_PRICE = 300;
+const LIFE_PRICE = 500;
 
 function getActiveSkin(){ return SHOP_SKINS.find(s => s.id === ACCOUNT.activeSkin) || SHOP_SKINS[0]; }
 function getActiveDanda(){ return SHOP_DANDAS.find(d => d.id === ACCOUNT.activeDanda) || SHOP_DANDAS[0]; }
@@ -746,7 +750,6 @@ function rebuildMenuButtons(){
     menuButtons.push({ id:'back',   label:'← BACK',   x: W/2 + 10,  y: 440, w: 240, h: 56 });
   }
   else if (G.phase === 'market'){
-    // Tab buttons
     const tabW = 180, tabH = 44, tabGap = 8;
     const total = tabW*4 + tabGap*3;
     const startX = W/2 - total/2;
@@ -1005,7 +1008,6 @@ function finishRound(){
 }
 function nextRound(){
   if (G.outcome === 'out'){
-    // Check for life (single player only)
     if (G.mode === 'single' && ACCOUNT.lives > 0){
       ACCOUNT.lives--;
       G.outs = 0;
@@ -1378,10 +1380,10 @@ function getLevelButtonRect(i){ const bw = 140, bh = 90, gap = 20; const total =
 /* Market item rects */
 function getMarketItemRects(tab, count){
   const cols = 3;
-  const bw = 240, bh = 170, gapX = 30, gapY = 20;
+  const bw = 250, bh = 158, gapX = 24, gapY = 16;
   const totalW = bw*cols + gapX*(cols-1);
   const startX = W/2 - totalW/2;
-  const startY = 150;
+  const startY = 148;
   const rects = [];
   for (let i = 0; i < count; i++){
     const col = i % cols, row = Math.floor(i / cols);
@@ -1443,9 +1445,7 @@ function handleMenuClick(x, y){
       }
     }
   }
-  // Market tab clicks + item clicks
   if (G.phase === 'market'){
-    // Tabs handled by menuButtons loop below
     const tab = G.marketTab;
     if (tab === 'skins'){
       const rects = getMarketItemRects('skins', SHOP_SKINS.length);
@@ -2498,7 +2498,6 @@ function drawProfileView(){
   if (ACCOUNT.isGuest){ centerText('🎮 GUEST — stats not saved', 184, 11, 'rgba(255,138,138,0.9)'); }
   else { centerText('👤 ' + ACCOUNT.username, 184, 13, 'rgba(255,255,255,0.6)'); }
 
-  // Coins + Lives display
   drawCoinIcon(W/2 - 130, 212, 12);
   ctx.font = '900 18px system-ui,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -2551,10 +2550,8 @@ function drawMarketItem(rect, item, opts){
   const owned = opts.owned;
   const active = opts.active;
   const affordable = ACCOUNT.coins >= item.price;
-  const canInteract = owned || affordable;
 
   ctx.save();
-  // Card background
   rr(ctx, x, y, w, h, 14);
   const grd = ctx.createLinearGradient(x, y, x, y+h);
   if (active){
@@ -2574,22 +2571,19 @@ function drawMarketItem(rect, item, opts){
   ctx.strokeStyle = active ? '#8affa0' : owned ? '#ffd166' : affordable ? '#5c9ee0' : 'rgba(255,255,255,0.15)';
   ctx.lineWidth = active ? 3 : 2; ctx.stroke();
 
-  // Preview area
   if (opts.previewKind === 'skin'){
-    const pcx = x + w/2, pcy = y + 45;
-    // Draw mini player with skin color
+    const pcx = x + w/2, pcy = y + 42;
     ctx.fillStyle = opts.color;
     rr(ctx, pcx - 9, pcy - 10, 18, 30, 5); ctx.fill();
     ctx.fillStyle = '#f0c49a';
     ctx.beginPath(); ctx.arc(pcx, pcy - 18, 10, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = '#2d3142';
     ctx.beginPath(); ctx.arc(pcx, pcy - 20, 10, Math.PI*1.05, Math.PI*2.05); ctx.fill();
-    // Danda next to it
     const d = getActiveDanda();
     ctx.strokeStyle = d.color; ctx.lineWidth = 4; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(pcx + 18, pcy - 8); ctx.lineTo(pcx + 40, pcy + 6); ctx.stroke();
   } else if (opts.previewKind === 'danda'){
-    const dcx = x + w/2, dcy = y + 45;
+    const dcx = x + w/2, dcy = y + 42;
     ctx.save(); ctx.translate(dcx, dcy); ctx.rotate(-0.3);
     ctx.fillStyle = opts.color;
     rr(ctx, -45, -5, 90, 10, 5); ctx.fill();
@@ -2600,8 +2594,7 @@ function drawMarketItem(rect, item, opts){
     rr(ctx, -30, -3, 55, 3, 1.5); ctx.fill();
     ctx.restore();
   } else if (opts.previewKind === 'boost'){
-    const bcx = x + w/2, bcy = y + 45;
-    // Draw gulli with motion lines
+    const bcx = x + w/2, bcy = y + 42;
     ctx.fillStyle = '#c08544';
     rr(ctx, bcx - 20, bcy - 5, 40, 10, 5); ctx.fill();
     ctx.fillStyle = '#8a5a2b';
@@ -2610,7 +2603,6 @@ function drawMarketItem(rect, item, opts){
     ctx.font = '900 22px system-ui,sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(opts.speedIcon, bcx, bcy);
-    // Speed lines
     ctx.strokeStyle = opts.color; ctx.lineWidth = 2; ctx.globalAlpha = 0.6;
     for (let i = 0; i < 3; i++){
       ctx.beginPath();
@@ -2621,7 +2613,7 @@ function drawMarketItem(rect, item, opts){
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   } else if (opts.previewKind === 'life'){
-    const lcx = x + w/2, lcy = y + 40;
+    const lcx = x + w/2, lcy = y + 38;
     ctx.font = '900 40px system-ui,sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const pulse = 0.9 + 0.1*Math.sin(performance.now()/300);
@@ -2634,41 +2626,36 @@ function drawMarketItem(rect, item, opts){
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
 
-  // Title
   ctx.font = '900 14px system-ui,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(item.name, x + w/2, y + 88);
+  ctx.fillText(item.name, x + w/2, y + 84);
 
-  // Description / Detail line
   ctx.font = '700 11px system-ui,sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.fillText(opts.desc || '', x + w/2, y + 106);
+  ctx.fillText(opts.desc || '', x + w/2, y + 101);
 
-  // Price / Status
   ctx.font = '900 15px system-ui,sans-serif';
   if (active){
     ctx.fillStyle = '#8affa0';
-    ctx.fillText('✓ EQUIPPED', x + w/2, y + 135);
+    ctx.fillText('✓ EQUIPPED', x + w/2, y + 128);
   } else if (owned){
     ctx.fillStyle = '#ffd166';
-    ctx.fillText('OWNED · TAP TO EQUIP', x + w/2, y + 135);
+    ctx.fillText('OWNED · TAP TO EQUIP', x + w/2, y + 128);
   } else if (affordable){
-    // Coin icon + price
-    drawCoinIcon(x + w/2 - 32, y + 133, 9);
+    drawCoinIcon(x + w/2 - 32, y + 126, 9);
     ctx.fillStyle = '#ffd166';
-    ctx.fillText(item.price, x + w/2 + 8, y + 135);
+    ctx.fillText(item.price, x + w/2 + 8, y + 128);
   } else {
     ctx.fillStyle = 'rgba(255,120,120,0.85)';
-    drawCoinIcon(x + w/2 - 32, y + 133, 9, 0.5);
-    ctx.fillText(item.price, x + w/2 + 8, y + 135);
+    drawCoinIcon(x + w/2 - 32, y + 126, 9, 0.5);
+    ctx.fillText(item.price, x + w/2 + 8, y + 128);
   }
 
-  // Coin potential (only for skins/dandas/boosts that show "value")
   if (opts.coinHint){
     ctx.font = '700 10px system-ui,sans-serif';
     ctx.fillStyle = 'rgba(255,209,102,0.75)';
-    ctx.fillText(opts.coinHint, x + w/2, y + 155);
+    ctx.fillText(opts.coinHint, x + w/2, y + 146);
   }
 
   ctx.restore();
@@ -2682,7 +2669,6 @@ function drawMarket(){
   centerText('🏪  MARKET', 45, 32, '#ffd166');
   centerText('Spend your coins wisely', 72, 13, 'rgba(255,255,255,0.65)');
 
-  // Coin balance top-right
   drawCoinIcon(W - 140, 45, 15);
   ctx.font = '900 20px system-ui,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -2690,7 +2676,6 @@ function drawMarket(){
   ctx.fillText(ACCOUNT.coins + '', W - 118, 45);
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 
-  // Tabs drawn as menu buttons (via rebuildMenuButtons). Highlight active tab.
   for (const b of menuButtons){
     if (b.id.startsWith('tab_')){
       const tabId = b.id.slice(4);
@@ -2710,7 +2695,6 @@ function drawMarket(){
     }
   }
 
-  // Items
   const tab = G.marketTab;
   if (tab === 'skins'){
     const rects = getMarketItemRects('skins', SHOP_SKINS.length);
@@ -2733,8 +2717,10 @@ function drawMarket(){
       const owned = ACCOUNT.ownedDandas.indexOf(item.id) >= 0;
       const active = ACCOUNT.activeDanda === item.id;
       let desc = 'Classic wood';
-      if (item.id === 'gold') desc = 'Shiny golden';
+      if (item.id === 'gold')    desc = 'Shiny golden';
       if (item.id === 'diamond') desc = 'Crystal clear';
+      if (item.id === 'emerald') desc = 'Emerald shine';
+      if (item.id === 'ruby')    desc = 'Legendary ruby';
       drawMarketItem(rects[i], item, {
         owned, active, color: item.color, accent: item.accent,
         previewKind: 'danda', desc
@@ -2747,9 +2733,18 @@ function drawMarket(){
       const item = SHOP_BOOSTS[i];
       const owned = ACCOUNT.ownedBoosts.indexOf(item.id) >= 0;
       const active = ACCOUNT.activeBoost === item.id;
-      const speedIcon = item.bonus === 0 ? '—' : (item.bonus < 0.2 ? '⚡' : '🚀');
+      const speedIcon = item.bonus === 0 ? '—'
+        : item.bonus <= 0.05 ? '⚡'
+        : item.bonus <= 0.10 ? '⚡⚡'
+        : item.bonus <= 0.15 ? '🚀'
+        : '🚀🚀';
+      const boostColor = item.bonus === 0 ? '#9aa0a6'
+        : item.bonus <= 0.05 ? '#9ad0ff'
+        : item.bonus <= 0.10 ? '#8affa0'
+        : item.bonus <= 0.15 ? '#ffbe0b'
+        : '#ff6bcb';
       drawMarketItem(rects[i], item, {
-        owned, active, color: item.bonus === 0 ? '#9aa0a6' : item.bonus < 0.2 ? '#ffbe0b' : '#ff6bcb',
+        owned, active, color: boostColor,
         previewKind: 'boost', desc: item.desc || 'Default', speedIcon
       });
     }
@@ -2764,13 +2759,11 @@ function drawMarket(){
       coinHint: 'Current: ' + ACCOUNT.lives + ' lives'
     });
 
-    // Info text
     centerText('Buy multiple lives — they stack!', W/2, 350, 14, 'rgba(255,255,255,0.75)');
     centerText('Each life lets you survive one OUT.', W/2, 375, 13, 'rgba(255,255,255,0.6)');
     centerText('Lives work in Single Player mode.', W/2, 397, 13, 'rgba(255,209,102,0.7)');
   }
 
-  // Message toast
   if (G.marketMsgTimer > 0 && G.marketMsg){
     ctx.save();
     const alpha = Math.min(1, G.marketMsgTimer / 0.4);
@@ -2789,13 +2782,12 @@ function drawMarket(){
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   }
 
-  // Only draw the BACK button (menuButtons that aren't tabs)
   for (const b of menuButtons){
     if (b.id === 'back') drawMenuButton(b, '#ffd166');
   }
 }
 
-/* ==================== TOSS / WAITING / GAMEOVER (unchanged) ==================== */
+/* ==================== TOSS / WAITING / GAMEOVER ==================== */
 function drawToss(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
