@@ -24,20 +24,21 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+    - name: Create package.json
+      run: npm init -y
 
     - name: Install Capacitor
-      run: |
-        npm install @capacitor/core @capacitor/cli @capacitor/android
+      run: npm install @capacitor/core @capacitor/cli @capacitor/android
 
-    - name: Initialize Capacitor
+    - name: Create www folder with redirect
       run: |
-        npx cap init "Gulli Danda" "com.pradeep.gullidanda" --web-dir=www
         mkdir -p www
         echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://prdpml01.github.io/GULLIDANDA/"></head></html>' > www/index.html
 
-    - name: Configure Capacitor
+    - name: Initialize Capacitor
+      run: npx cap init "Gulli Danda" "com.pradeep.gullidanda" --web-dir=www
+
+    - name: Configure Capacitor for Live URL
       run: |
         node -e "
           const fs = require('fs');
@@ -47,12 +48,13 @@ jobs:
           fs.writeFileSync('capacitor.config.json', JSON.stringify(config, null, 2));
         "
 
-    - name: Add Android Platform and Sync
-      run: |
-        npx cap add android
-        npx cap sync
+    - name: Add Android Platform
+      run: npx cap add android
 
-    - name: Build APK
+    - name: Sync Capacitor
+      run: npx cap sync
+
+    - name: Build Android APK
       run: |
         cd android
         chmod +x gradlew
