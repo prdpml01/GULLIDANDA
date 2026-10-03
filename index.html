@@ -31,6 +31,7 @@
     padding:7px 14px;margin-right:10px;}
   .stat span{color:#ffd166;}
   .stat.out span{color:#ff8a8a;}
+  .stat.coin span{color:#ffd166;}
   .right{display:flex;}
   #mobileNameInput{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);
     width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;
@@ -47,6 +48,7 @@
   <div id="hud">
     <div class="right">
       <div class="stat">SCORE <span id="uiScore">0</span></div>
+      <div class="stat coin">🪙 <span id="uiCoins">0</span></div>
       <div class="stat">BEST <span id="uiBest">0</span></div>
     </div>
     <div class="right">
@@ -81,15 +83,16 @@ const SWEET_LO = 62, SWEET_HI = 88;
 const SKY_BOTTOM = 148, STADIUM_TOP = 140, STADIUM_BOTTOM = 300, HORIZON = 300;
 const SPLASH_DURATION = 2.6, TOSS_DURATION = 2500, TOSS_RESULT_DURATION = 2400;
 
-/* ==================== UNLIMITED LEVELS ==================== */
+/* ==================== COIN SYSTEM ==================== */
+// Base coins = floor(score / 10)
+// Bonus: if score >= 2 * target → 2x coins
+const COIN_DIVISOR = 10;
+
 const LEVEL_NAMES = [
   'ROOKIE','AMATEUR','PRO','EXPERT','LEGEND',
   'MASTER','GRANDMASTER','CHAMPION','ELITE','SUPREME',
   'TITAN','IMMORTAL','GODLIKE','UNSTOPPABLE','PHENOMENAL'
 ];
-// Target formula:
-//  L1 = 100, L2 = 250, L3 = 500, L4 = 1000, L5 = 2000, L6 = 4000, ...
-//  i.e. from L3 onwards: 500 * 2^(n-3)
 function getLevelTarget(n){
   n = Math.max(1, Math.floor(n));
   if (n === 1) return 100;
@@ -106,6 +109,12 @@ function getLevel(n){
   if (n <= LEVEL_NAMES.length) name = LEVEL_NAMES[n-1];
   else name = 'LEGEND ' + n;
   return { level: n, target, speed:[speed1, speed2], error, name };
+}
+
+function calcCoins(score, target){
+  const base = Math.floor(score / COIN_DIVISOR);
+  const isBonus = score >= 2 * target;
+  return { base, bonus: isBonus, total: isBonus ? base * 2 : base };
 }
 
 const SHOTS = {
@@ -129,6 +138,7 @@ const ACCOUNT = {
   matchesPlayed: 0, onlineMatches: 0,
   wins: 0, losses: 0, totalRuns: 0,
   highestUnlockedLevel: 1,
+  coins: 0,
   loading: false, error: '',
   formUsername: '',
   formPassword: '',
@@ -146,7 +156,8 @@ function saveSession(){
     if (ACCOUNT.isGuest){
       localStorage.setItem(SESSION_KEY, JSON.stringify({
         isGuest: true, name: ACCOUNT.name,
-        highestUnlockedLevel: ACCOUNT.highestUnlockedLevel
+        highestUnlockedLevel: ACCOUNT.highestUnlockedLevel,
+        coins: ACCOUNT.coins
       }));
     } else {
       localStorage.setItem(SESSION_KEY, JSON.stringify({ username: ACCOUNT.username, isGuest: false }));
@@ -226,6 +237,7 @@ function registerUserAccount(username, password){
       matchesPlayed: 0, onlineMatches: 0,
       wins: 0, losses: 0, totalRuns: 0,
       highestUnlockedLevel: 1,
+      coins: 0,
       createdAt: Date.now(), updatedAt: Date.now()
     };
     return NET.db.ref('accounts/' + key).set(data).then(() => {
@@ -236,6 +248,7 @@ function registerUserAccount(username, password){
       ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
       ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
       ACCOUNT.highestUnlockedLevel = 1;
+      ACCOUNT.coins = 0;
       ACCOUNT.loggedIn = true;
       ACCOUNT.isGuest = false;
       ACCOUNT.loading = false;
@@ -272,6 +285,7 @@ function loginUserAccount(username, password){
     ACCOUNT.losses = data.losses || 0;
     ACCOUNT.totalRuns = data.totalRuns || 0;
     ACCOUNT.highestUnlockedLevel = Math.max(1, data.highestUnlockedLevel || 1);
+    ACCOUNT.coins = Math.max(0, data.coins || 0);
     ACCOUNT.loggedIn = true;
     ACCOUNT.isGuest = false;
     ACCOUNT.loading = false;
@@ -292,6 +306,7 @@ function guestLogin(name){
   ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
   ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
   ACCOUNT.highestUnlockedLevel = 1;
+  ACCOUNT.coins = 0;
   ACCOUNT.error = '';
   saveSession();
   setPhase('menu');
@@ -308,6 +323,7 @@ function logoutUser(){
   ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
   ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
   ACCOUNT.highestUnlockedLevel = 1;
+  ACCOUNT.coins = 0;
   ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.formName = '';
   ACCOUNT.formFocus = 'username';
   ACCOUNT.mode = 'login'; ACCOUNT.error = '';
@@ -325,14 +341,16 @@ function syncAccountStats(){
     matchesPlayed: ACCOUNT.matchesPlayed, onlineMatches: ACCOUNT.onlineMatches,
     wins: ACCOUNT.wins, losses: ACCOUNT.losses, totalRuns: ACCOUNT.totalRuns,
     highestUnlockedLevel: ACCOUNT.highestUnlockedLevel,
+    coins: ACCOUNT.coins,
     updatedAt: Date.now()
   }).catch(()=>{});
 }
-function updateStatsSingle(score){
+function updateStatsSingle(score, coinsEarned){
   ACCOUNT.matchesPlayed++; ACCOUNT.totalRuns += score;
   if (score > ACCOUNT.bestSingle) ACCOUNT.bestSingle = score;
+  if (coinsEarned) ACCOUNT.coins += coinsEarned;
   syncAccountStats();
-  trackEvent('single_match_end', { score: score });
+  trackEvent('single_match_end', { score: score, coins: coinsEarned || 0 });
 }
 function updateStatsOnline(myScore, won){
   ACCOUNT.matchesPlayed++; ACCOUNT.onlineMatches++; ACCOUNT.totalRuns += myScore;
@@ -378,7 +396,9 @@ const G = {
   gameOverMsg: '', gameOverWinner: null, levelCleared: false,
   celebrationTimer: 0, confettiTimer: 0,
   nameEntry: { playerIndex: 0, currentText: '', online: false },
-  splashTimer: 0
+  splashTimer: 0,
+  coinsEarned: 0,
+  coinsBonus: false
 };
 
 const gulli = { x:0, y:0, vx:0, vy:0, rot:0, rotV:0, grounded:true };
@@ -659,6 +679,11 @@ function playSplashChime(){
   setTimeout(()=>beep(880, 0.15, 'triangle', 0.10), 130);
   setTimeout(()=>beep(1320, 0.35, 'triangle', 0.09), 260);
 }
+function playCoinSound(){
+  beep(1200, 0.08, 'sine', 0.10);
+  setTimeout(()=>beep(1600, 0.10, 'sine', 0.10), 70);
+  setTimeout(()=>beep(2000, 0.14, 'sine', 0.10), 150);
+}
 
 function rr(c,x,y,w,h,r){
   r=Math.min(r,w/2,h/2); c.beginPath();
@@ -682,7 +707,6 @@ function setPhase(p){
   if (p === 'register'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = false; usernameSuggestions = []; }
   if (p === 'guest'){ ACCOUNT.formFocus = 'guestName'; }
   if (p === 'levelSelect'){
-    // Show page containing current highest unlocked level
     G.levelPage = Math.max(0, Math.floor((ACCOUNT.highestUnlockedLevel - 1) / 5));
   }
   if (p==='menu'||p==='levelSelect'||p==='playerSelect'||p==='turnIntro'||p==='turnEnd'||p==='gameOver'||p==='leaderboard'||p==='login'||p==='register'||p==='guest'||p==='profileView'){
@@ -701,7 +725,6 @@ function rebuildMenuButtons(){
     menuButtons.push({ id:'leaderboard', label:'🏆  LEADERBOARD', x: W/2 - 190, y: 432, w: 380, h: 50 });
   }
   else if (G.phase === 'levelSelect'){
-    // Pagination + Back only — level buttons are drawn manually with lock state
     const page = G.levelPage || 0;
     if (page > 0){
       menuButtons.push({ id:'pagePrev', label:'◀ PREV', x: W/2 - 260, y: 390, w: 140, h: 42 });
@@ -937,7 +960,6 @@ function buildFielders(){
 }
 function startSinglePlayer(level){
   level = Math.max(1, Math.floor(level));
-  // Enforce progression — only unlocked levels can be played
   if (level > ACCOUNT.highestUnlockedLevel){
     G.banner = 'LOCKED — CLEAR LEVEL ' + (level-1) + ' FIRST';
     G.bannerTimer = 2.2;
@@ -949,6 +971,7 @@ function startSinglePlayer(level){
   G.currentPlayer = 0;
   G.gameOverWinner = null; G.gameOverMsg = ''; G.levelCleared = false;
   G.celebrationTimer = 0; G.confettiTimer = 0;
+  G.coinsEarned = 0; G.coinsBonus = false;
   initCrowd(); prepareTurn();
   trackEvent('single_game_start', { level: level });
 }
@@ -962,6 +985,7 @@ function startMultiPlayer(count){
   G.currentPlayer = 0;
   G.gameOverWinner = null; G.gameOverMsg = '';
   G.celebrationTimer = 0; G.confettiTimer = 0;
+  G.coinsEarned = 0; G.coinsBonus = false;
   G.nameEntry = { playerIndex: 1, currentText: '', online: false };
   initCrowd(); setPhase('nameEntry');
   trackEvent('local_multi_start', { players: count });
@@ -1089,7 +1113,13 @@ function advanceFromTurnEnd(){
     G.gameOverWinner = G.levelCleared ? 0 : -1;
     G.gameOverMsg = G.levelCleared ? ('LEVEL ' + G.level + ' CLEARED!') : 'LEVEL FAILED';
     G.celebrationTimer = 0; G.confettiTimer = 0;
-    updateStatsSingle(G.score);
+
+    // ====== COIN CALCULATION ======
+    const c = calcCoins(G.score, lv.target);
+    G.coinsEarned = c.total;
+    G.coinsBonus = c.bonus;
+    updateStatsSingle(G.score, G.coinsEarned);
+
     // Unlock next level on clear
     if (G.levelCleared){
       if (G.level + 1 > ACCOUNT.highestUnlockedLevel){
@@ -1098,12 +1128,15 @@ function advanceFromTurnEnd(){
         syncAccountStats();
       }
     }
+
     setPhase('gameOver');
     if (G.levelCleared){
       crowdExcitement = 2.0; playCheer(1.4);
       beep(1200, 0.2, 'triangle', 0.13);
       setTimeout(()=>beep(1600, 0.2, 'triangle', 0.13), 180);
       setTimeout(()=>beep(2000, 0.25, 'triangle', 0.12), 360);
+      // Coin sounds
+      if (G.coinsEarned > 0) setTimeout(()=>playCoinSound(), 500);
     } else { crowdExcitement = 0.3; beep(240, 0.3, 'sawtooth', 0.10); }
   } else {
     G.currentPlayer++;
@@ -1240,6 +1273,7 @@ function update(dt){
           ACCOUNT.isGuest = true;
           ACCOUNT.name = session.name || 'GUEST';
           ACCOUNT.highestUnlockedLevel = Math.max(1, session.highestUnlockedLevel || 1);
+          ACCOUNT.coins = Math.max(0, session.coins || 0);
           setPhase('menu');
         } else if (session.username && NET.ready){
           const key = usernameKey(session.username);
@@ -1257,6 +1291,7 @@ function update(dt){
               ACCOUNT.losses = data.losses || 0;
               ACCOUNT.totalRuns = data.totalRuns || 0;
               ACCOUNT.highestUnlockedLevel = Math.max(1, data.highestUnlockedLevel || 1);
+              ACCOUNT.coins = Math.max(0, data.coins || 0);
               ACCOUNT.loggedIn = true;
               ACCOUNT.isGuest = false;
               setPhase('menu');
@@ -1482,7 +1517,6 @@ const AUTH_BOXES = {
   }
 };
 
-// Level button hit-test rectangles (same as drawLevelSelect)
 function getLevelButtonRect(i){
   const bw = 140, bh = 90, gap = 20;
   const total = bw*5 + gap*4, startX = W/2 - total/2;
@@ -1490,7 +1524,6 @@ function getLevelButtonRect(i){
 }
 
 function handleMenuClick(x, y){
-  // Custom level buttons first (levelSelect)
   if (G.phase === 'levelSelect'){
     const page = G.levelPage || 0;
     for (let i=0; i<5; i++){
@@ -2430,6 +2463,20 @@ function drawMenuButton(b, highlightColor){
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
+function drawCoinIcon(x, y, r, alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha || 1;
+  const grd = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.1, x, y, r);
+  grd.addColorStop(0, '#fff4c2');
+  grd.addColorStop(0.55, '#ffd166');
+  grd.addColorStop(1, '#a06b12');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,80,20,0.8)'; ctx.lineWidth = Math.max(1.2, r*0.18); ctx.stroke();
+  ctx.fillStyle = 'rgba(140,90,20,0.65)';
+  ctx.beginPath(); ctx.arc(x, y, r*0.55, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
 function drawCurrentPlayerBadge(){
   if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView') return;
   const p = G.players[G.currentPlayer];
@@ -2765,8 +2812,8 @@ function drawLeaderboard(){
 function drawProfileView(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
-  centerText('👤  YOUR PROFILE', 50, 30, '#ffd166');
-  const cx = W/2, cy = 135, r = 42;
+  centerText('👤  YOUR PROFILE', 45, 26, '#ffd166');
+  const cx = W/2, cy = 118, r = 38;
   ctx.save();
   const grd = ctx.createRadialGradient(cx - 15, cy - 15, 5, cx, cy, r);
   grd.addColorStop(0, ACCOUNT.isGuest ? '#8a8a8a' : '#ffd166');
@@ -2774,21 +2821,29 @@ function drawProfileView(){
   ctx.fillStyle = grd;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 3; ctx.stroke();
-  ctx.font = '900 40px system-ui,sans-serif';
+  ctx.font = '900 36px system-ui,sans-serif';
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillStyle = '#1a1a1a';
   ctx.fillText((ACCOUNT.name || 'P').charAt(0), cx, cy + 2);
   ctx.restore();
-  centerText(ACCOUNT.name, 200, 28, '#ffffff');
+  centerText(ACCOUNT.name, 178, 24, '#ffffff');
   if (ACCOUNT.isGuest){
-    centerText('🎮 GUEST — stats not saved', 228, 14, 'rgba(255,138,138,0.9)');
-    centerText('Register to save your progress', 248, 12, 'rgba(255,255,255,0.6)');
+    centerText('🎮 GUEST — stats not saved', 200, 12, 'rgba(255,138,138,0.9)');
   } else {
-    centerText('👤 ' + ACCOUNT.username, 228, 15, 'rgba(255,255,255,0.6)');
+    centerText('👤 ' + ACCOUNT.username, 200, 14, 'rgba(255,255,255,0.6)');
   }
-  // Highest unlocked level banner
+
+  // Coin display
+  drawCoinIcon(W/2 - 110, 226, 14);
+  ctx.font = '900 20px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffd166';
+  ctx.fillText('COINS: ' + ACCOUNT.coins, W/2 - 88, 226);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+
+  // Level unlock banner
   const lv = getLevel(ACCOUNT.highestUnlockedLevel);
-  centerText('🏆 HIGHEST UNLOCKED: LEVEL ' + ACCOUNT.highestUnlockedLevel + ' (' + lv.name + ')', 268, 14, '#ffd166');
+  centerText('🏆 HIGHEST: LEVEL ' + ACCOUNT.highestUnlockedLevel + ' (' + lv.name + ')', 256, 13, '#ffd166');
 
   const stats = [
     { label:'Best Single', value: ACCOUNT.bestSingle + 'm', color:'#ffd166' },
@@ -2798,9 +2853,9 @@ function drawProfileView(){
     { label:'Matches', value: ACCOUNT.matchesPlayed, color:'#e0a95c' },
     { label:'Total Runs', value: ACCOUNT.totalRuns + 'm', color:'#a06bff' }
   ];
-  const cols = 3, bw = 170, bh = 58, gap = 12;
+  const cols = 3, bw = 170, bh = 54, gap = 12;
   const totalW = cols*bw + (cols-1)*gap;
-  const startX = W/2 - totalW/2, startY = 295;
+  const startX = W/2 - totalW/2, startY = 285;
   for (let i=0; i<stats.length; i++){
     const col = i % cols, row = Math.floor(i / cols);
     const x = startX + col*(bw+gap);
@@ -2812,10 +2867,10 @@ function drawProfileView(){
     ctx.font = '700 11px system-ui,sans-serif';
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillText(stats[i].label.toUpperCase(), x + bw/2, y + 16);
-    ctx.font = '900 20px system-ui,sans-serif';
+    ctx.fillText(stats[i].label.toUpperCase(), x + bw/2, y + 15);
+    ctx.font = '900 19px system-ui,sans-serif';
     ctx.fillStyle = stats[i].color;
-    ctx.fillText(String(stats[i].value), x + bw/2, y + 38);
+    ctx.fillText(String(stats[i].value), x + bw/2, y + 36);
     ctx.restore();
   }
   for (const b of menuButtons) drawMenuButton(b, b.id === 'logout' ? '#ff8a8a' : '#ffffff');
@@ -2893,7 +2948,7 @@ function drawWaitingOpp(){
     centerText('Watch their innings below — you bat next!', 90, 15, 'rgba(255,255,255,0.7)');
   } else {
     centerText('🏏  YOUR INNINGS DONE', 50, 22, '#ffd166');
-    centerText('Your Score: ' + G.score + ' m', 82, 22, '#8affa0');
+    centerText('Your Score: ' + G.score + ' pts', 82, 22, '#8affa0');
     centerText('Watching ' + (NET.oppName || 'opponent') + ' bat', 112, 14, 'rgba(255,255,255,0.7)');
   }
   const px = 100, py = 135, pw = W - 200, ph = 330;
@@ -2910,7 +2965,7 @@ function drawWaitingOpp(){
     const phaseLabel = opp.phase || 'BATTING';
     ctx.font = '900 36px system-ui,sans-serif';
     ctx.fillStyle = '#ffd166';
-    ctx.fillText(oppScore + ' m', px + pw/2, py + 38);
+    ctx.fillText(oppScore + ' pts', px + pw/2, py + 38);
     ctx.font = '700 14px system-ui,sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.fillText('Status: ' + phaseLabel, px + pw/2, py + 82);
@@ -2981,8 +3036,8 @@ function drawMenuScreen(){
   ctx.font='700 10px system-ui,sans-serif';
   ctx.fillStyle='rgba(255,255,255,0.65)';
   const sub = ACCOUNT.isGuest
-    ? ('GUEST · Level ' + ACCOUNT.highestUnlockedLevel + ' unlocked')
-    : ('@' + ACCOUNT.username + ' · Lv' + ACCOUNT.highestUnlockedLevel + ' · W:' + ACCOUNT.wins + ' L:' + ACCOUNT.losses);
+    ? ('GUEST · Lv' + ACCOUNT.highestUnlockedLevel + ' · 🪙 ' + ACCOUNT.coins)
+    : ('@' + ACCOUNT.username + ' · Lv' + ACCOUNT.highestUnlockedLevel + ' · 🪙 ' + ACCOUNT.coins);
   ctx.fillText(sub, bx + 14, by + 36);
   ctx.restore();
 
@@ -3050,7 +3105,6 @@ function drawLevelSelect(){
   centerText('Page ' + (page+1) + '  ·  Levels ' + (page*5+1) + ' - ' + (page*5+5), 136, 15, 'rgba(255,255,255,0.75)');
   centerText('Clear each level to unlock the next', 160, 13, 'rgba(255,209,102,0.85)');
 
-  // Draw 5 level buttons manually with lock state
   for (let i=0; i<5; i++){
     const lvlNum = page*5 + i + 1;
     const lvl = getLevel(lvlNum);
@@ -3058,6 +3112,7 @@ function drawLevelSelect(){
     const isCurrent = lvlNum === ACCOUNT.highestUnlockedLevel;
     const rect = getLevelButtonRect(i);
     const {x, y, w, h} = rect;
+    const coinsPossible = Math.floor(lvl.target * 2 / COIN_DIVISOR);
 
     ctx.save();
     rr(ctx, x, y, w, h, 12);
@@ -3078,34 +3133,33 @@ function drawLevelSelect(){
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
     if (isLocked){
-      ctx.font = '900 32px system-ui,sans-serif';
+      ctx.font = '900 28px system-ui,sans-serif';
       ctx.fillStyle = 'rgba(160,160,160,0.7)';
-      ctx.fillText('🔒', x + w/2, y + 30);
+      ctx.fillText('🔒', x + w/2, y + 26);
       ctx.font = '700 12px system-ui,sans-serif';
       ctx.fillStyle = 'rgba(160,160,160,0.7)';
-      ctx.fillText('LEVEL ' + lvlNum, x + w/2, y + 60);
+      ctx.fillText('LEVEL ' + lvlNum, x + w/2, y + 56);
       ctx.font = '600 10px system-ui,sans-serif';
       ctx.fillStyle = 'rgba(140,140,140,0.65)';
-      ctx.fillText('Clear LV ' + (lvlNum-1), x + w/2, y + 76);
+      ctx.fillText('Clear LV ' + (lvlNum-1), x + w/2, y + 74);
     } else {
-      ctx.font = '900 15px system-ui,sans-serif';
+      ctx.font = '900 14px system-ui,sans-serif';
       ctx.fillStyle = '#ffffff';
-      ctx.fillText('LEVEL ' + lvlNum, x + w/2, y + 20);
-      ctx.font = '900 22px system-ui,sans-serif';
+      ctx.fillText('LEVEL ' + lvlNum, x + w/2, y + 16);
+      ctx.font = '900 20px system-ui,sans-serif';
       ctx.fillStyle = '#ffd166';
-      ctx.fillText(lvl.target + ' pts', x + w/2, y + 46);
-      ctx.font = '700 11px system-ui,sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.fillText(lvl.name, x + w/2, y + 68);
+      ctx.fillText(lvl.target + ' pts', x + w/2, y + 40);
+      ctx.font = '700 10px system-ui,sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillText(lvl.name, x + w/2, y + 60);
+      // Coin potential
+      ctx.font = '700 10px system-ui,sans-serif';
+      ctx.fillStyle = '#ffd166';
+      ctx.fillText('🪙 up to ' + coinsPossible, x + w/2, y + 76);
       if (isCurrent){
         ctx.font = '900 9px system-ui,sans-serif';
         ctx.fillStyle = '#8affa0';
-        ctx.fillText('▶ PLAY NOW', x + w/2, y + 82);
-      } else {
-        // Show a check for cleared levels
-        ctx.font = '900 11px system-ui,sans-serif';
-        ctx.fillStyle = 'rgba(138,255,160,0.8)';
-        ctx.fillText('✓ CLEARED', x + w/2, y + 82);
+        ctx.fillText('▶ PLAY NOW', x + w/2, y + 87);
       }
     }
     ctx.restore();
@@ -3223,7 +3277,11 @@ function drawTurnIntro(){
   let infoText;
   if (G.mode === 'multi') infoText = 'Unlimited gullis · 1 out ends your turn · ' + fielders.length + ' fielder' + (fielders.length>1?'s':'') + ' ready';
   else if (G.mode === 'online') infoText = 'You vs ' + (NET.oppName || 'OPPONENT') + ' · 1 out ends your innings';
-  else { const lv = getLevel(G.level); infoText = '🎯 Target: ' + lv.target + ' pts  ·  Reach it to unlock Level ' + (G.level+1); }
+  else {
+    const lv = getLevel(G.level);
+    const coinBase = Math.floor(lv.target / COIN_DIVISOR);
+    infoText = '🎯 Target: ' + lv.target + ' pts  ·  🪙 ' + (coinBase*2) + ' bonus coins for 2x score!';
+  }
   centerText(infoText, 315, 18, 'rgba(255,255,255,0.7)');
   for (const b of menuButtons) drawMenuButton(b, p.color);
 }
@@ -3364,7 +3422,7 @@ function drawGameOver(){
       ctx.fillText(i === 0 ? 'YOU' : 'OPPONENT', x + bw/2, y + 17);
       ctx.font='900 26px system-ui,sans-serif';
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(p.score + ' m', x + bw/2, y + 40);
+      ctx.fillText(p.score + ' pts', x + bw/2, y + 40);
       ctx.restore();
     }
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
@@ -3374,18 +3432,45 @@ function drawGameOver(){
   if (G.mode === 'single'){
     const lv = getLevel(G.level);
     if (G.levelCleared){
-      drawTrophy(W/2, 130, 0.95, t);
+      drawTrophy(W/2, 105, 0.75, t);
       const pulse = 0.85 + 0.15*Math.sin(t*4);
       ctx.save(); ctx.globalAlpha = pulse;
-      centerText('✨  LEVEL ' + G.level + ' CLEARED!  ✨', 240, 32, '#ffd166');
+      centerText('✨  LEVEL ' + G.level + ' CLEARED!  ✨', 195, 28, '#ffd166');
       ctx.restore();
-      const nextLv = getLevel(G.level + 1);
-      centerText('Level ' + G.level + ': ' + G.score + ' pts (target ' + lv.target + ')', 285, 17, 'rgba(255,255,255,0.85)');
-      centerText('🔓 UNLOCKED: Level ' + (G.level + 1) + ' — ' + nextLv.name + ' (' + nextLv.target + ' pts)', 315, 16, '#8affa0');
+      centerText('Level ' + G.level + ': ' + G.score + ' pts (target ' + lv.target + ')', 232, 15, 'rgba(255,255,255,0.85)');
+      centerText('🔓 UNLOCKED: Level ' + (G.level + 1) + ' — ' + getLevel(G.level+1).name, 256, 14, '#8affa0');
+
+      // COIN REWARD DISPLAY
+      const c = calcCoins(G.score, lv.target);
+      const cx = W/2, cy = 305;
+      drawCoinIcon(cx - 90, cy, 22, 1);
+      ctx.font = '900 22px system-ui,sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffd166';
+      ctx.fillText('+ ' + c.total + ' COINS', cx - 60, cy - 8);
+      ctx.font = '700 13px system-ui,sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      if (c.bonus){
+        ctx.fillStyle = '#8affa0';
+        ctx.fillText('🎉 BONUS! 2x coins for 2x target!', cx - 60, cy + 14);
+      } else {
+        ctx.fillText('Get ' + (lv.target*2) + ' pts for 2x coins!', cx - 60, cy + 14);
+      }
+      ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     } else {
-      centerText('LEVEL ' + G.level + ' FAILED', 150, 42, '#ff8a8a');
-      centerText('You scored ' + G.score + ' pts — needed ' + lv.target + ' pts', 205, 20, 'rgba(255,255,255,0.85)');
-      centerText('Try again to unlock next level!', 240, 16, 'rgba(255,255,255,0.6)');
+      centerText('LEVEL ' + G.level + ' FAILED', 130, 38, '#ff8a8a');
+      centerText('You scored ' + G.score + ' pts — needed ' + lv.target + ' pts', 178, 18, 'rgba(255,255,255,0.85)');
+      centerText('Try again to unlock next level!', 208, 15, 'rgba(255,255,255,0.6)');
+      // Show coins earned even on fail
+      if (G.coinsEarned > 0){
+        const cx = W/2, cy = 260;
+        drawCoinIcon(cx - 80, cy, 18, 0.85);
+        ctx.font = '900 18px system-ui,sans-serif';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ffd166';
+        ctx.fillText('+ ' + G.coinsEarned + ' COINS earned (kept)', cx - 55, cy);
+        ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+      }
     }
   } else {
     const w = G.players[G.gameOverWinner];
@@ -3431,7 +3516,7 @@ function drawGameOver(){
       ctx.textAlign='right';
       ctx.fillStyle = isWinner ? '#ffd166' : '#ffffff';
       ctx.font = '900 16px system-ui,sans-serif';
-      ctx.fillText(p.score + ' m', W/2 + bw/2 - 16, y + bh/2);
+      ctx.fillText(p.score + ' pts', W/2 + bw/2 - 16, y + bh/2);
       ctx.restore();
     }
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
@@ -3526,6 +3611,7 @@ const uiScore = document.getElementById('uiScore');
 const uiBest = document.getElementById('uiBest');
 const uiOuts = document.getElementById('uiOuts');
 const uiTurn = document.getElementById('uiTurn');
+const uiCoins = document.getElementById('uiCoins');
 function updateHUD(){
   const hud = document.getElementById('hud');
   if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'
@@ -3541,6 +3627,7 @@ function updateHUD(){
   uiBest.textContent = G.best;
   uiOuts.textContent = G.outs + '/1';
   uiTurn.textContent = (G.currentPlayer + 1) + '/' + G.players.length;
+  if (uiCoins) uiCoins.textContent = ACCOUNT.coins;
 }
 
 let last = performance.now();
