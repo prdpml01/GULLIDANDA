@@ -60,7 +60,6 @@
 (() => {
 "use strict";
 
-/* ==================== FIREBASE CONFIG ==================== */
 const firebaseConfig = {
   apiKey: "AIzaSyDG1YzutTMVnCRoVZMsFW3HNJVzLlSlQ5Y",
   authDomain: "gulli-danda-c4e39.firebaseapp.com",
@@ -71,7 +70,6 @@ const firebaseConfig = {
   appId: "1:531759654343:web:2748d946dddb1d3fdee5e2",
   measurementId: "G-QE22357WNQ"
 };
-/* ========================================================== */
 
 const canvas = document.getElementById('game');
 const ctx    = canvas.getContext('2d');
@@ -99,7 +97,6 @@ const PLAYER_COLORS = ['#e63946', '#3a86ff', '#06d6a0', '#ffbe0b', '#a06bff'];
 const PLAYER_NAMES  = ['RED',     'BLUE',    'GREEN',   'YELLOW',  'PURPLE'];
 const CONFETTI_COLORS = ['#ffd166','#ff8a8a','#8affa0','#5c9ee0','#e0a95c','#ff6bcb','#ffffff','#a06bff'];
 
-/* ==================== ACCOUNT SYSTEM ==================== */
 const SESSION_KEY = 'gulli_danda_session_v2';
 
 const ACCOUNT = {
@@ -114,12 +111,11 @@ const ACCOUNT = {
   loading: false, error: '',
   formUsername: '',
   formPassword: '',
-  formName: '',  // guest name
+  formName: '',
   formFocus: 'username',
   mode: 'login'
 };
 
-// Suggestion state
 let usernameSuggestions = [];
 let suggestionTimer = null;
 let suggestionsOpen = false;
@@ -148,7 +144,6 @@ function isValidUsername(u){ return u && u.length >= 3 && u.length <= 15; }
 function isValidPassword(p){ return p && p.length >= 4 && p.length <= 20; }
 
 function hashPassword(pw){
-  // Simple hash (djb2) — not cryptographically secure, casual game only
   let h = 5381;
   const str = 'gd:' + pw;
   for (let i = 0; i < str.length; i++){
@@ -166,7 +161,6 @@ function trackEvent(name, params){
   } catch(e){}
 }
 
-/* ==================== USERNAME SUGGESTIONS ==================== */
 function onUsernameChange(){
   if (suggestionTimer) clearTimeout(suggestionTimer);
   suggestionsOpen = true;
@@ -192,7 +186,6 @@ function fetchUsernameSuggestions(prefix){
     }).catch(() => { usernameSuggestions = []; });
 }
 
-/* ==================== AUTH ==================== */
 function registerUserAccount(username, password){
   if (!NET.ready){ ACCOUNT.error = 'Network not ready'; return; }
   if (!isValidUsername(username)){ ACCOUNT.error = 'Username must be 3-15 chars (A-Z, 0-9, _)'; return; }
@@ -319,7 +312,6 @@ function updateStatsOnline(myScore, won){
   trackEvent('online_match_end', { score: myScore, won: won ? 1 : 0 });
 }
 
-/* ==================== LEADERBOARD ==================== */
 const LEADERBOARD = { data: null, loading: false };
 function fetchLeaderboard(cb){
   if (!NET.ready){ if (cb) cb(null); return; }
@@ -336,7 +328,6 @@ function fetchLeaderboard(cb){
   }).catch(() => { LEADERBOARD.loading = false; if (cb) cb(null); });
 }
 
-/* ==================== GAME STATE ==================== */
 const G = {
   phase: 'splash',
   mode: 'single', level: 1,
@@ -374,7 +365,6 @@ const SHIRT_TONES = ['#eceef2','#d94f4f','#4f7fd9','#e0b84f','#5fbf7a','#8a6ad9'
 let crowdCanvas = null, crowdRows = [], frontRowPeople = [], flashes = [], crowdFlags = [];
 let shake = 0;
 
-/* ==================== ONLINE NETWORK ==================== */
 const NET = {
   ready: false, db: null, roomId: null, role: null,
   myName: '', oppName: '', oppScore: null,
@@ -591,7 +581,6 @@ function layoutShotButtons(){
 layoutShotButtons();
 let menuButtons = [];
 
-/* ==================== AUDIO ==================== */
 let actx = null;
 function beep(freq, dur, type='sine', vol=0.12){
   try {
@@ -640,7 +629,6 @@ function playSplashChime(){
   setTimeout(()=>beep(1320, 0.35, 'triangle', 0.09), 260);
 }
 
-/* ==================== HELPERS ==================== */
 function rr(c,x,y,w,h,r){
   r=Math.min(r,w/2,h/2); c.beginPath();
   c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
@@ -749,7 +737,6 @@ function rebuildMenuButtons(){
   }
 }
 
-/* ==================== CROWD ==================== */
 function drawCrowdPerson(c, p, armRaise){
   const s = p.s;
   const headR = 4.6 * s, bodyH = 12.5 * s;
@@ -851,7 +838,6 @@ function initCrowd(){
   }
 }
 
-/* ==================== GAME FLOW ==================== */
 function resetGulli(){
   gulli.x = GULLI_START_X; gulli.y = GROUND_Y - 7;
   gulli.vx = 0; gulli.vy = 0; gulli.rot = 0; gulli.rotV = 0; gulli.grounded = true;
@@ -1091,7 +1077,6 @@ function advanceFromTurnEnd(){
   }
 }
 
-/* ==================== PARTICLES ==================== */
 function spawnBurst(x,y,acc){
   const n = 12 + Math.round(acc*16);
   for (let i=0;i<n;i++){
@@ -1160,7 +1145,6 @@ function updateParticles(dt){
   if (G.ring){ G.ring.t += dt*2.6; if (G.ring.t>=1) G.ring=null; }
 }
 
-/* ==================== UPDATE ==================== */
 function update(dt){
   NET.lastSync = (NET.lastSync || 0) + dt;
   if (NET.lastSync > 0.15 && NET.roomRef && NET.role && G.mode === 'online'){
@@ -1416,7 +1400,6 @@ function update(dt){
   }
 }
 
-/* ==================== INPUT ==================== */
 function pointInButton(px, py, b){
   return px>=b.x && px<=b.x+b.w && py>=b.y && py<=b.y+b.h;
 }
@@ -1428,7 +1411,6 @@ function setShot(id){
   if (G.shotType !== id){ G.shotType = id; beep(720, 0.05, 'sine', 0.06); }
 }
 
-// ===== Footer link coordinates (menu screen) =====
 const FOOTER_LINK_Y = H - 46;
 const FOOTER_LINKS = [
   { id: 'privacy', label: 'Privacy Policy', x: W/2 - 160, w: 110 },
@@ -1436,7 +1418,6 @@ const FOOTER_LINKS = [
   { id: 'contact', label: 'Contact',        x: W/2 + 60,  w: 80  }
 ];
 
-// Login/Register/Guest field boxes (shared coordinates)
 const AUTH_BOXES = {
   login: {
     username: { x: W/2 - 220, y: 175, w: 440, h: 52 },
@@ -1504,7 +1485,6 @@ function handleMenuClick(x, y){
       }
     }
   }
-  // Menu screen: MY PROFILE + LOGOUT buttons
   if (G.phase === 'menu'){
     const pvW = 130, pvH = 52, pvX = W - 18 - pvW, pvY = 18;
     const loW = 110, loH = 52, loX = pvX - 12 - loW, loY = 18;
@@ -1527,8 +1507,17 @@ function handleMenuClick(x, y){
       }
     }
   }
-  // Login screen field taps
+  // ===== GUEST BUTTON on login screen =====
   if (G.phase === 'login'){
+    const gbW = 360, gbH = 46, gbX = W/2 - gbW/2, gbY = 398;
+    if (pointInButton(x,y,{x:gbX, y:gbY, w:gbW, h:gbH})){
+      beep(880, 0.06, 'triangle', 0.09);
+      ACCOUNT.error = '';
+      ACCOUNT.formName = '';
+      ACCOUNT.formFocus = 'guestName';
+      setPhase('guest');
+      return true;
+    }
     if (pointInButton(x,y,AUTH_BOXES.login.username)){
       ACCOUNT.formFocus = 'username';
       suggestionsOpen = true;
@@ -1542,7 +1531,6 @@ function handleMenuClick(x, y){
       openMobileKeyboard();
       return true;
     }
-    // Suggestion click
     if (suggestionsOpen && usernameSuggestions.length > 0){
       const box = AUTH_BOXES.login.username;
       const sugX = box.x + box.w + 8;
@@ -1561,7 +1549,6 @@ function handleMenuClick(x, y){
       }
     }
   }
-  // Register screen field taps
   if (G.phase === 'register'){
     if (pointInButton(x,y,AUTH_BOXES.register.username)){
       ACCOUNT.formFocus = 'username';
@@ -1594,7 +1581,6 @@ function handleMenuClick(x, y){
       }
     }
   }
-  // Guest screen field taps
   if (G.phase === 'guest'){
     if (pointInButton(x,y,AUTH_BOXES.guest.name)){
       ACCOUNT.formFocus = 'guestName';
@@ -1642,7 +1628,6 @@ function handleAuthKey(e){
   const focus = ACCOUNT.formFocus;
   if (e.key === 'Escape'){ setPhase('menu'); e.preventDefault(); return; }
   if (e.key === 'Tab'){
-    // Switch between username / password
     if (G.phase === 'register'){
       if (focus === 'username'){ ACCOUNT.formFocus = 'password'; suggestionsOpen = false; }
       else if (focus === 'password'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = true; if (ACCOUNT.formUsername.length >= 2) onUsernameChange(); }
@@ -1748,7 +1733,6 @@ window.addEventListener('keydown', e=>{
   }
 });
 
-/* ========== MOBILE KEYBOARD ========== */
 const mobileInput = document.getElementById('mobileNameInput');
 function isTypingPhase(){
   return G.phase === 'nameEntry' || G.phase === 'login' || G.phase === 'register' || G.phase === 'guest';
@@ -1825,7 +1809,6 @@ mobileInput.addEventListener('keydown', e=>{
   }
 });
 
-/* ==================== DRAW ==================== */
 const clouds = [
   { x:140, y:58, s:0.9 }, { x:470, y:98, s:0.65 },
   { x:780, y:50, s:0.85 }, { x:1120, y:105, s:0.55 },
@@ -2380,10 +2363,10 @@ function drawOverlays(){
     const a = clamp(G.bannerTimer/0.4, 0, 1);
     ctx.globalAlpha = a;
     let c='#ffffff';
-    if (G.banner==='MISS!'||G.banner==='OUT!'||G.banner==='CAUGHT!') c='#ff8a8a';
+    if (G.banner==='MISS!'||G.banner==='OUT!'||G.banner==='CAUGHT!'||G.banner==='REGISTER TO PLAY ONLINE') c='#ff8a8a';
     else if (G.banner==='PERFECT!') c='#ffd166';
     else if (G.banner==='SAFE!') c='#8affa0';
-    centerText(G.banner, 380, 54, c);
+    centerText(G.banner, 380, G.banner === 'REGISTER TO PLAY ONLINE' ? 32 : 54, c);
     ctx.globalAlpha=1;
   }
   if (G.phase==='air' && gulli.vy > 0){
@@ -2518,7 +2501,6 @@ function drawSplash(){
   ctx.restore();
 }
 
-/* ===== Auth screens ===== */
 function drawSuggestionDropdown(box){
   if (!suggestionsOpen || usernameSuggestions.length === 0) return;
   const sugX = box.x + box.w + 8;
@@ -2584,7 +2566,6 @@ function drawLoginScreen(){
   if (ACCOUNT.loading) centerText('Logging in...', 315, 14, 'rgba(255,209,102,0.9)');
   else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 315, 14, '#ff8a8a');
 
-  // Guest button (extra, not in menuButtons)
   const gbW = 360, gbH = 46, gbX = W/2 - gbW/2, gbY = 398;
   ctx.save();
   rr(ctx, gbX, gbY, gbW, gbH, 12);
@@ -3288,7 +3269,6 @@ function drawSearching(){
   for (const b of menuButtons) drawMenuButton(b);
 }
 
-/* ==================== MAIN RENDER ==================== */
 function draw(){
   ctx.clearRect(0,0,W,H);
   if (G.phase === 'splash'){ drawSplash(); return; }
@@ -3354,7 +3334,6 @@ function draw(){
   ctx.fillRect(0,0,W,H);
 }
 
-/* ==================== HUD ==================== */
 const uiScore = document.getElementById('uiScore');
 const uiBest = document.getElementById('uiBest');
 const uiOuts = document.getElementById('uiOuts');
@@ -3376,7 +3355,6 @@ function updateHUD(){
   uiTurn.textContent = (G.currentPlayer + 1) + '/' + G.players.length;
 }
 
-/* ==================== LOOP ==================== */
 let last = performance.now();
 function loop(now){
   let dt = (now-last)/1000;
@@ -3386,7 +3364,6 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 
-/* ==================== BOOT ==================== */
 resetGulli();
 rebuildMenuButtons();
 initFirebase();
