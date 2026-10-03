@@ -180,7 +180,7 @@ function logoutUser(){
   ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
   ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
   ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
-  ACCOUNT.formName = ''; ACCOUNT.formPhone = ''; ACCOUNT.formFocus = 'name';
+  ACCOUNT.formName = ''; ACCOUNT.formPhone = ''; ACCOUNT.formFocus = 'phone';
   ACCOUNT.mode = 'login'; ACCOUNT.error = '';
   clearSession();
   setPhase('login');
@@ -543,6 +543,9 @@ function hexA(hex, a){
 }
 function setPhase(p){
   G.phase = p;
+  // Auto-focus phone on login screen
+  if (p === 'login'){ ACCOUNT.formFocus = 'phone'; }
+  if (p === 'register'){ ACCOUNT.formFocus = 'name'; }
   if (p==='menu'||p==='levelSelect'||p==='playerSelect'||p==='turnIntro'||p==='turnEnd'||p==='gameOver'||p==='leaderboard'||p==='login'||p==='register'||p==='profileView'){
     rebuildMenuButtons();
   }
@@ -1363,12 +1366,22 @@ function handleMenuClick(x, y){
       }
     }
   }
-  // Login/register field taps
-  if (G.phase === 'login' || G.phase === 'register'){
-    const nameBox = { x: W/2 - 220, y: 210, w: 440, h: 56 };
-    const phoneBox = { x: W/2 - 220, y: 290, w: 440, h: 56 };
-    if (G.phase === 'register' && pointInButton(x,y,nameBox)){ ACCOUNT.formFocus = 'name'; openMobileKeyboard(); return true; }
-    if (pointInButton(x,y,phoneBox)){ ACCOUNT.formFocus = 'phone'; openMobileKeyboard(); return true; }
+  // Login/register field taps - FIXED
+  if (G.phase === 'login'){
+    // Login screen: phone box at y=210
+    const loginPhoneBox = { x: W/2 - 220, y: 210, w: 440, h: 60 };
+    if (pointInButton(x,y,loginPhoneBox)){
+      ACCOUNT.formFocus = 'phone';
+      openMobileKeyboard();
+      return true;
+    }
+  }
+  if (G.phase === 'register'){
+    // Register screen: name box at y=150, phone box at y=250
+    const regNameBox = { x: W/2 - 220, y: 150, w: 440, h: 56 };
+    const regPhoneBox = { x: W/2 - 220, y: 250, w: 440, h: 56 };
+    if (pointInButton(x,y,regNameBox)){ ACCOUNT.formFocus = 'name'; openMobileKeyboard(); return true; }
+    if (pointInButton(x,y,regPhoneBox)){ ACCOUNT.formFocus = 'phone'; openMobileKeyboard(); return true; }
   }
   return false;
 }
@@ -1506,7 +1519,12 @@ function isTypingPhase(){ return G.phase === 'nameEntry' || G.phase === 'login' 
 function openMobileKeyboard(){
   mobileInput.style.pointerEvents = 'auto';
   mobileInput.style.zIndex = '999';
-  if (G.phase === 'login' || G.phase === 'register'){
+  if (G.phase === 'login'){
+    // Login always uses phone
+    ACCOUNT.formFocus = 'phone';
+    mobileInput.value = ACCOUNT.formPhone;
+    mobileInput.setAttribute('inputmode', 'numeric');
+  } else if (G.phase === 'register'){
     mobileInput.value = (ACCOUNT.formFocus === 'name') ? ACCOUNT.formName : ACCOUNT.formPhone;
     mobileInput.setAttribute('inputmode', ACCOUNT.formFocus === 'phone' ? 'numeric' : 'text');
   } else if (G.phase === 'nameEntry'){
@@ -1520,12 +1538,14 @@ function openMobileKeyboard(){
 canvas.addEventListener('pointerdown', e=>{
   e.preventDefault();
   if (isTypingPhase()){
-    if (G.phase === 'login' || G.phase === 'register'){
+    if (G.phase === 'login'){
+      ACCOUNT.formFocus = 'phone'; // Login always phone
+    } else if (G.phase === 'register'){
       const {x,y} = canvasCoordsFromEvent(e);
-      const nameBox = { x: W/2 - 220, y: 210, w: 440, h: 56 };
-      const phoneBox = { x: W/2 - 220, y: 290, w: 440, h: 56 };
-      if (G.phase === 'register' && pointInButton(x,y,nameBox)) ACCOUNT.formFocus = 'name';
-      else if (pointInButton(x,y,phoneBox)) ACCOUNT.formFocus = 'phone';
+      const regNameBox = { x: W/2 - 220, y: 150, w: 440, h: 56 };
+      const regPhoneBox = { x: W/2 - 220, y: 250, w: 440, h: 56 };
+      if (pointInButton(x,y,regNameBox)) ACCOUNT.formFocus = 'name';
+      else if (pointInButton(x,y,regPhoneBox)) ACCOUNT.formFocus = 'phone';
     }
     openMobileKeyboard();
   }
@@ -1534,7 +1554,10 @@ canvas.addEventListener('pointerdown', e=>{
 
 mobileInput.addEventListener('input', ()=>{
   const raw = mobileInput.value || '';
-  if (G.phase === 'login' || G.phase === 'register'){
+  if (G.phase === 'login'){
+    ACCOUNT.formPhone = raw.replace(/\D/g,'').slice(0,10);
+    mobileInput.value = ACCOUNT.formPhone;
+  } else if (G.phase === 'register'){
     if (ACCOUNT.formFocus === 'name'){
       ACCOUNT.formName = raw.toUpperCase().slice(0,10);
       mobileInput.value = ACCOUNT.formName;
@@ -2590,7 +2613,6 @@ function drawMenuScreen(){
   centerText('GULLI  DANDA', 90, 58, '#ffd166');
   centerText('CHAMPIONSHIP', 128, 22, 'rgba(255,255,255,0.85)');
 
-  // Account badge top-left
   const bw = 260, bh = 52, bx = 18, by = 18;
   ctx.save();
   rr(ctx, bx, by, bw, bh, 12);
@@ -2605,7 +2627,6 @@ function drawMenuScreen(){
   ctx.fillText('📱 ' + ACCOUNT.phone + ' · W:' + ACCOUNT.wins + ' L:' + ACCOUNT.losses, bx + 14, by + 36);
   ctx.restore();
 
-  // MY PROFILE + LOGOUT buttons top-right
   const pvW = 130, pvH = 52, pvX = W - 18 - pvW, pvY = 18;
   const loW = 110, loH = 52, loX = pvX - 12 - loW, loY = 18;
   ctx.save();
@@ -2633,35 +2654,27 @@ function drawMenuScreen(){
   ctx.globalAlpha = 1;
   for (const b of menuButtons) drawMenuButton(b);
 
-  // Powered by + Footer links
   ctx.font = '700 11px system-ui,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(255,209,102,0.85)';
   ctx.fillText('Powered by PRADEEP SINGH', W/2, H - 22);
-  // Footer links row
   ctx.font = '700 12px system-ui,sans-serif';
   const linkBaseY = H - 46;
   const privacyX = W/2 - 160;
   const aboutX = W/2 - 30;
   const contactX = W/2 + 60;
   const linkColor = 'rgba(140,180,230,0.9)';
-  // Privacy Policy
   ctx.textAlign = 'center';
   ctx.fillStyle = linkColor;
   ctx.fillText('Privacy Policy', privacyX, linkBaseY);
-  // Dot separator
   ctx.fillStyle = 'rgba(255,255,255,0.4)';
   ctx.fillText('·', W/2 - 80, linkBaseY);
-  // About
   ctx.fillStyle = linkColor;
   ctx.fillText('About', aboutX, linkBaseY);
-  // Dot separator
   ctx.fillStyle = 'rgba(255,255,255,0.4)';
   ctx.fillText('·', W/2 + 15, linkBaseY);
-  // Contact
   ctx.fillStyle = linkColor;
   ctx.fillText('Contact', contactX, linkBaseY);
-  // Underline effect
   ctx.strokeStyle = 'rgba(140,180,230,0.5)'; ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(privacyX - 42, linkBaseY + 9); ctx.lineTo(privacyX + 42, linkBaseY + 9);
