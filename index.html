@@ -110,8 +110,18 @@ const SHOP_BOOSTS = [
 ];
 const LIFE_PRICE = 500;
 
-function getActiveSkin(){ return SHOP_SKINS.find(s => s.id === ACCOUNT.activeSkin) || SHOP_SKINS[0]; }
-function getActiveDanda(){ return SHOP_DANDAS.find(d => d.id === ACCOUNT.activeDanda) || SHOP_DANDAS[0]; }
+/* ============ SPECTATOR OVERRIDES (live view) ============ */
+let SPEC_ON = false;
+let SPEC_SKIN = null, SPEC_DANDA = null;
+
+function getActiveSkin(){
+  if (SPEC_ON && SPEC_SKIN) return SPEC_SKIN;
+  return SHOP_SKINS.find(s => s.id === ACCOUNT.activeSkin) || SHOP_SKINS[0];
+}
+function getActiveDanda(){
+  if (SPEC_ON && SPEC_DANDA) return SPEC_DANDA;
+  return SHOP_DANDAS.find(d => d.id === ACCOUNT.activeDanda) || SHOP_DANDAS[0];
+}
 function getActiveBoost(){ return SHOP_BOOSTS.find(b => b.id === ACCOUNT.activeBoost) || SHOP_BOOSTS[0]; }
 
 const LEVEL_NAMES = [
@@ -420,6 +430,7 @@ const HAIR_TONES  = ['#141414','#1f1512','#2d1810','#3a2416','#4a2a10','#5c3a1e'
 const SHIRT_TONES = ['#eceef2','#d94f4f','#4f7fd9','#e0b84f','#5fbf7a','#8a6ad9','#e08a4f','#4fc7cf','#c94f8a','#f2c14e'];
 let crowdCanvas = null, crowdRows = [], frontRowPeople = [], flashes = [], crowdFlags = [];
 let shake = 0;
+let frameDt = 0.016;   /* used by the live spectator smoothing */
 
 const NET = {
   ready: false, db: null, roomId: null, role: null,
@@ -450,6 +461,15 @@ function resetMatchFlags(){
   NET.autopilotRetryAt = 0; NET.oppLiveAt = 0; NET.series = { me: 0, opp: 0 };
   clearTimeout(NET.scanTimer); NET.scanTimer = null;
 }
+
+/* ==================== LIVE SPECTATOR STATE ==================== */
+const SPEC = {
+  ready: false,
+  gx: 0, gy: 0, gr: 0, cx: 0,      // smoothed values
+  tgx: 0, tgy: 0, tgr: 0, tcx: 0,  // target values from network
+  fX: []                            // smoothed fielder x positions
+};
+function specReset(){ SPEC.ready = false; SPEC.fX = []; }
 
 function initFirebase(){
   try {
@@ -482,6 +502,7 @@ function startOnlineMatchmaking(){
   NET.joinPopup = null; NET.joinPopupTimer = 0;
   NET.roomRef = null; NET.roomId = null; NET.role = null;
   resetMatchFlags();
+  specReset();
   if (!NET.ready && !initFirebase()){ G.banner = 'NETWORK ERROR'; G.bannerTimer = 2.5; setPhase('menu'); return; }
   setPhase('searching'); NET.searching = true;
   NET.searchStart = performance.now(); NET.statusMsg = 'Searching for players...';
@@ -580,6 +601,7 @@ function onJoined(id, room){
   NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppLive = null; NET.oppLeft = false;
   NET.statusMsg = 'Joined ' + (NET.oppName || 'player') + ' — connecting...';
   NET.leaveArmed = true; armLeaveFlag();
+  specReset();
   watchRoom();
   trackEvent('matchmaking_success', {});
   waitForHost(id);
@@ -696,27 +718,40 @@ function watchRoom(){
       if (wasLeft !== NET.oppLeft) refreshResultButtons();
     }
 
-    // ---- rematch: host bumped the round number ----
+    /* ---------- REMATCH: host bumped the round number ---------- */
     const dr = data.round || 1;
     if (dr > NET.round){ startNextRound(data, dr); return; }
 
-    // ---- rematch requests ----
+    /* ---------- REMATCH handshake (transaction = only one client bumps) ---------- */
     const rm = data.rematch || {};
     const mineReq = rm[role] === NET.round, oppReq = rm[oppRole] === NET.round;
     if (mineReq !== NET.rematchSent || oppReq !== NET.oppRematch){
       NET.rematchSent = mineReq; NET.oppRematch = oppReq; refreshResultButtons();
     }
-    if (role === 'p1' && rm.p1 === NET.round && rm.p2 === NET.round && !NET.roundStarting && !NET.oppLeft){
+    if (rm.p1 === NET.round && rm.p2 === NET.round &&
+        !NET.roundStarting && !NET.oppLeft && !NET.botResult &&
+        data.p1 && data.p2 && !data.p2.isBot){
       NET.roundStarting = true;
-      const winner = Math.random() < 0.5 ? 'p1' : 'p2';
-      ref.update({
-        round: NET.round + 1,
-        'p1/score': 0, 'p1/done': false, 'p2/score': 0, 'p2/done': false,
-        tossWinner: winner, currentBatsman: winner, skipToss: null, live: null, rematch: null
-      }).then(() => { NET.roundStarting = false; }).catch(() => { NET.roundStarting = false; });
+      const myRound = NET.round;
+      ref.transaction(cur => {
+        if (cur === null) return cur;
+        if ((cur.round || 1) !== myRound) return;       // someone already bumped it
+        if (!cur.p1 || !cur.p2 || cur.p2.isBot) return; // safety
+        const w = Math.random() < 0.5 ? 'p1' : 'p2';
+        cur.round = myRound + 1;
+        cur.tossWinner = w;
+        cur.currentBatsman = w;
+        cur.skipToss = null;
+        cur.live = null;
+        cur.rematch = null;
+        cur.p1.score = 0; cur.p1.done = false; cur.p1.left = null;
+        cur.p2.score = 0; cur.p2.done = false; cur.p2.left = null;
+        return cur;
+      }).then(() => { NET.roundStarting = false; })
+        .catch(() => { NET.roundStarting = false; });
     }
 
-    // ---- toss ----
+    /* ---------- toss ---------- */
     if (role === 'p1' && data.p2 && !data.p2.isBot && !data.tossWinner && !NET.tossDecided){
       NET.tossDecided = true; NET.searching = false;
       const winner = Math.random() < 0.5 ? 'p1' : 'p2';
@@ -758,6 +793,9 @@ function startNextRound(data, dr){
   NET.currentBatsman = data.currentBatsman || NET.tossWinner;
   NET.tossDecided = true;
   NET.tossStartTime = performance.now();
+  NET.oppLeft = false;
+  G.turnEndTimer = 0;
+  specReset();
   G.banner = '🔁 REMATCH!'; G.bannerTimer = 2;
   setPhase('toss');
 }
@@ -793,6 +831,7 @@ function beginOnlineTurn(){
   G.currentPlayer = 0;
   G.gameOverWinner = null; G.gameOverMsg = ''; G.levelCleared = false;
   G.celebrationTimer = 0; G.confettiTimer = 0;
+  specReset();
   initCrowd(); prepareTurn();
 }
 function reportOnlineScore(score){
@@ -825,6 +864,7 @@ function reportOnlineScore(score){
     update['currentBatsman'] = (NET.role === 'p1') ? 'p2' : 'p1';
   }
   NET.statusMsg = 'Waiting for ' + (NET.oppName || 'opponent') + '...';
+  specReset();
   setPhase('waitingOpp');   // switch right away: no double-submit, and we start watching the opponent live
   NET.roomRef.update(update).then(() => { checkFinish(); }).catch(() => {});
 }
@@ -882,6 +922,7 @@ function cleanupOnline(){
   NET.autopilot = false; NET.autopilotStart = 0;
   NET.autopilotBot = null;
   NET.joinPopup = null; NET.joinPopupTimer = 0;
+  specReset();
 }
 
 /* ==================== AUTOPILOT MODE ==================== */
@@ -912,6 +953,7 @@ function startAutopilotMode(){
     detachRoomListeners();
     try{ if (NET.roomRef) NET.roomRef.onDisconnect().remove(); }catch(e){}
     if (NET.roomRef) watchAutopilotRoom();
+    specReset();
     setPhase('toss');
     trackEvent('autopilot_start', {});
   };
@@ -974,6 +1016,7 @@ function autoAcceptJoin(name){
   NET.botResult = false;
   NET.series = { me: 0, opp: 0 };
   NET.round = NET.round || 1;
+  specReset();
 
   const phase = G.phase;
   const upd = {
@@ -1605,8 +1648,9 @@ function updateParticles(dt){
 
 /* ==================== UPDATE ==================== */
 function update(dt){
+  /* ---------- LIVE BROADCAST (full state so the spectator sees the exact same match) ---------- */
   NET.lastSync = (NET.lastSync || 0) + dt;
-  if (NET.lastSync > 0.15 && NET.roomRef && NET.role && G.mode === 'online' && !NET.autopilot){
+  if (NET.lastSync > 0.10 && NET.roomRef && NET.role && G.mode === 'online' && !NET.autopilot){
     NET.lastSync = 0;
     let phaseLabel = G.phase;
     if (G.phase === 'power' || G.phase === 'air') phaseLabel = 'BATTING';
@@ -1617,12 +1661,51 @@ function update(dt){
     else if (G.phase === 'turnEnd') phaseLabel = 'INNINGS DONE';
     else if (G.phase === 'waitingOpp') phaseLabel = 'WAITING';
     else if (G.phase === 'turnIntro') phaseLabel = 'GETTING READY';
+
+    const fs = [];
+    for (let i = 0; i < fielders.length; i++){
+      const f = fielders[i];
+      fs.push([
+        Math.round(f.x),
+        Math.round((f.runPhase || 0) * 100) / 100,
+        f.moving ? 1 : 0,
+        f.facing > 0 ? 1 : -1,
+        Math.round(f.speed || 0),
+        f.color || '#5c9ee0',
+        f.skin  || '#f0c49a',
+        f.hair  || '#3a2416',
+        f.number || ''
+      ]);
+    }
+
+    const skin = getActiveSkin(), danda = getActiveDanda();
     NET.roomRef.child('live/' + NET.role).update({
-      phase: phaseLabel, score: G.score,
-      gulliX: Math.round(gulli.x), gulliY: Math.round(gulli.y),
-      ballDist: Math.round(G.hitDistance || 0), ts: Date.now()
+      ph: G.phase,                       // raw phase (spectator renders the identical scene)
+      lb: phaseLabel,                    // display label
+      sc: G.score,
+      ou: G.outs,
+      gx: Math.round(gulli.x),
+      gy: Math.round(gulli.y),
+      gr: Math.round(gulli.rot * 100) / 100,
+      gg: gulli.grounded ? 1 : 0,
+      gv: gulli.vy > 0 ? 1 : 0,
+      cx: Math.round(camX),
+      pw: Math.round(G.power),
+      sh: G.shotType,
+      bd: Math.round(G.hitDistance || 0),
+      bn: G.banner || '',
+      bt: Math.round((G.bannerTimer || 0) * 10) / 10,
+      oc: G.outcome || '',
+      ql: Math.round((G.quality || 0) * 100) / 100,
+      sk: skin.color,
+      dn: danda.color,
+      da: danda.accent,
+      nm: NET.myName,
+      fs: fs,
+      ts: Date.now()
     }).catch(()=>{});
   }
+
   if (G.bannerTimer>0) G.bannerTimer -= dt;
   if (G.swingTimer>0) G.swingTimer -= dt;
   if (G.marketMsgTimer>0) G.marketMsgTimer -= dt;
@@ -2184,7 +2267,6 @@ window.addEventListener('keydown', e=>{
 });
 
 const mobileInput = document.getElementById('mobileNameInput');
-function isTypingPhase(){ return G.phase === 'nameEntry' || G.phase === 'login' || G.phase === 'register' || G.phase === 'guest'; }
 function openMobileKeyboard(){
   mobileInput.style.pointerEvents = 'auto'; mobileInput.style.zIndex = '999';
   const focus = ACCOUNT.formFocus;
@@ -2565,7 +2647,7 @@ function drawEffects(){
     ctx.restore();
   }
 }
-function drawPowerMeter(){
+function drawPowerMeter(labelOverride){
   if (G.phase!=='power') return;
   const bw=430, bh=26; const bx=W/2-bw/2, by=H-158;
   ctx.save();
@@ -2589,16 +2671,16 @@ function drawPowerMeter(){
   ctx.font='bold 15px system-ui,sans-serif'; ctx.textAlign='center';
   ctx.fillStyle='rgba(255,255,255,0.92)';
   ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=6;
-  ctx.fillText('CLICK to toss  •  stop in the green', W/2, by-16);
+  ctx.fillText(labelOverride || 'CLICK to toss  •  stop in the green', W/2, by-16);
   ctx.shadowBlur=0; ctx.restore(); ctx.textAlign='left';
 }
-function drawShotSelector(){
+function drawShotSelector(spectating){
   if (G.phase!=='power' && G.phase!=='air') return;
   ctx.save();
   ctx.font='900 13px system-ui,sans-serif'; ctx.textAlign='center';
   ctx.fillStyle='rgba(255,255,255,0.85)';
   ctx.shadowColor='rgba(0,0,0,0.6)'; ctx.shadowBlur=6;
-  ctx.fillText('SHOT: press 1 / 2 / 3  (or click)', W/2, H - 88);
+  ctx.fillText(spectating ? 'OPPONENT SHOT SELECTION' : 'SHOT: press 1 / 2 / 3  (or click)', W/2, H - 88);
   ctx.shadowBlur=0;
   for (const b of shotButtons){
     const shot = SHOTS[b.id];
@@ -3374,86 +3456,195 @@ function drawTossResult(){
   const remaining = Math.max(0, Math.ceil((TOSS_RESULT_DURATION - elapsed) / 1000));
   centerText('Starting in ' + remaining + '...', 460, 22, 'rgba(255,209,102,0.9)');
 }
-function drawWaitingOpp(){
-  ctx.fillStyle = 'rgba(12,16,28,0.88)';
-  ctx.fillRect(0,0,W,H);
-  const opp = NET.oppLive;
-  const iAmWaitingForMyTurn = !NET.myDone;
-  const headerColor = iAmWaitingForMyTurn ? PLAYER_COLORS[1] : '#ffd166';
-  if (iAmWaitingForMyTurn){
-    centerText((NET.oppName || 'OPPONENT') + ' IS BATTING FIRST', 55, 26, headerColor);
-    centerText('Watch their innings below — you bat next!', 90, 15, 'rgba(255,255,255,0.7)');
-  } else {
-    centerText('🏏  YOUR INNINGS DONE', 50, 22, '#ffd166');
-    centerText('Your Score: ' + G.score + ' pts', 82, 22, '#8affa0');
-    centerText('Watching ' + (NET.oppName || 'opponent') + ' bat', 112, 14, 'rgba(255,255,255,0.7)');
+
+/* ==================== LIVE SPECTATOR (same view as the batter) ==================== */
+function drawSpectatorScene(live, dt){
+  if (!live || !live.ph){
+    ctx.fillStyle = 'rgba(12,16,28,0.92)';
+    ctx.fillRect(0,0,W,H);
+    const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
+    centerText('Connecting to opponent stream' + dots, H/2, 22, 'rgba(255,255,255,0.75)');
+    return;
   }
-  const px = 100, py = 135, pw = W - 200, ph = 330;
-  ctx.save();
-  rr(ctx, px, py, pw, ph, 16);
-  ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
-  ctx.strokeStyle = PLAYER_COLORS[1]; ctx.lineWidth = 3; ctx.stroke();
-  ctx.font = '900 18px system-ui,sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillStyle = PLAYER_COLORS[1];
-  ctx.fillText('LIVE: ' + (NET.oppName || 'OPPONENT'), px + pw/2, py + 12);
-  if (opp){
-    const oppScore = opp.score || 0;
-    const phaseLabel = opp.phase || 'BATTING';
-    ctx.font = '900 36px system-ui,sans-serif';
-    ctx.fillStyle = '#ffd166';
-    ctx.fillText(oppScore + ' pts', px + pw/2, py + 38);
-    ctx.font = '700 14px system-ui,sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.fillText('Status: ' + phaseLabel + (opp.ballDist ? '  ·  Last hit: ' + opp.ballDist + 'm' : ''), px + pw/2, py + 82);
-    const liveAge = NET.oppLiveAt ? (performance.now() - NET.oppLiveAt) : 99999;
-    const liveOk = liveAge < 3000 || phaseLabel === 'WAITING' || phaseLabel === 'INNINGS DONE';
-    ctx.save();
-    ctx.textAlign = 'left'; ctx.font = '800 12px system-ui,sans-serif';
-    ctx.fillStyle = liveOk ? ('rgba(138,255,160,' + (0.55 + 0.45 * Math.sin(performance.now()/180)) + ')') : '#ffbe0b';
-    ctx.fillText(liveOk ? '● LIVE' : '○ SIGNAL WEAK', px + 18, py + 16);
-    ctx.restore();
-    const miniX = px + 40, miniY = py + 115;
-    const miniW = pw - 80, miniH = 130;
-    ctx.fillStyle = 'rgba(90,140,70,0.35)';
-    rr(ctx, miniX, miniY, miniW, miniH, 8); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(miniX, miniY + miniH - 20); ctx.lineTo(miniX + miniW, miniY + miniH - 20); ctx.stroke();
-    ctx.fillStyle = '#b07c42'; ctx.fillRect(miniX + 18, miniY + miniH - 30, 8, 12);
-    const scaleX = (miniW - 40) / 1600;
-    const scaleY = (miniH - 40) / 500;
-    const gx = Math.max(0, Math.min(1600, opp.gulliX || 0));
-    const gy = Math.max(0, Math.min(500, opp.gulliY || 400));
-    const dotX = miniX + 20 + gx * scaleX;
-    const dotY = miniY + miniH - 30 - (500 - gy) * scaleY;
-    ctx.strokeStyle = 'rgba(255,209,102,0.35)'; ctx.lineWidth = 1.5;
-    ctx.setLineDash([4,4]);
-    ctx.beginPath(); ctx.moveTo(miniX + 22, miniY + miniH - 24); ctx.lineTo(dotX, dotY); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.save();
-    ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 12;
-    ctx.fillStyle = '#ffd166';
-    ctx.beginPath(); ctx.arc(dotX, dotY, 6, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
-    ctx.font = '600 10px system-ui,sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText('LIVE VIEW', miniX + miniW/2, miniY + 4);
-    if (NET.oppDone){
-      centerText('OPPONENT DONE!', py + ph + 20, 22, '#8affa0');
-    } else if (iAmWaitingForMyTurn){
-      const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
-      centerText('Opponent batting' + dots + ' you bat next!', py + ph + 20, 15, 'rgba(255,255,255,0.7)');
-    } else {
-      const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
-      centerText('Waiting for opponent to finish' + dots, py + ph + 20, 15, 'rgba(255,255,255,0.7)');
+
+  /* ---- smooth the network values so motion looks identical to the real game ---- */
+  if (!SPEC.ready){
+    SPEC.gx = SPEC.tgx = live.gx || 0;
+    SPEC.gy = SPEC.tgy = live.gy || (GROUND_Y - 7);
+    SPEC.gr = SPEC.tgr = live.gr || 0;
+    SPEC.cx = SPEC.tcx = live.cx || 0;
+    SPEC.ready = true;
+  }
+  SPEC.tgx = live.gx || 0;
+  SPEC.tgy = live.gy || (GROUND_Y - 7);
+  SPEC.tgr = live.gr || 0;
+  SPEC.tcx = live.cx || 0;
+
+  const k = Math.min(1, dt * 20);
+  SPEC.gx += (SPEC.tgx - SPEC.gx) * k;
+  SPEC.gy += (SPEC.tgy - SPEC.gy) * k;
+  SPEC.gr += (SPEC.tgr - SPEC.gr) * k;
+  SPEC.cx += (SPEC.tcx - SPEC.cx) * Math.min(1, dt * 10);
+
+  const fList = live.fs || [];
+  for (let i = 0; i < fList.length; i++){
+    const tx = fList[i][0] || 0;
+    if (SPEC.fX[i] === undefined) SPEC.fX[i] = tx;
+    else SPEC.fX[i] += (tx - SPEC.fX[i]) * k;
+  }
+  SPEC.fX.length = fList.length;
+
+  /* ---- temporarily swap the globals so the real drawing code renders the opponent's match ---- */
+  const bakCamX = camX;
+  const bakFielders = fielders.slice();
+  const bakGulli = { x:gulli.x, y:gulli.y, vx:gulli.vx, vy:gulli.vy, rot:gulli.rot, rotV:gulli.rotV, grounded:gulli.grounded };
+  const bakPlayers = G.players, bakCurrent = G.currentPlayer;
+  const bakParticles = G.particles, bakRing = G.ring;
+  const bakBanner = G.banner, bakBannerT = G.bannerTimer;
+  const bakPhase = G.phase, bakPower = G.power, bakShot = G.shotType;
+  const bakHit = G.hitDistance, bakOutcome = G.outcome, bakZonePop = G.zonePop;
+  const bakOn = SPEC_ON, bakSkin = SPEC_SKIN, bakDanda = SPEC_DANDA;
+
+  camX = SPEC.cx;
+  fielders.length = 0;
+  for (let i = 0; i < fList.length; i++){
+    const f = fList[i];
+    fielders.push({
+      homeX: f[0], x: SPEC.fX[i] !== undefined ? SPEC.fX[i] : f[0],
+      patrol: 0, patrolSpeed: 0, patrolPhase: 0,
+      color: f[5] || '#5c9ee0', skin: f[6] || '#f0c49a', hair: f[7] || '#3a2416',
+      topSpeed: 700, speed: f[4] || 0,
+      runPhase: f[1] || 0, moving: !!f[2], facing: f[3] > 0 ? 1 : -1,
+      isCatcher: false, chasing: false, number: f[8] || '', playerName: null
+    });
+  }
+  gulli.x = SPEC.gx;
+  gulli.y = SPEC.gy;
+  gulli.rot = SPEC.gr;
+  gulli.vx = 0;
+  gulli.vy = live.gv ? 120 : 0;          // drawZone() needs vy > 0 to appear
+  gulli.grounded = live.gg !== 0;
+  G.players = [{ name: live.nm || NET.oppName || 'OPPONENT', color: live.sk || '#3a86ff' }];
+  G.currentPlayer = 0;
+  G.particles = [];
+  G.ring = null;
+  G.banner = live.bn || '';
+  G.bannerTimer = live.bt || 0;
+  G.phase = live.ph || 'power';
+  G.power = live.pw || 0;
+  G.shotType = live.sh || 'DRIVE';
+  G.hitDistance = live.bd || 0;
+  G.outcome = live.oc || '';
+  G.zonePop = 0.6;
+  SPEC_ON = true;
+  SPEC_SKIN = { id:'spec', name:'', color: live.sk || '#3a86ff', price:0 };
+  SPEC_DANDA = { id:'spec', name:'', color: live.dn || '#b07c42', accent: live.da || '#8a5a2b', price:0 };
+
+  try {
+    drawSky();
+    drawStadium();
+    drawField();
+    drawDistanceMarkers();
+    if (G.phase === 'fielding' || G.phase === 'throw' || G.phase === 'result') drawDandaOnGround();
+    drawZone();
+    for (const f of fielders) drawFielder(f);
+    drawGulli();
+    drawPlayer();
+    /* identical meter + shot panel, exactly like the batter sees */
+    drawPowerMeter('OPPONENT BATTING');
+    drawShotSelector(true);
+    if (G.bannerTimer > 0 && G.banner){
+      let c = '#ffffff';
+      if (G.banner === 'MISS!' || G.banner === 'OUT!' || G.banner === 'CAUGHT!') c = '#ff8a8a';
+      else if (G.banner === 'PERFECT!') c = '#ffd166';
+      else if (G.banner === 'SAFE!') c = '#8affa0';
+      centerText(G.banner, 380, 54, c);
     }
+    if (G.phase === 'air' && live.gv) centerText('HIT NOW!', 372, 22, '#ffd166');
+    if (G.phase === 'fly') centerText(Math.round(G.hitDistance) + ' m', 350, 44, '#ffffff');
+    if (G.phase === 'fielding') centerText('FIELDING…', 380, 18, 'rgba(255,255,255,0.9)');
+    if (G.phase === 'throw') centerText('THROWING AT THE DANDA!', 380, 18, 'rgba(255,209,102,0.95)');
+  } finally {
+    camX = bakCamX;
+    fielders.length = 0; for (const f of bakFielders) fielders.push(f);
+    Object.assign(gulli, bakGulli);
+    G.players = bakPlayers; G.currentPlayer = bakCurrent;
+    G.particles = bakParticles; G.ring = bakRing;
+    G.banner = bakBanner; G.bannerTimer = bakBannerT;
+    G.phase = bakPhase; G.power = bakPower; G.shotType = bakShot;
+    G.hitDistance = bakHit; G.outcome = bakOutcome; G.zonePop = bakZonePop;
+    SPEC_ON = bakOn; SPEC_SKIN = bakSkin; SPEC_DANDA = bakDanda;
+  }
+}
+
+function drawWaitingOpp(){
+  if (!crowdCanvas) initCrowd();
+  const live = NET.oppLive;
+  const iAmWaiting = !NET.myDone;
+
+  /* ---- the actual live match, rendered exactly like the batter's screen ---- */
+  drawSpectatorScene(live, frameDt);
+
+  /* ---- thin HUD so we know we're spectating ---- */
+  ctx.save();
+  const g = ctx.createLinearGradient(0, 0, 0, 86);
+  g.addColorStop(0, 'rgba(10,14,24,0.92)');
+  g.addColorStop(1, 'rgba(10,14,24,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, 86);
+  ctx.restore();
+
+  const blink = 0.55 + 0.45 * Math.sin(performance.now() / 300);
+  ctx.save();
+  ctx.globalAlpha = blink;
+  ctx.fillStyle = '#ff4d4d';
+  ctx.beginPath(); ctx.arc(34, 26, 7, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.font = '900 17px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('LIVE  ·  ' + (NET.oppName || 'OPPONENT') + ' BATTING', 52, 26);
+  ctx.font = '700 12px system-ui,sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.62)';
+  ctx.fillText(live && live.lb ? ('Status: ' + live.lb) : 'Waiting for stream…', 52, 46);
+  ctx.restore();
+
+  if (live){
+    ctx.save();
+    rr(ctx, W - 300, 10, 280, 40, 10);
+    ctx.fillStyle = 'rgba(20,25,40,0.85)'; ctx.fill();
+    ctx.strokeStyle = '#3a86ff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = '900 12px system-ui,sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillText('THEIR SCORE', W - 286, 30);
+    ctx.font = '900 24px system-ui,sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText((live.sc || 0) + ' pts', W - 30, 31);
+    ctx.restore();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(10,14,24,0.8)';
+  ctx.fillRect(0, H - 50, W, 50);
+  ctx.font = '800 14px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (NET.myDone){
+    ctx.fillStyle = '#8affa0';
+    ctx.fillText('YOUR INNINGS: ' + G.score + ' pts  ·  waiting for ' + (NET.oppName || 'opponent') + ' to finish…', W/2, H - 25);
   } else {
-    centerText('Connecting to opponent stream...', py + ph/2, 20, 'rgba(255,255,255,0.7)');
+    const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.fillText('You bat next — watch ' + (NET.oppName || 'opponent') + ' play' + dots, W/2, H - 25);
   }
   ctx.restore();
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
+
 function drawMenuScreen(){
   ctx.fillStyle = 'rgba(12,16,28,0.55)';
   ctx.fillRect(0,0,W,H);
@@ -4058,31 +4249,35 @@ function draw(){
   if (G.phase === 'market'){ drawMarket(); return; }
   ctx.save();
   if (shake > 0.002){ const m = shake * shake * 9; ctx.translate((Math.random()-0.5)*m, (Math.random()-0.5)*m); }
-  drawSky();
-  if (G.players.length > 0){ drawStadium(); }
-  else { ctx.fillStyle = '#2a3142'; ctx.fillRect(0, STADIUM_TOP, W, STADIUM_BOTTOM - STADIUM_TOP); }
-  drawField();
-  if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'){
-    if (G.phase === 'menu') drawMenuScreen();
-    else if (G.phase === 'levelSelect') drawLevelSelect();
-    else drawPlayerSelect();
-  }
-  else if (G.phase === 'searching'){ drawSearching(); }
-  else if (G.phase === 'toss'){ drawToss(); }
-  else if (G.phase === 'tossResult'){ drawTossResult(); }
-  else if (G.phase === 'waitingOpp'){ drawWaitingOpp(); }
-  else if (G.phase === 'botBatting'){ drawBotBattingOverlay(); }
-  else if (G.phase === 'nameEntry'){ if (fielders.length === 0) buildFielders(); for (const f of fielders) drawFielder(f); drawPlayer(); drawNameEntry(); }
-  else if (G.phase === 'turnIntro'){ drawDistanceMarkers(); for (const f of fielders) drawFielder(f); drawPlayer(); drawEffects(); drawTurnIntro(); }
-  else if (G.phase === 'turnEnd'){ drawDistanceMarkers(); for (const f of fielders) drawFielder(f); drawPlayer(); drawEffects(); drawTurnEnd(); }
-  else if (G.phase === 'gameOver'){ drawDistanceMarkers(); for (const f of fielders) drawFielder(f); drawPlayer(); drawEffects(); drawGameOver(); }
-  else {
-    drawDistanceMarkers();
-    if (G.phase==='fielding'||G.phase==='throw'||G.phase==='result') drawDandaOnGround();
-    drawZone();
-    for (const f of fielders) drawFielder(f);
-    drawGulli(); drawPlayer(); drawEffects();
-    drawPowerMeter(); drawShotSelector(); drawCurrentPlayerBadge(); drawOverlays();
+  if (G.phase === 'waitingOpp'){
+    /* the live spectator renders its own full scene */
+    drawWaitingOpp();
+  } else {
+    drawSky();
+    if (G.players.length > 0){ drawStadium(); }
+    else { ctx.fillStyle = '#2a3142'; ctx.fillRect(0, STADIUM_TOP, W, STADIUM_BOTTOM - STADIUM_TOP); }
+    drawField();
+    if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'){
+      if (G.phase === 'menu') drawMenuScreen();
+      else if (G.phase === 'levelSelect') drawLevelSelect();
+      else drawPlayerSelect();
+    }
+    else if (G.phase === 'searching'){ drawSearching(); }
+    else if (G.phase === 'toss'){ drawToss(); }
+    else if (G.phase === 'tossResult'){ drawTossResult(); }
+    else if (G.phase === 'botBatting'){ drawBotBattingOverlay(); }
+    else if (G.phase === 'nameEntry'){ if (fielders.length === 0) buildFielders(); for (const f of fielders) drawFielder(f); drawPlayer(); drawNameEntry(); }
+    else if (G.phase === 'turnIntro'){ drawDistanceMarkers(); for (const f of fielders) drawFielder(f); drawPlayer(); drawEffects(); drawTurnIntro(); }
+    else if (G.phase === 'turnEnd'){ drawDistanceMarkers(); for (const f of fielders) drawFielder(f); drawPlayer(); drawEffects(); drawTurnEnd(); }
+    else if (G.phase === 'gameOver'){ drawDistanceMarkers(); for (const f of fielders) drawFielder(f); drawPlayer(); drawEffects(); drawGameOver(); }
+    else {
+      drawDistanceMarkers();
+      if (G.phase==='fielding'||G.phase==='throw'||G.phase==='result') drawDandaOnGround();
+      drawZone();
+      for (const f of fielders) drawFielder(f);
+      drawGulli(); drawPlayer(); drawEffects();
+      drawPowerMeter(); drawShotSelector(false); drawCurrentPlayerBadge(); drawOverlays();
+    }
   }
   ctx.restore();
   const vg = ctx.createRadialGradient(W/2,H/2,H*0.45,W/2,H/2,H*1.0);
@@ -4107,7 +4302,7 @@ function updateHUD(){
       || G.phase === 'register' || G.phase === 'guest' || G.phase === 'searching'
       || G.phase === 'toss' || G.phase === 'tossResult' || G.phase === 'leaderboard'
       || G.phase === 'profileView' || G.phase === 'market' || G.phase === 'botBatting'
-      || (G.phase === 'waitingOpp' && !NET.myDone)){
+      || G.phase === 'waitingOpp'){
     hud.style.display = 'none'; return;
   }
   hud.style.display = 'flex';
@@ -4125,6 +4320,7 @@ function loop(now){
   let dt = (now-last)/1000;
   last = now;
   if (dt>0.05) dt=0.05;
+  frameDt = dt;
   update(dt); draw(); updateHUD();
   requestAnimationFrame(loop);
 }
