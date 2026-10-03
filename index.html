@@ -468,6 +468,7 @@ function startOnlineMatchmaking(){
   NET.autopilot = false; NET.autopilotStart = 0;
   NET.autopilotBot = null;
   NET.joinPopup = null; NET.joinPopupTimer = 0;
+  NET.roomRef = null; NET.roomId = null; NET.role = null;
   if (!NET.ready && !initFirebase()){ G.banner = 'NETWORK ERROR'; G.bannerTimer = 2.5; setPhase('menu'); return; }
   setPhase('searching'); NET.searching = true;
   NET.searchStart = performance.now(); NET.statusMsg = 'Searching for players...';
@@ -485,13 +486,31 @@ function tryFindRoom(){
       if (room && room.p1 && room.p1.name !== NET.myName && !room.p2){ joined = true; joinRoom(child.key, room); }
     });
     if (!joined){
-      if (performance.now() - NET.searchStart > 4000){ createRoom(); }
-      else { setTimeout(()=>{ if (NET.searching) tryFindRoom(); }, 1800); }
+      // Try autopilot rooms (bot p2 → replaceable)
+      NET.db.ref('rooms').orderByChild('status').equalTo('autopilot').limitToFirst(5).once('value').then(snap2 => {
+        if (!NET.searching) return;
+        let joined2 = false;
+        snap2.forEach(child => {
+          if (joined2) return;
+          const room = child.val();
+          if (room && room.p1 && room.p1.name !== NET.myName && room.p2 && room.p2.isBot){
+            joined2 = true;
+            joinAutopilotRoom(child.key, room);
+          }
+        });
+        if (!joined2){
+          if (performance.now() - NET.searchStart > 4000 && !NET.roomRef){ createRoom(); }
+          else { setTimeout(()=>{ if (NET.searching) tryFindRoom(); }, 1500); }
+        }
+      }).catch(()=>{
+        if (performance.now() - NET.searchStart > 4000 && !NET.roomRef) createRoom();
+        else setTimeout(()=>{ if (NET.searching) tryFindRoom(); }, 1500);
+      });
     }
-  }).catch(()=>{ createRoom(); });
+  }).catch(()=>{ if (performance.now() - NET.searchStart > 4000 && !NET.roomRef) createRoom(); });
 }
 function createRoom(){
-  if (!NET.searching) return;
+  if (!NET.searching || NET.roomRef) return;
   const id = genRoomId(); NET.roomId = id; NET.role = 'p1';
   NET.roomRef = NET.db.ref('rooms/' + id);
   NET.roomRef.set({
@@ -507,6 +526,49 @@ function joinRoom(id, room){
     status: 'playing',
     p2: { name: NET.myName, score: 0, done: false }
   }).then(()=>{ watchRoom(); trackEvent('matchmaking_success', {}); });
+}
+function joinAutopilotRoom(id, room){
+  NET.roomId = id;
+  NET.role = 'p2';
+  NET.oppName = room.p1 ? room.p1.name : '';
+  NET.roomRef = NET.db.ref('rooms/' + id);
+  NET.searching = false;
+  NET.tossDecided = false;
+  NET.tossWinner = null;
+  NET.currentBatsman = null;
+
+  NET.roomRef.update({
+    status: 'playing',
+    'p2/name': NET.myName,
+    'p2/isBot': null,
+    'p2/score': 0,
+    'p2/done': false,
+    joinedAt: Date.now()
+  }).then(()=>{
+    trackEvent('joined_autopilot', {});
+    watchRoom();
+    // Fallback: agar 20 sec me p1 accept na kare to wapas search karo
+    const joinStart = performance.now();
+    const checkTimeout = () => {
+      if (NET.tossWinner || G.phase !== 'searching') return;
+      if (performance.now() - joinStart > 20000){
+        try{ if (NET.listener) NET.roomRef.off('value', NET.listener); }catch(e){}
+        NET.roomRef = null; NET.roomId = null; NET.role = null;
+        NET.searching = true;
+        NET.searchStart = performance.now();
+        setPhase('searching');
+        tryFindRoom();
+        return;
+      }
+      setTimeout(checkTimeout, 1000);
+    };
+    setTimeout(checkTimeout, 1000);
+  }).catch(()=>{
+    NET.roomRef = null; NET.roomId = null; NET.role = null;
+    NET.searching = true;
+    setPhase('searching');
+    tryFindRoom();
+  });
 }
 function watchRoom(){
   if (NET.listener && NET.roomRef) NET.roomRef.off('value', NET.listener);
@@ -607,6 +669,17 @@ function cleanupOnline(){
   NET.searching = false;
   if (NET.listener && NET.roomRef){ try{ NET.roomRef.off('value', NET.listener); }catch(e){} NET.listener = null; }
   if (NET.liveRef){ try{ NET.liveRef.off(); }catch(e){} NET.liveRef = null; }
+  // Delete our waiting/autopilot room so others don't get stuck
+  try{
+    if (NET.roomRef && NET.role === 'p1'){
+      NET.roomRef.once('value').then(snap => {
+        const d = snap.val();
+        if (d && (d.status === 'waiting' || d.status === 'autopilot')){
+          NET.roomRef.remove().catch(()=>{});
+        }
+      }).catch(()=>{});
+    }
+  }catch(e){}
   NET.oppLive = null; NET.roomId = null; NET.role = null; NET.oppName = '';
   NET.oppScore = null; NET.oppDone = false; NET.myDone = false; NET.roomRef = null;
   NET.tossWinner = null; NET.currentBatsman = null;
@@ -628,19 +701,26 @@ function startAutopilotMode(){
   NET.myDone = false; NET.oppDone = false;
   NET.turnHandedOver = false;
 
-  try {
-    if (NET.ready && NET.db){
-      const id = genRoomId();
-      NET.roomId = id;
-      NET.roomRef = NET.db.ref('rooms/' + id);
-      NET.roomRef.set({
-        status: 'autopilot',
-        createdAt: Date.now(),
-        p1: { name: NET.myName, score: 0, done: false },
-        p2: { name: '🤖 AUTO-PILOT', score: 0, done: false, isBot: true }
-      }).then(()=>{ watchAutopilotRoom(); }).catch(()=>{});
-    }
-  } catch(e){}
+  const botData = { name: '🤖 AUTO-PILOT', score: 0, done: false, isBot: true };
+  const p1Data  = { name: NET.myName, score: 0, done: false };
+
+  if (NET.roomRef){
+    NET.roomRef.update({
+      status: 'autopilot',
+      p1: p1Data,
+      p2: botData
+    }).then(()=>{ watchAutopilotRoom(); }).catch(()=>{});
+  } else if (NET.ready && NET.db){
+    const id = genRoomId();
+    NET.roomId = id;
+    NET.roomRef = NET.db.ref('rooms/' + id);
+    NET.roomRef.set({
+      status: 'autopilot',
+      createdAt: Date.now(),
+      p1: p1Data,
+      p2: botData
+    }).then(()=>{ watchAutopilotRoom(); }).catch(()=>{});
+  }
 
   NET.tossWinner = 'p1';
   NET.currentBatsman = 'p1';
@@ -657,29 +737,30 @@ function watchAutopilotRoom(){
     const data = snap.val();
     if (!data || !data.p2) return;
     const p2 = data.p2;
-    if (!p2.isBot && p2.name && p2.name.indexOf('🤖') === -1){
+    // Real player joined our autopilot room → kick bot, auto-accept
+    if (!p2.isBot && p2.name && p2.name.indexOf('🤖') === -1 && NET.autopilot){
       if (!NET.joinPopup || NET.joinPopup.name !== p2.name){
         NET.joinPopup = { name: p2.name };
-        NET.joinPopupTimer = 15;
+        NET.joinPopupTimer = 4;
         beep(1200, 0.12, 'triangle', 0.14);
         setTimeout(()=>beep(1600, 0.15, 'triangle', 0.13), 120);
         setTimeout(()=>beep(2000, 0.18, 'triangle', 0.12), 250);
         trackEvent('autopilot_join_popup', { joiner: p2.name });
       }
+      // AUTO-ACCEPT — bot gets kicked, real match starts
+      autoAcceptJoin(p2.name);
     }
   });
 }
 
-function acceptJoin(){
-  if (!NET.joinPopup) return;
-  const name = NET.joinPopup.name;
-  NET.joinPopup = null;
-  NET.joinPopupTimer = 0;
+function autoAcceptJoin(name){
+  if (!NET.autopilot) return;
   NET.autopilot = false;
   NET.oppName = name;
   NET.myDone = false; NET.oppDone = false;
   NET.turnHandedOver = false;
   NET.tossDecided = false;
+  NET.autopilotBot = null;
 
   if (NET.roomRef){
     const winner = Math.random() < 0.5 ? 'p1' : 'p2';
@@ -705,6 +786,14 @@ function acceptJoin(){
 
   NET.tossStartTime = performance.now();
   setPhase('toss');
+}
+
+function acceptJoin(){
+  if (!NET.joinPopup) return;
+  const name = NET.joinPopup.name;
+  NET.joinPopup = null;
+  NET.joinPopupTimer = 0;
+  autoAcceptJoin(name);
 }
 
 function finishBotMatch(){
@@ -3598,7 +3687,7 @@ function drawJoinPopup(){
   const bx = W/2 - bw/2, by = 90;
 
   ctx.save();
-  ctx.globalAlpha = Math.min(1, NET.joinPopupTimer);
+  ctx.globalAlpha = Math.min(1, NET.joinPopupTimer / 2);
 
   ctx.shadowColor = 'rgba(138,255,160,' + (pulse * 0.9) + ')';
   ctx.shadowBlur = 26 + pulse * 8;
@@ -3623,7 +3712,7 @@ function drawJoinPopup(){
 
   ctx.font = '700 13px system-ui,sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillText('Waiting to play — Tap here to JOIN now', bx + 58, by + 54);
+  ctx.fillText('Auto-joining match...', bx + 58, by + 54);
 
   const ax = bx + bw - 36 + Math.sin(performance.now()/280) * 5;
   ctx.fillStyle = '#8affa0';
@@ -3635,7 +3724,7 @@ function drawJoinPopup(){
   ctx.fillStyle = 'rgba(255,255,255,0.15)';
   rr(ctx, pbX, pbY, pbW, 4, 2); ctx.fill();
   ctx.fillStyle = '#8affa0';
-  rr(ctx, pbX, pbY, pbW * (NET.joinPopupTimer / 15), 4, 2); ctx.fill();
+  rr(ctx, pbX, pbY, pbW * (NET.joinPopupTimer / 4), 4, 2); ctx.fill();
 
   ctx.restore();
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
