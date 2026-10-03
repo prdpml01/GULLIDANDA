@@ -436,8 +436,20 @@ const NET = {
   autopilotStart: 0,
   autopilotBot: null,
   joinPopup: null,
-  joinPopupTimer: 0
+  joinPopupTimer: 0,
+  round: 1, rematchSent: false, oppRematch: false, oppLeft: false,
+  botResult: false, forfeitWin: false, leaveArmed: false,
+  roundStarting: false, hopping: false, autopilotStarting: false,
+  autopilotRetryAt: 0, scanTimer: null, myRoomCreatedAt: 0,
+  oppLiveAt: 0, forfeitTimer: 0, series: { me: 0, opp: 0 }
 };
+function resetMatchFlags(){
+  NET.round = 1; NET.rematchSent = false; NET.oppRematch = false; NET.oppLeft = false;
+  NET.botResult = false; NET.forfeitWin = false; NET.leaveArmed = false;
+  NET.roundStarting = false; NET.hopping = false; NET.autopilotStarting = false;
+  NET.autopilotRetryAt = 0; NET.oppLiveAt = 0; NET.series = { me: 0, opp: 0 };
+  clearTimeout(NET.scanTimer); NET.scanTimer = null;
+}
 
 function initFirebase(){
   try {
@@ -469,134 +481,311 @@ function startOnlineMatchmaking(){
   NET.autopilotBot = null;
   NET.joinPopup = null; NET.joinPopupTimer = 0;
   NET.roomRef = null; NET.roomId = null; NET.role = null;
+  resetMatchFlags();
   if (!NET.ready && !initFirebase()){ G.banner = 'NETWORK ERROR'; G.bannerTimer = 2.5; setPhase('menu'); return; }
   setPhase('searching'); NET.searching = true;
   NET.searchStart = performance.now(); NET.statusMsg = 'Searching for players...';
   trackEvent('matchmaking_start', {});
   tryFindRoom();
 }
-function tryFindRoom(){
-  if (!NET.searching) return;
-  NET.db.ref('rooms').orderByChild('status').equalTo('waiting').limitToFirst(5).once('value').then(snap => {
-    if (!NET.searching) return;
-    let joined = false;
-    snap.forEach(child => {
-      if (joined) return;
-      const room = child.val();
-      if (room && room.p1 && room.p1.name !== NET.myName && !room.p2){ joined = true; joinRoom(child.key, room); }
+function roomIsFresh(room){ return !room.createdAt || (Date.now() - room.createdAt) < 30*60*1000; }
+function listRooms(status){
+  return NET.db.ref('rooms').orderByChild('status').equalTo(status).limitToFirst(10).once('value').then(snap => {
+    const arr = [];
+    snap.forEach(ch => {
+      const r = ch.val();
+      if (r && r.p1 && r.p1.name !== NET.myName && roomIsFresh(r)) arr.push({ id: ch.key, room: r, status: status });
     });
-    if (!joined){
-      // Try autopilot rooms (bot p2 → replaceable)
-      NET.db.ref('rooms').orderByChild('status').equalTo('autopilot').limitToFirst(5).once('value').then(snap2 => {
-        if (!NET.searching) return;
-        let joined2 = false;
-        snap2.forEach(child => {
-          if (joined2) return;
-          const room = child.val();
-          if (room && room.p1 && room.p1.name !== NET.myName && room.p2 && room.p2.isBot){
-            joined2 = true;
-            joinAutopilotRoom(child.key, room);
-          }
-        });
-        if (!joined2){
-          if (performance.now() - NET.searchStart > 4000 && !NET.roomRef){ createRoom(); }
-          else { setTimeout(()=>{ if (NET.searching) tryFindRoom(); }, 1500); }
-        }
-      }).catch(()=>{
-        if (performance.now() - NET.searchStart > 4000 && !NET.roomRef) createRoom();
-        else setTimeout(()=>{ if (NET.searching) tryFindRoom(); }, 1500);
-      });
+    return arr;
+  }).catch(() => []);
+}
+// waiting rooms (idle host) + autopilot rooms (host is playing vs bot, bot is replaceable)
+function findCandidates(){
+  return Promise.all([listRooms('waiting'), listRooms('autopilot')]).then(res => {
+    const w = res[0].filter(c => !c.room.p2);
+    const a = res[1].filter(c => c.room.p2 && c.room.p2.isBot);
+    return w.concat(a);
+  });
+}
+// atomic join: only one joiner can ever win a room
+function claimRoom(id, wantStatus){
+  return NET.db.ref('rooms/' + id).transaction(cur => {
+    if (cur === null) return cur;
+    if (!cur.p1 || cur.p1.name === NET.myName || cur.status !== wantStatus) return;
+    if (wantStatus === 'waiting' && cur.p2) return;
+    if (wantStatus === 'autopilot' && !(cur.p2 && cur.p2.isBot)) return;
+    cur.status = 'playing';
+    cur.p2 = { name: NET.myName, score: 0, done: false };
+    cur.joinedAt = Date.now();
+    return cur;
+  }).then(res => {
+    const v = res.snapshot && res.snapshot.val();
+    return !!(res.committed && v && v.status === 'playing' && v.p2 && v.p2.name === NET.myName);
+  });
+}
+function detachRoomListeners(){
+  if (NET.listener && NET.roomRef){ try{ NET.roomRef.off('value', NET.listener); }catch(e){} }
+  NET.listener = null;
+  if (NET.liveRef){ try{ NET.liveRef.off(); }catch(e){} NET.liveRef = null; }
+}
+// once a real match is on: do not delete the room on disconnect, just flag that we left
+function armLeaveFlag(){
+  try{
+    if (NET.roomRef && NET.role){
+      NET.roomRef.onDisconnect().cancel();
+      NET.roomRef.child(NET.role + '/left').onDisconnect().set(true);
     }
-  }).catch(()=>{ if (performance.now() - NET.searchStart > 4000 && !NET.roomRef) createRoom(); });
+  }catch(e){}
+}
+function refreshResultButtons(){ if (G.phase === 'gameOver' && G.mode === 'onlineResults') rebuildMenuButtons(); }
+
+function tryFindRoom(){
+  if (!NET.searching || NET.roomRef) return;
+  findCandidates().then(cands => {
+    if (!NET.searching || NET.roomRef) return;
+    return attemptJoin(cands, 0).then(ok => {
+      if (ok || !NET.searching || NET.roomRef) return;
+      if (performance.now() - NET.searchStart > 4000) createRoom();
+      else setTimeout(() => { if (NET.searching) tryFindRoom(); }, 1500);
+    });
+  }).catch(() => {
+    if (!NET.searching || NET.roomRef) return;
+    if (performance.now() - NET.searchStart > 4000) createRoom();
+    else setTimeout(() => { if (NET.searching) tryFindRoom(); }, 1500);
+  });
+}
+function attemptJoin(cands, i){
+  if (!NET.searching || i >= cands.length) return Promise.resolve(false);
+  const c = cands[i];
+  return claimRoom(c.id, c.status).then(ok => {
+    if (ok){
+      if (!NET.searching){
+        // user cancelled while the join was in flight -> free the room again
+        try{ NET.db.ref('rooms/' + c.id + '/p2/left').set(true); }catch(e){}
+        return false;
+      }
+      onJoined(c.id, c.room);
+      return true;
+    }
+    return attemptJoin(cands, i + 1);
+  }).catch(() => attemptJoin(cands, i + 1));
+}
+function onJoined(id, room){
+  NET.roomId = id; NET.role = 'p2';
+  NET.oppName = room.p1 ? room.p1.name : '';
+  NET.roomRef = NET.db.ref('rooms/' + id);
+  NET.searching = false;
+  NET.tossDecided = false; NET.tossWinner = null; NET.currentBatsman = null;
+  NET.round = room.round || 1;
+  NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppLive = null; NET.oppLeft = false;
+  NET.statusMsg = 'Joined ' + (NET.oppName || 'player') + ' — connecting...';
+  NET.leaveArmed = true; armLeaveFlag();
+  watchRoom();
+  trackEvent('matchmaking_success', {});
+  waitForHost(id);
+}
+// if the host never answers (closed tab etc.) go back to searching
+function waitForHost(id){
+  const joinStart = performance.now();
+  const check = () => {
+    if (NET.roomId !== id || NET.role !== 'p2') return;
+    if (NET.tossWinner || G.phase !== 'searching') return;
+    if (performance.now() - joinStart > 20000){ restartSearch(); return; }
+    setTimeout(check, 1000);
+  };
+  setTimeout(check, 1000);
+}
+function restartSearch(){
+  const ref = NET.roomRef;
+  detachRoomListeners();
+  try{ if (ref){ ref.child('p2/left').set(true); ref.child('p2/left').onDisconnect().cancel(); } }catch(e){}
+  NET.roomRef = null; NET.roomId = null; NET.role = null; NET.leaveArmed = false;
+  NET.tossWinner = null; NET.currentBatsman = null; NET.tossDecided = false;
+  NET.searching = true; NET.searchStart = performance.now();
+  NET.statusMsg = 'Searching for players...';
+  setPhase('searching');
+  tryFindRoom();
 }
 function createRoom(){
   if (!NET.searching || NET.roomRef) return;
   const id = genRoomId(); NET.roomId = id; NET.role = 'p1';
+  NET.myRoomCreatedAt = Date.now(); NET.round = 1;
   NET.roomRef = NET.db.ref('rooms/' + id);
-  NET.roomRef.set({
-    status: 'waiting', createdAt: Date.now(),
+  const ref = NET.roomRef;
+  ref.set({
+    status: 'waiting', createdAt: NET.myRoomCreatedAt, round: 1,
     p1: { name: NET.myName, score: 0, done: false }, p2: null
-  }).then(()=>{ NET.statusMsg = 'Room created. Waiting for opponent...'; watchRoom(); }).catch(()=>{});
-}
-function joinRoom(id, room){
-  NET.roomId = id; NET.role = 'p2';
-  NET.oppName = room.p1 ? room.p1.name : '';
-  NET.roomRef = NET.db.ref('rooms/' + id);
-  NET.roomRef.update({
-    status: 'playing',
-    p2: { name: NET.myName, score: 0, done: false }
-  }).then(()=>{ watchRoom(); trackEvent('matchmaking_success', {}); });
-}
-function joinAutopilotRoom(id, room){
-  NET.roomId = id;
-  NET.role = 'p2';
-  NET.oppName = room.p1 ? room.p1.name : '';
-  NET.roomRef = NET.db.ref('rooms/' + id);
-  NET.searching = false;
-  NET.tossDecided = false;
-  NET.tossWinner = null;
-  NET.currentBatsman = null;
-
-  NET.roomRef.update({
-    status: 'playing',
-    'p2/name': NET.myName,
-    'p2/isBot': null,
-    'p2/score': 0,
-    'p2/done': false,
-    joinedAt: Date.now()
-  }).then(()=>{
-    trackEvent('joined_autopilot', {});
+  }).then(() => {
+    if (NET.roomRef !== ref) return;
+    NET.statusMsg = 'Room created. Waiting for opponent...';
+    try{ ref.onDisconnect().remove(); }catch(e){}   // never leave a dead waiting room behind
     watchRoom();
-    // Fallback: agar 20 sec me p1 accept na kare to wapas search karo
-    const joinStart = performance.now();
-    const checkTimeout = () => {
-      if (NET.tossWinner || G.phase !== 'searching') return;
-      if (performance.now() - joinStart > 20000){
-        try{ if (NET.listener) NET.roomRef.off('value', NET.listener); }catch(e){}
-        NET.roomRef = null; NET.roomId = null; NET.role = null;
-        NET.searching = true;
-        NET.searchStart = performance.now();
-        setPhase('searching');
-        tryFindRoom();
-        return;
-      }
-      setTimeout(checkTimeout, 1000);
-    };
-    setTimeout(checkTimeout, 1000);
-  }).catch(()=>{
-    NET.roomRef = null; NET.roomId = null; NET.role = null;
-    NET.searching = true;
-    setPhase('searching');
-    tryFindRoom();
-  });
+    scheduleRoomScan();
+  }).catch(() => {});
 }
+// While waiting in our own room keep looking for other rooms, so two players who both
+// created a room at the same moment still find each other (newer room hops into the older one).
+function scheduleRoomScan(){
+  clearTimeout(NET.scanTimer);
+  NET.scanTimer = setTimeout(scanForRooms, 2000);
+}
+function scanForRooms(){
+  if (!NET.searching || NET.role !== 'p1' || !NET.roomRef || NET.hopping) return;
+  const myId = NET.roomId, myCreated = NET.myRoomCreatedAt || 0;
+  findCandidates().then(cands => {
+    if (!NET.searching || NET.roomId !== myId) return;
+    const elig = cands.filter(c => {
+      if (c.status === 'autopilot') return true;   // that host is already playing, it will not hop
+      const cc = c.room.createdAt || 0;
+      return cc < myCreated || (cc === myCreated && c.id < myId);
+    });
+    if (!elig.length){ scheduleRoomScan(); return; }
+    hopTo(elig, myId);
+  }).catch(() => scheduleRoomScan());
+}
+function hopTo(elig, myId){
+  NET.hopping = true;
+  const myRef = NET.roomRef;
+  // 1) close our own room so nobody can join it while we move
+  myRef.transaction(cur => {
+    if (cur === null) return cur;
+    if (cur.status !== 'waiting' || cur.p2) return;
+    cur.status = 'closing';
+    return cur;
+  }).then(res => {
+    const v = res.snapshot && res.snapshot.val();
+    if (!(res.committed && v && v.status === 'closing')){ NET.hopping = false; scheduleRoomScan(); return; }
+    detachRoomListeners();
+    return attemptJoin(elig, 0).then(ok => {
+      NET.hopping = false;
+      if (ok){
+        try{ myRef.onDisconnect().cancel(); }catch(e){}
+        myRef.remove().catch(() => {});
+      } else if (NET.roomRef === myRef && NET.searching){
+        myRef.transaction(cur => {
+          if (cur && cur.status === 'closing' && !cur.p2){ cur.status = 'waiting'; }
+          return cur;
+        }).catch(() => {});
+        watchRoom();
+        scheduleRoomScan();
+      }
+    });
+  }).catch(() => { NET.hopping = false; scheduleRoomScan(); });
+}
+
 function watchRoom(){
-  if (NET.listener && NET.roomRef) NET.roomRef.off('value', NET.listener);
-  NET.listener = NET.roomRef.on('value', snap => {
-    const data = snap.val(); if (!data) return;
-    const opp = NET.role === 'p1' ? data.p2 : data.p1;
-    if (opp){ NET.oppName = opp.name || NET.oppName; NET.oppScore = typeof opp.score === 'number' ? opp.score : null; NET.oppDone = !!opp.done; }
-    if (NET.role === 'p1' && data.p2 && !data.tossWinner && !NET.tossDecided){
+  detachRoomListeners();
+  const ref = NET.roomRef; if (!ref) return;
+  const role = NET.role;
+  const oppRole = role === 'p1' ? 'p2' : 'p1';
+  NET.listener = ref.on('value', snap => {
+    const data = snap.val();
+    if (!data){
+      // room vanished under us before the match started -> search again
+      if (role === 'p2' && !NET.tossWinner && G.phase === 'searching' && NET.roomRef === ref) restartSearch();
+      return;
+    }
+    const opp = data[oppRole];
+    if (opp && !opp.isBot){
+      NET.oppName = opp.name || NET.oppName;
+      NET.oppScore = typeof opp.score === 'number' ? opp.score : null;
+      NET.oppDone = !!opp.done;
+      const wasLeft = NET.oppLeft;
+      NET.oppLeft = !!opp.left;
+      if (!NET.leaveArmed){ NET.leaveArmed = true; armLeaveFlag(); }
+      if (wasLeft !== NET.oppLeft) refreshResultButtons();
+    }
+
+    // ---- rematch: host bumped the round number ----
+    const dr = data.round || 1;
+    if (dr > NET.round){ startNextRound(data, dr); return; }
+
+    // ---- rematch requests ----
+    const rm = data.rematch || {};
+    const mineReq = rm[role] === NET.round, oppReq = rm[oppRole] === NET.round;
+    if (mineReq !== NET.rematchSent || oppReq !== NET.oppRematch){
+      NET.rematchSent = mineReq; NET.oppRematch = oppReq; refreshResultButtons();
+    }
+    if (role === 'p1' && rm.p1 === NET.round && rm.p2 === NET.round && !NET.roundStarting && !NET.oppLeft){
+      NET.roundStarting = true;
+      const winner = Math.random() < 0.5 ? 'p1' : 'p2';
+      ref.update({
+        round: NET.round + 1,
+        'p1/score': 0, 'p1/done': false, 'p2/score': 0, 'p2/done': false,
+        tossWinner: winner, currentBatsman: winner, skipToss: null, live: null, rematch: null
+      }).then(() => { NET.roundStarting = false; }).catch(() => { NET.roundStarting = false; });
+    }
+
+    // ---- toss ----
+    if (role === 'p1' && data.p2 && !data.p2.isBot && !data.tossWinner && !NET.tossDecided){
       NET.tossDecided = true; NET.searching = false;
       const winner = Math.random() < 0.5 ? 'p1' : 'p2';
-      NET.roomRef.update({ tossWinner: winner, currentBatsman: winner }).catch(()=>{});
+      ref.update({ tossWinner: winner, currentBatsman: winner }).catch(() => {});
     }
     if (data.tossWinner && !NET.tossWinner){
       NET.tossWinner = data.tossWinner;
       NET.currentBatsman = data.currentBatsman || data.tossWinner;
       NET.searching = false;
-      if (G.phase !== 'toss' && G.phase !== 'tossResult'){ NET.tossStartTime = performance.now(); setPhase('toss'); }
+      if (data.skipToss){
+        // we joined a match that is already running (host was playing vs autopilot): no toss
+        if (NET.currentBatsman === NET.role && !NET.myDone){
+          G.banner = '🎮 ' + (NET.oppName || 'OPPONENT') + ' IS DONE — YOUR TURN!'; G.bannerTimer = 2.5;
+          beginOnlineTurn();
+        } else {
+          G.banner = '🔗 LINKED WITH ' + (NET.oppName || 'OPPONENT'); G.bannerTimer = 2.5;
+          setPhase('waitingOpp');
+        }
+      } else if (G.phase !== 'toss' && G.phase !== 'tossResult'){
+        NET.tossStartTime = performance.now(); setPhase('toss');
+      }
     }
     if (data.currentBatsman && data.currentBatsman !== NET.currentBatsman){
       NET.currentBatsman = data.currentBatsman;
       if (NET.currentBatsman === NET.role && !NET.myDone && G.phase === 'waitingOpp'){ beginOnlineTurn(); }
     }
     if (data.p1 && data.p2 && data.p1.done && data.p2.done){ showOnlineResults(data); }
+    checkOppForfeit();
   });
-  const oppRole = NET.role === 'p1' ? 'p2' : 'p1';
-  if (NET.liveRef) NET.liveRef.off();
-  NET.liveRef = NET.roomRef.child('live/' + oppRole);
-  NET.liveRef.on('value', snap => { NET.oppLive = snap.val(); });
+  NET.liveRef = ref.child('live/' + oppRole);
+  NET.liveRef.on('value', snap => { NET.oppLive = snap.val(); NET.oppLiveAt = performance.now(); });
+}
+function startNextRound(data, dr){
+  NET.round = dr;
+  NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppLive = null;
+  NET.turnHandedOver = false; NET.rematchSent = false; NET.oppRematch = false;
+  NET.roundStarting = false; NET.botResult = false; NET.forfeitWin = false;
+  NET.tossWinner = data.tossWinner || 'p1';
+  NET.currentBatsman = data.currentBatsman || NET.tossWinner;
+  NET.tossDecided = true;
+  NET.tossStartTime = performance.now();
+  G.banner = '🔁 REMATCH!'; G.bannerTimer = 2;
+  setPhase('toss');
+}
+function requestRematch(){
+  if (!NET.roomRef || NET.rematchSent || NET.oppLeft || NET.botResult || NET.forfeitWin) return;
+  NET.rematchSent = true; rebuildMenuButtons();
+  NET.roomRef.child('rematch/' + NET.role).set(NET.round).catch(() => { NET.rematchSent = false; rebuildMenuButtons(); });
+}
+// opponent closed the game / pressed FIND NEW before finishing -> remaining player wins
+function checkOppForfeit(){
+  if (!NET.roomRef || !NET.oppLeft || NET.oppDone) return;
+  if (G.phase !== 'waitingOpp' && G.phase !== 'toss' && G.phase !== 'tossResult') return;
+  showForfeitWin();
+}
+function showForfeitWin(){
+  const myScore = NET.myDone ? (G.score || 0) : 0;
+  G.mode = 'onlineResults';
+  G.players = [
+    { name: NET.myName, color: getActiveSkin().color, score: myScore },
+    { name: NET.oppName || 'OPPONENT', color: PLAYER_COLORS[1], score: NET.oppScore || 0 }
+  ];
+  G.gameOverWinner = 0;
+  G.gameOverMsg = 'OPPONENT LEFT — YOU WIN!';
+  NET.forfeitWin = true; NET.series.me++;
+  updateStatsOnline(myScore, true);
+  G.celebrationTimer = 0; G.confettiTimer = 0;
+  setPhase('gameOver');
+  crowdExcitement = 2; playCheer(1.4);
 }
 function beginOnlineTurn(){
   G.mode = 'online';
@@ -608,6 +797,7 @@ function beginOnlineTurn(){
 }
 function reportOnlineScore(score){
   if (!NET.roomRef && !NET.autopilot) return;
+  if (NET.myDone) return;
   NET.myDone = true;
 
   if (NET.autopilot){
@@ -634,21 +824,22 @@ function reportOnlineScore(score){
     NET.turnHandedOver = true;
     update['currentBatsman'] = (NET.role === 'p1') ? 'p2' : 'p1';
   }
-  NET.roomRef.update(update).then(()=>{
-    NET.statusMsg = 'Waiting for ' + (NET.oppName || 'opponent') + '...';
-    setPhase('waitingOpp'); checkFinish();
-  }).catch(()=>{ setPhase('waitingOpp'); });
+  NET.statusMsg = 'Waiting for ' + (NET.oppName || 'opponent') + '...';
+  setPhase('waitingOpp');   // switch right away: no double-submit, and we start watching the opponent live
+  NET.roomRef.update(update).then(() => { checkFinish(); }).catch(() => {});
 }
 function checkFinish(){
   if (!NET.roomRef) return;
   NET.roomRef.once('value').then(snap => {
     const d = snap.val();
     if (d && d.p1 && d.p2 && d.p1.done && d.p2.done) showOnlineResults(d);
+    else checkOppForfeit();
   });
 }
 function showOnlineResults(data){
   if (G.phase === 'gameOver' && G.mode === 'onlineResults') return;
   G.mode = 'onlineResults';
+  NET.botResult = false; NET.forfeitWin = false;
   const myScore  = (data[NET.role] && data[NET.role].score) || 0;
   const oppScore = ((NET.role === 'p1' ? data.p2 : data.p1)?.score) || 0;
   const myName   = (data[NET.role] && data[NET.role].name) || NET.myName || 'YOU';
@@ -659,6 +850,7 @@ function showOnlineResults(data){
   ];
   G.gameOverWinner = myScore > oppScore ? 0 : (myScore < oppScore ? 1 : -1);
   G.gameOverMsg = (myScore === oppScore) ? 'DRAW!' : (myScore > oppScore ? 'YOU WIN!' : 'YOU LOSE');
+  if (G.gameOverWinner === 0) NET.series.me++; else if (G.gameOverWinner === 1) NET.series.opp++;
   updateStatsOnline(myScore, myScore > oppScore);
   G.celebrationTimer = 0; G.confettiTimer = 0;
   setPhase('gameOver');
@@ -667,19 +859,22 @@ function showOnlineResults(data){
 }
 function cleanupOnline(){
   NET.searching = false;
-  if (NET.listener && NET.roomRef){ try{ NET.roomRef.off('value', NET.listener); }catch(e){} NET.listener = null; }
-  if (NET.liveRef){ try{ NET.liveRef.off(); }catch(e){} NET.liveRef = null; }
-  // Delete our waiting/autopilot room so others don't get stuck
-  try{
-    if (NET.roomRef && NET.role === 'p1'){
-      NET.roomRef.once('value').then(snap => {
-        const d = snap.val();
-        if (d && (d.status === 'waiting' || d.status === 'autopilot')){
-          NET.roomRef.remove().catch(()=>{});
-        }
-      }).catch(()=>{});
-    }
-  }catch(e){}
+  const ref = NET.roomRef, role = NET.role;
+  detachRoomListeners();
+  if (ref && role){
+    try{ ref.onDisconnect().cancel(); ref.child(role + '/left').onDisconnect().cancel(); }catch(e){}
+    ref.once('value').then(snap => {
+      const d = snap.val(); if (!d) return;
+      const opp = d[role === 'p1' ? 'p2' : 'p1'];
+      const oppGone = !opp || opp.isBot || opp.left;
+      if (oppGone || (role === 'p1' && (d.status === 'waiting' || d.status === 'autopilot' || d.status === 'closing'))){
+        ref.remove().catch(() => {});                       // nobody left in the room -> delete it
+      } else {
+        ref.child(role + '/left').set(true).catch(() => {}); // tell the opponent we are gone
+      }
+    }).catch(() => {});
+  }
+  resetMatchFlags();
   NET.oppLive = null; NET.roomId = null; NET.role = null; NET.oppName = '';
   NET.oppScore = null; NET.oppDone = false; NET.myDone = false; NET.roomRef = null;
   NET.tossWinner = null; NET.currentBatsman = null;
@@ -691,53 +886,69 @@ function cleanupOnline(){
 
 /* ==================== AUTOPILOT MODE ==================== */
 function startAutopilotMode(){
-  if (!NET.searching) return;
-  NET.searching = false;
-  NET.autopilot = true;
-  NET.autopilotStart = performance.now();
-  NET.autopilotBot = { name: '🤖 AUTO-PILOT', score: 0 };
-  NET.role = 'p1';
-  NET.oppName = NET.autopilotBot.name;
-  NET.myDone = false; NET.oppDone = false;
-  NET.turnHandedOver = false;
+  if (!NET.searching || NET.autopilotStarting) return;
+  if (performance.now() < NET.autopilotRetryAt) return;
+  NET.autopilotStarting = true;
 
   const botData = { name: '🤖 AUTO-PILOT', score: 0, done: false, isBot: true };
   const p1Data  = { name: NET.myName, score: 0, done: false };
 
+  const begin = () => {
+    NET.autopilotStarting = false;
+    if (!NET.searching) return;
+    clearTimeout(NET.scanTimer);
+    NET.searching = false;
+    NET.autopilot = true;
+    NET.autopilotStart = performance.now();
+    NET.autopilotBot = { name: '🤖 AUTO-PILOT', score: 0 };
+    NET.role = 'p1';
+    NET.oppName = NET.autopilotBot.name;
+    NET.myDone = false; NET.oppDone = false; NET.oppLeft = false;
+    NET.turnHandedOver = false; NET.botResult = false;
+    NET.tossWinner = 'p1';
+    NET.currentBatsman = 'p1';
+    NET.tossStartTime = performance.now();
+    NET.tossResultStart = 0;
+    detachRoomListeners();
+    try{ if (NET.roomRef) NET.roomRef.onDisconnect().remove(); }catch(e){}
+    if (NET.roomRef) watchAutopilotRoom();
+    setPhase('toss');
+    trackEvent('autopilot_start', {});
+  };
+
   if (NET.roomRef){
-    NET.roomRef.update({
-      status: 'autopilot',
-      p1: p1Data,
-      p2: botData
-    }).then(()=>{ watchAutopilotRoom(); }).catch(()=>{});
+    const ref = NET.roomRef;
+    ref.transaction(cur => {
+      if (cur === null) return cur;
+      if (cur.status !== 'waiting' || cur.p2) return;     // a real player just joined -> no autopilot
+      cur.status = 'autopilot';
+      cur.p1 = p1Data; cur.p2 = botData;
+      return cur;
+    }).then(res => {
+      const v = res.snapshot && res.snapshot.val();
+      if (NET.roomRef !== ref || !NET.searching){ NET.autopilotStarting = false; return; }
+      if (res.committed && v && v.status === 'autopilot') begin();
+      else { NET.autopilotStarting = false; NET.autopilotRetryAt = performance.now() + 1500; }
+    }).catch(() => { NET.autopilotStarting = false; NET.autopilotRetryAt = performance.now() + 1500; });
   } else if (NET.ready && NET.db){
     const id = genRoomId();
-    NET.roomId = id;
+    NET.roomId = id; NET.role = 'p1'; NET.round = 1;
     NET.roomRef = NET.db.ref('rooms/' + id);
-    NET.roomRef.set({
-      status: 'autopilot',
-      createdAt: Date.now(),
-      p1: p1Data,
-      p2: botData
-    }).then(()=>{ watchAutopilotRoom(); }).catch(()=>{});
+    NET.roomRef.set({ status: 'autopilot', createdAt: Date.now(), round: 1, p1: p1Data, p2: botData })
+      .then(() => begin()).catch(() => begin());
+  } else {
+    begin();
   }
-
-  NET.tossWinner = 'p1';
-  NET.currentBatsman = 'p1';
-  NET.tossStartTime = performance.now();
-  NET.tossResultStart = 0;
-  setPhase('toss');
-  trackEvent('autopilot_start', {});
 }
 
 function watchAutopilotRoom(){
   if (!NET.roomRef) return;
-  if (NET.listener){ try{ NET.roomRef.off('value', NET.listener); }catch(e){} }
+  detachRoomListeners();
   NET.listener = NET.roomRef.on('value', snap => {
     const data = snap.val();
     if (!data || !data.p2) return;
     const p2 = data.p2;
-    // Real player joined our autopilot room → kick bot, auto-accept
+    // A real player claimed our autopilot room -> link up with them automatically
     if (!p2.isBot && p2.name && p2.name.indexOf('🤖') === -1 && NET.autopilot){
       if (!NET.joinPopup || NET.joinPopup.name !== p2.name){
         NET.joinPopup = { name: p2.name };
@@ -747,45 +958,68 @@ function watchAutopilotRoom(){
         setTimeout(()=>beep(2000, 0.18, 'triangle', 0.12), 250);
         trackEvent('autopilot_join_popup', { joiner: p2.name });
       }
-      // AUTO-ACCEPT — bot gets kicked, real match starts
       autoAcceptJoin(p2.name);
     }
   });
 }
 
+const BATTING_PHASES = ['turnIntro','power','air','fly','fielding','throw','result','turnEnd'];
 function autoAcceptJoin(name){
   if (!NET.autopilot) return;
   NET.autopilot = false;
-  NET.oppName = name;
-  NET.myDone = false; NET.oppDone = false;
-  NET.turnHandedOver = false;
-  NET.tossDecided = false;
   NET.autopilotBot = null;
+  NET.oppName = name;
+  NET.oppDone = false; NET.oppScore = null; NET.oppLive = null; NET.oppLeft = false;
+  NET.tossDecided = true;
+  NET.botResult = false;
+  NET.series = { me: 0, opp: 0 };
+  NET.round = NET.round || 1;
+
+  const phase = G.phase;
+  const upd = {
+    status: 'playing',
+    'p2/isBot': null, 'p2/score': 0, 'p2/done': false,
+    joinedAt: Date.now(), round: NET.round, live: null, rematch: null
+  };
+
+  if (BATTING_PHASES.indexOf(phase) >= 0){
+    // We are in the middle of our innings: keep batting, the new player just watches us LIVE
+    NET.myDone = false; NET.turnHandedOver = false;
+    NET.tossWinner = 'p1'; NET.currentBatsman = 'p1';
+    upd.tossWinner = 'p1'; upd.currentBatsman = 'p1'; upd.skipToss = true;
+    upd['p1/score'] = 0; upd['p1/done'] = false;
+    G.banner = '🎮 ' + name + ' JOINED — LIVE MATCH!';
+  } else if (phase === 'botBatting'){
+    // our innings is over (bot was "batting"): hand the bat to the real player right now
+    NET.myDone = true; NET.turnHandedOver = true;
+    NET.tossWinner = 'p1'; NET.currentBatsman = 'p2';
+    upd.tossWinner = 'p1'; upd.currentBatsman = 'p2'; upd.skipToss = true;
+    upd['p1/score'] = G.score; upd['p1/done'] = true;
+    NET.statusMsg = 'Waiting for ' + name + '...';
+    G.banner = '🎮 ' + name + ' JOINED!';
+    setPhase('waitingOpp');
+  } else {
+    // still in the toss: do a normal random toss against the real player
+    NET.myDone = false; NET.turnHandedOver = false;
+    const winner = Math.random() < 0.5 ? 'p1' : 'p2';
+    NET.tossWinner = winner; NET.currentBatsman = winner;
+    upd.tossWinner = winner; upd.currentBatsman = winner; upd.skipToss = null;
+    upd['p1/score'] = 0; upd['p1/done'] = false;
+    NET.tossStartTime = performance.now();
+    G.banner = '🎮 ' + name + ' JOINED!';
+    setPhase('toss');
+  }
+  G.bannerTimer = 2.5;
 
   if (NET.roomRef){
-    const winner = Math.random() < 0.5 ? 'p1' : 'p2';
-    NET.roomRef.update({
-      status: 'playing',
-      'p1/score': 0, 'p1/done': false,
-      'p2/score': 0, 'p2/done': false,
-      'p2/isBot': null,
-      tossWinner: winner,
-      currentBatsman: winner,
-      joinedAt: Date.now()
-    }).catch(()=>{});
-    NET.tossWinner = winner;
-    NET.currentBatsman = winner;
+    NET.leaveArmed = true; armLeaveFlag();
+    NET.roomRef.update(upd).catch(() => {});
+    watchRoom();                       // from now on the normal two-player sync handles everything
   }
-
-  G.banner = '🎮 ' + name + ' JOINED!';
-  G.bannerTimer = 2.5;
   crowdExcitement = 1.2;
   playCheer(1.0);
   beep(1400, 0.15, 'triangle', 0.13);
   setTimeout(()=>beep(1800, 0.18, 'triangle', 0.13), 150);
-
-  NET.tossStartTime = performance.now();
-  setPhase('toss');
 }
 
 function acceptJoin(){
@@ -806,6 +1040,15 @@ function finishBotMatch(){
   G.gameOverWinner = myScore > oppScore ? 0 : (myScore < oppScore ? 1 : -1);
   G.gameOverMsg = myScore === oppScore ? 'DRAW!' : (myScore > oppScore ? 'YOU WIN!' : 'YOU LOSE');
   G.mode = 'onlineResults';
+  NET.botResult = true;
+  // the bot match is over: close the room so nobody joins a finished game
+  if (NET.roomRef){
+    const ref = NET.roomRef;
+    detachRoomListeners();
+    try{ ref.onDisconnect().cancel(); }catch(e){}
+    ref.remove().catch(() => {});
+    NET.roomRef = null; NET.roomId = null; NET.role = null;
+  }
   updateStatsOnline(myScore, myScore > oppScore);
   G.celebrationTimer = 0; G.confettiTimer = 0;
   setPhase('gameOver');
@@ -942,8 +1185,19 @@ function rebuildMenuButtons(){
   else if (G.phase === 'turnEnd'){ menuButtons.push({ id:'continue', label:'CONTINUE  ▶', x: W/2 - 130, y: 430, w: 260, h: 56 }); }
   else if (G.phase === 'gameOver'){
     if (G.mode === 'onlineResults'){
-      menuButtons.push({ id:'onlineAgain', label:'FIND NEW MATCH', x: W/2 - 250, y: 440, w: 240, h: 56 });
-      menuButtons.push({ id:'menu',        label:'MAIN MENU',      x: W/2 + 10,  y: 440, w: 240, h: 56 });
+      const canRematch = !!NET.roomRef && !NET.botResult && !NET.forfeitWin && !NET.oppLeft;
+      if (canRematch){
+        const on = (NET.oppName || 'OPPONENT').toUpperCase().slice(0, 12);
+        const rb = { id:'rematch', label:'🔁  REMATCH', x: W/2 - 346, y: 440, w: 220, h: 56 };
+        if (NET.rematchSent) rb.sub = 'Waiting for ' + on + '...';
+        else if (NET.oppRematch) rb.sub = on + ' is ready — tap!';
+        menuButtons.push(rb);
+        menuButtons.push({ id:'onlineAgain', label:'FIND NEW MATCH', x: W/2 - 110, y: 440, w: 220, h: 56 });
+        menuButtons.push({ id:'menu',        label:'MAIN MENU',      x: W/2 + 126, y: 440, w: 220, h: 56 });
+      } else {
+        menuButtons.push({ id:'onlineAgain', label:'FIND NEW MATCH', x: W/2 - 250, y: 440, w: 240, h: 56 });
+        menuButtons.push({ id:'menu',        label:'MAIN MENU',      x: W/2 + 10,  y: 440, w: 240, h: 56 });
+      }
       return;
     }
     if (G.mode === 'single'){
@@ -1258,6 +1512,7 @@ function nextRound(){
   G.phase='power';
 }
 function endTurn(){
+  G.turnEndTimer = 0;
   G.players[G.currentPlayer].score = G.score;
   G.players[G.currentPlayer].outs = G.outs;
   setPhase('turnEnd');
@@ -1361,6 +1616,7 @@ function update(dt){
     else if (G.phase === 'result') phaseLabel = 'RESULT';
     else if (G.phase === 'turnEnd') phaseLabel = 'INNINGS DONE';
     else if (G.phase === 'waitingOpp') phaseLabel = 'WAITING';
+    else if (G.phase === 'turnIntro') phaseLabel = 'GETTING READY';
     NET.roomRef.child('live/' + NET.role).update({
       phase: phaseLabel, score: G.score,
       gulliX: Math.round(gulli.x), gulliY: Math.round(gulli.y),
@@ -1449,6 +1705,16 @@ function update(dt){
   if (NET.joinPopupTimer > 0){
     NET.joinPopupTimer -= dt;
     if (NET.joinPopupTimer <= 0){ NET.joinPopup = null; NET.joinPopupTimer = 0; }
+  }
+
+  // ===== OPPONENT LEFT? (checked once a second) =====
+  NET.forfeitTimer += dt;
+  if (NET.forfeitTimer > 1){ NET.forfeitTimer = 0; checkOppForfeit(); }
+
+  // ===== ONLINE: after OUT hand the bat over automatically (no CONTINUE tap needed) =====
+  if (G.phase === 'turnEnd' && G.mode === 'online'){
+    G.turnEndTimer = (G.turnEndTimer || 0) + dt;
+    if (G.turnEndTimer >= 2.2){ G.turnEndTimer = 0; advanceFromTurnEnd(); return; }
   }
 
   // ===== BOT BATTING PHASE =====
@@ -1742,6 +2008,7 @@ function handleMenuClick(x, y){
       if (b.id === 'logout'){ cleanupOnline(); logoutUser(); return true; }
       if (b.id === 'cancelSearch'){ NET.searching = false; cleanupOnline(); setPhase('menu'); return true; }
       if (b.id === 'onlineAgain'){ cleanupOnline(); startOnlineMatchmaking(); return true; }
+      if (b.id === 'rematch'){ requestRematch(); return true; }
       if (b.id.startsWith('pc')){ startMultiPlayer(parseInt(b.id.slice(2),10)); return true; }
       if (b.id === 'back'){ setPhase('menu'); return true; }
       if (b.id === 'startBat'){ beginBatting(); return true; }
@@ -1801,16 +2068,6 @@ function onInput(e){
   if (!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(err){} }
   if (G.phase === 'splash'){ if (G.splashTimer > 0.7){ G.splashTimer = SPLASH_DURATION; } return; }
 
-  // ===== JOIN POPUP CLICK =====
-  if (NET.joinPopup && NET.joinPopupTimer > 0 && e){
-    const {x,y} = canvasCoordsFromEvent(e);
-    const bw = 440, bh = 80;
-    const bx = W/2 - bw/2, by = 90;
-    if (x >= bx && x <= bx+bw && y >= by && y <= by+bh){
-      acceptJoin();
-      return;
-    }
-  }
 
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
   if (G.phase === 'botBatting') return;
@@ -3148,7 +3405,14 @@ function drawWaitingOpp(){
     ctx.fillText(oppScore + ' pts', px + pw/2, py + 38);
     ctx.font = '700 14px system-ui,sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.fillText('Status: ' + phaseLabel, px + pw/2, py + 82);
+    ctx.fillText('Status: ' + phaseLabel + (opp.ballDist ? '  ·  Last hit: ' + opp.ballDist + 'm' : ''), px + pw/2, py + 82);
+    const liveAge = NET.oppLiveAt ? (performance.now() - NET.oppLiveAt) : 99999;
+    const liveOk = liveAge < 3000 || phaseLabel === 'WAITING' || phaseLabel === 'INNINGS DONE';
+    ctx.save();
+    ctx.textAlign = 'left'; ctx.font = '800 12px system-ui,sans-serif';
+    ctx.fillStyle = liveOk ? ('rgba(138,255,160,' + (0.55 + 0.45 * Math.sin(performance.now()/180)) + ')') : '#ffbe0b';
+    ctx.fillText(liveOk ? '● LIVE' : '○ SIGNAL WEAK', px + 18, py + 16);
+    ctx.restore();
     const miniX = px + 40, miniY = py + 115;
     const miniW = pw - 80, miniH = 130;
     ctx.fillStyle = 'rgba(90,140,70,0.35)';
@@ -3448,7 +3712,7 @@ function drawTurnEnd(){
     centerText('INNINGS OVER', 110, 44, '#ffd166');
     centerText('Your Final Score', 168, 22, 'rgba(255,255,255,0.75)');
     centerText(G.score + ' pts', 240, 76, '#ffd166');
-    centerText('Handing over to ' + (NET.oppName || 'opponent') + '…', 296, 22, 'rgba(255,209,102,0.9)');
+    centerText('Handing over to ' + (NET.oppName || 'opponent') + ' in ' + Math.max(1, Math.ceil(2.2 - (G.turnEndTimer || 0))) + '…', 296, 22, 'rgba(255,209,102,0.9)');
   } else {
     centerText(p.name + ' — TURN OVER', 110, 42, p.color);
     centerText('Final Score', 172, 22, 'rgba(255,255,255,0.75)');
@@ -3558,6 +3822,17 @@ function drawGameOver(){
       ctx.restore();
     }
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    if (NET.roomRef && !NET.botResult){
+      const on = NET.oppName || 'OPPONENT';
+      centerText('Series:  YOU ' + NET.series.me + '  –  ' + NET.series.opp + '  ' + on, 365, 16, 'rgba(255,255,255,0.75)');
+      let note = '';
+      if (NET.forfeitWin || NET.oppLeft) note = on + ' left the match';
+      else if (NET.rematchSent) note = 'Waiting for ' + on + ' to accept the rematch...';
+      else if (NET.oppRematch) note = on + ' wants a REMATCH!';
+      if (note) centerText(note, 402, 17, '#ffd166');
+    } else if (NET.forfeitWin){
+      centerText((NET.oppName || 'Opponent') + ' left the match', 402, 17, '#ffd166');
+    }
     for (const b of menuButtons) drawMenuButton(b, '#ffd166');
     return;
   }
@@ -3674,7 +3949,7 @@ function drawSearching(){
   rr(ctx, barX, barY, barW, barH, 2); ctx.fill();
   ctx.fillStyle = remain > 10 ? '#8affa0' : remain > 5 ? '#ffbe0b' : '#ff8a8a';
   rr(ctx, barX, barY, barW * (elapsed / 30000 > 1 ? 1 : elapsed / 30000), barH, 2); ctx.fill();
-  centerText('Auto-pilot bot in ' + remain + 's', 510, 12, 'rgba(255,255,255,0.65)');
+  centerText(NET.searching ? ('Auto-pilot bot in ' + remain + 's') : 'Linking with opponent...', 510, 12, 'rgba(255,255,255,0.65)');
   for (const b of menuButtons) drawMenuButton(b);
 }
 
@@ -3712,7 +3987,7 @@ function drawJoinPopup(){
 
   ctx.font = '700 13px system-ui,sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillText('Auto-joining match...', bx + 58, by + 54);
+  ctx.fillText('Linked automatically — match is on!', bx + 58, by + 54);
 
   const ax = bx + bw - 36 + Math.sin(performance.now()/280) * 5;
   ctx.fillStyle = '#8affa0';
