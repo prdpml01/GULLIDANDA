@@ -7,21 +7,17 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <style>
-  html,body{
-    margin:0;width:100%;height:100%;height:100dvh;
+  html,body{margin:0;width:100%;height:100%;height:100dvh;
     background:radial-gradient(circle at 50% 0%, #2b3350 0%, #141824 70%);
     display:flex;align-items:center;justify-content:center;
     font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
     overflow:hidden;user-select:none;-webkit-tap-highlight-color:transparent;
-    padding:0;box-sizing:border-box;
-  }
-  #wrap{
-    position:relative;
+    padding:0;box-sizing:border-box;}
+  #wrap{position:relative;
     width: min(97vw, 980px, calc(97vh  * 16 / 9));
     width: min(97vw, 980px, calc(97dvh * 16 / 9));
     aspect-ratio: 16 / 9;
-    max-height: 97vh; max-height: 97dvh;
-  }
+    max-height: 97vh; max-height: 97dvh;}
   canvas{width:100%;height:100%;display:block;border-radius:16px;
     box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 0 3px rgba(255,255,255,.07);
     cursor:pointer;touch-action:manipulation;}
@@ -35,18 +31,10 @@
   .stat span{color:#ffd166;}
   .stat.out span{color:#ff8a8a;}
   .right{display:flex;}
-  #mobileNameInput{
-    position:absolute;
-    left:50%;bottom:8px;
-    transform:translateX(-50%);
-    width:1px;height:1px;
-    opacity:0;border:0;padding:0;margin:0;
-    background:transparent;color:transparent;
-    font-size:16px;
-    caret-color:transparent;
-    z-index:-1;
-    pointer-events:none;
-  }
+  #mobileNameInput{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);
+    width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;
+    background:transparent;color:transparent;font-size:16px;
+    caret-color:transparent;z-index:-1;pointer-events:none;}
 </style>
 </head>
 <body>
@@ -91,15 +79,8 @@ const GROUND_Y = 430, GRAV = 1200, PPM = 10;
 const PLAYER_X = 200, GULLI_START_X = 300, DANDA_X = 268;
 const ZONE_X = GULLI_START_X, ZONE_Y = GROUND_Y - 145, ZONE_R = 78;
 const SWEET_LO = 62, SWEET_HI = 88;
-
-const SKY_BOTTOM = 148;
-const STADIUM_TOP = 140;
-const STADIUM_BOTTOM = 300;
-const HORIZON = 300;
-
-const SPLASH_DURATION = 2.6;
-const TOSS_DURATION = 2500;
-const TOSS_RESULT_DURATION = 2400;
+const SKY_BOTTOM = 148, STADIUM_TOP = 140, STADIUM_BOTTOM = 300, HORIZON = 300;
+const SPLASH_DURATION = 2.6, TOSS_DURATION = 2500, TOSS_RESULT_DURATION = 2400;
 
 const SHOTS = {
   PUSH:  { vxBase:  560, vyBase: -260, label:'PUSH',  sub:'SAFE',  color:'#3fa35a' },
@@ -117,6 +98,172 @@ const PLAYER_COLORS = ['#e63946', '#3a86ff', '#06d6a0', '#ffbe0b', '#a06bff'];
 const PLAYER_NAMES  = ['RED',     'BLUE',    'GREEN',   'YELLOW',  'PURPLE'];
 const CONFETTI_COLORS = ['#ffd166','#ff8a8a','#8affa0','#5c9ee0','#e0a95c','#ff6bcb','#ffffff','#a06bff'];
 
+/* ==================== ACCOUNT / PROFILE SYSTEM ==================== */
+const SESSION_KEY = 'gulli_danda_session_v1';
+
+const ACCOUNT = {
+  loggedIn: false,
+  name: '',
+  phone: '',
+  bestSingle: 0,
+  bestOnline: 0,
+  matchesPlayed: 0,
+  onlineMatches: 0,
+  wins: 0,
+  losses: 0,
+  totalRuns: 0,
+  loading: false,
+  error: '',
+  // Form fields for login/register screens
+  formName: '',
+  formPhone: '',
+  formFocus: 'name', // 'name' or 'phone'
+  mode: 'login'      // 'login' or 'register'
+};
+
+function saveSession(){
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      phone: ACCOUNT.phone,
+      name: ACCOUNT.name
+    }));
+  } catch(e){}
+}
+function clearSession(){
+  try { localStorage.removeItem(SESSION_KEY); } catch(e){}
+}
+function loadSession(){
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e){}
+  return null;
+}
+
+function normalizePhone(p){
+  return String(p || '').replace(/\D/g, '').slice(0, 10);
+}
+
+function registerUser(name, phone){
+  if (!NET.ready){ ACCOUNT.error = 'Network not ready'; return; }
+  ACCOUNT.error = '';
+  ACCOUNT.loading = true;
+  const key = 'user_' + phone;
+  NET.db.ref('accounts/' + key).once('value').then(snap => {
+    if (snap.exists()){
+      ACCOUNT.error = 'Number already registered. Please login.';
+      ACCOUNT.loading = false;
+      return;
+    }
+    const data = {
+      name: name, phone: phone,
+      bestSingle: 0, bestOnline: 0,
+      matchesPlayed: 0, onlineMatches: 0,
+      wins: 0, losses: 0, totalRuns: 0,
+      createdAt: Date.now(), updatedAt: Date.now()
+    };
+    return NET.db.ref('accounts/' + key).set(data).then(() => {
+      Object.assign(ACCOUNT, data);
+      ACCOUNT.loggedIn = true;
+      ACCOUNT.loading = false;
+      saveSession();
+      setPhase('menu');
+      beep(880, 0.1, 'triangle', 0.11);
+      setTimeout(()=>beep(1200, 0.15, 'triangle', 0.11), 120);
+    });
+  }).catch(err => {
+    ACCOUNT.error = 'Connection error. Try again.';
+    ACCOUNT.loading = false;
+  });
+}
+
+function loginUser(phone){
+  if (!NET.ready){ ACCOUNT.error = 'Network not ready'; return; }
+  ACCOUNT.error = '';
+  ACCOUNT.loading = true;
+  const key = 'user_' + phone;
+  NET.db.ref('accounts/' + key).once('value').then(snap => {
+    if (!snap.exists()){
+      ACCOUNT.error = 'Not registered. Please register first.';
+      ACCOUNT.loading = false;
+      return;
+    }
+    const data = snap.val();
+    Object.assign(ACCOUNT, data);
+    ACCOUNT.loggedIn = true;
+    ACCOUNT.loading = false;
+    saveSession();
+    setPhase('menu');
+    beep(880, 0.1, 'triangle', 0.11);
+  }).catch(err => {
+    ACCOUNT.error = 'Connection error. Try again.';
+    ACCOUNT.loading = false;
+  });
+}
+
+function logoutUser(){
+  ACCOUNT.loggedIn = false;
+  ACCOUNT.name = '';
+  ACCOUNT.phone = '';
+  ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
+  ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
+  ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
+  ACCOUNT.formName = ''; ACCOUNT.formPhone = ''; ACCOUNT.formFocus = 'name';
+  ACCOUNT.mode = 'login';
+  clearSession();
+  setPhase('login');
+}
+
+function syncAccountStats(){
+  if (!NET.ready || !ACCOUNT.loggedIn) return;
+  const key = 'user_' + ACCOUNT.phone;
+  NET.db.ref('accounts/' + key).update({
+    name: ACCOUNT.name,
+    bestSingle: ACCOUNT.bestSingle,
+    bestOnline: ACCOUNT.bestOnline,
+    matchesPlayed: ACCOUNT.matchesPlayed,
+    onlineMatches: ACCOUNT.onlineMatches,
+    wins: ACCOUNT.wins,
+    losses: ACCOUNT.losses,
+    totalRuns: ACCOUNT.totalRuns,
+    updatedAt: Date.now()
+  }).catch(()=>{});
+}
+
+function updateStatsSingle(score){
+  ACCOUNT.matchesPlayed++;
+  ACCOUNT.totalRuns += score;
+  if (score > ACCOUNT.bestSingle) ACCOUNT.bestSingle = score;
+  syncAccountStats();
+}
+function updateStatsOnline(myScore, won){
+  ACCOUNT.matchesPlayed++;
+  ACCOUNT.onlineMatches++;
+  ACCOUNT.totalRuns += myScore;
+  if (myScore > ACCOUNT.bestOnline) ACCOUNT.bestOnline = myScore;
+  if (won) ACCOUNT.wins++; else ACCOUNT.losses++;
+  syncAccountStats();
+}
+
+/* ==================== LEADERBOARD ==================== */
+const LEADERBOARD = { data: null, loading: false };
+function fetchLeaderboard(cb){
+  if (!NET.ready){ if (cb) cb(null); return; }
+  LEADERBOARD.loading = true;
+  NET.db.ref('accounts').orderByChild('bestOnline').limitToLast(10).once('value').then(snap => {
+    const arr = [];
+    snap.forEach(child => {
+      const v = child.val();
+      if (v && v.name) arr.push(v);
+    });
+    arr.sort((a,b) => (b.bestOnline||0) - (a.bestOnline||0));
+    LEADERBOARD.data = arr;
+    LEADERBOARD.loading = false;
+    if (cb) cb(arr);
+  }).catch(() => { LEADERBOARD.loading = false; if (cb) cb(null); });
+}
+
+/* ==================== GAME STATE ==================== */
 const G = {
   phase: 'splash',
   mode: 'single', level: 1,
@@ -143,21 +290,15 @@ const gulli = { x:0, y:0, vx:0, vy:0, rot:0, rotV:0, grounded:true };
 let camX = 0;
 const fielders = [];
 let activeFielder = null;
-let throwTimer = 0;
-let throwLaunched = false;
+let throwTimer = 0, throwLaunched = false;
 
 let crowdExcitement = 0;
-let crowdDots = [];
-let crowdSections = [];
+let crowdDots = [], crowdSections = [];
 
 const SKIN_TONES  = ['#f7dcc0','#f4cfa6','#e8b98a','#d9a273','#c98d5e','#a86b3d','#8a5430','#6b3f22'];
 const HAIR_TONES  = ['#141414','#1f1512','#2d1810','#3a2416','#4a2a10','#5c3a1e','#7a5a34','#3a3a3a'];
 const SHIRT_TONES = ['#eceef2','#d94f4f','#4f7fd9','#e0b84f','#5fbf7a','#8a6ad9','#e08a4f','#4fc7cf','#c94f8a','#f2c14e'];
-let crowdCanvas = null;
-let crowdRows = [];
-let frontRowPeople = [];
-let flashes = [];
-let crowdFlags = [];
+let crowdCanvas = null, crowdRows = [], frontRowPeople = [], flashes = [], crowdFlags = [];
 let shake = 0;
 
 /* ==================== ONLINE NETWORK ==================== */
@@ -168,16 +309,10 @@ const NET = {
   roomRef: null, listener: null,
   searching: false, searchStart: 0,
   statusMsg: 'Searching...',
-  oppLive: null,
-  liveRef: null,
-  lastSync: 0,
-  // Toss + turn state
-  tossWinner: null,
-  currentBatsman: null,
-  tossStartTime: 0,
-  tossResultStart: 0,
-  tossDecided: false,
-  turnHandedOver: false
+  oppLive: null, liveRef: null, lastSync: 0,
+  tossWinner: null, currentBatsman: null,
+  tossStartTime: 0, tossResultStart: 0,
+  tossDecided: false, turnHandedOver: false
 };
 
 function initFirebase(){
@@ -187,20 +322,20 @@ function initFirebase(){
     NET.db = firebase.database();
     NET.ready = true;
     return true;
-  } catch(e){ console.error('Firebase init failed', e); return false; }
+  } catch(e){ console.error(e); return false; }
 }
 
 function genRoomId(){ return 'GD-' + Math.random().toString(36).slice(2,7).toUpperCase(); }
 
-function startOnlineMatchmaking(name){
-  NET.myName = (name || 'PLAYER').toUpperCase().slice(0,10);
+function startOnlineMatchmaking(){
+  if (!ACCOUNT.loggedIn){ setPhase('login'); return; }
+  NET.myName = ACCOUNT.name;
   NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppName = '';
   NET.oppLive = null;
   NET.tossWinner = null; NET.currentBatsman = null;
   NET.tossDecided = false; NET.turnHandedOver = false;
   if (!NET.ready && !initFirebase()){
-    G.banner = 'NETWORK ERROR'; G.bannerTimer = 2.5;
-    setPhase('menu'); return;
+    G.banner = 'NETWORK ERROR'; G.bannerTimer = 2.5; setPhase('menu'); return;
   }
   setPhase('searching');
   NET.searching = true;
@@ -211,16 +346,14 @@ function startOnlineMatchmaking(name){
 
 function tryFindRoom(){
   if (!NET.searching) return;
-  const roomsRef = NET.db.ref('rooms');
-  roomsRef.orderByChild('status').equalTo('waiting').limitToFirst(5).once('value').then(snap => {
+  NET.db.ref('rooms').orderByChild('status').equalTo('waiting').limitToFirst(5).once('value').then(snap => {
     if (!NET.searching) return;
     let joined = false;
     snap.forEach(child => {
       if (joined) return;
       const room = child.val();
       if (room && room.p1 && room.p1.name !== NET.myName && !room.p2){
-        joined = true;
-        joinRoom(child.key, room);
+        joined = true; joinRoom(child.key, room);
       }
     });
     if (!joined){
@@ -239,10 +372,8 @@ function createRoom(){
     status: 'waiting', createdAt: Date.now(),
     p1: { name: NET.myName, score: 0, done: false },
     p2: null
-  }).then(()=>{
-    NET.statusMsg = 'Room created. Waiting for opponent...';
-    watchRoom();
-  }).catch(err => { console.error(err); });
+  }).then(()=>{ NET.statusMsg = 'Room created. Waiting for opponent...'; watchRoom(); })
+    .catch(err => console.error(err));
 }
 
 function joinRoom(id, room){
@@ -266,19 +397,11 @@ function watchRoom(){
       NET.oppScore = typeof opp.score === 'number' ? opp.score : null;
       NET.oppDone = !!opp.done;
     }
-
-    /* ---- P1 decides toss when P2 joins ---- */
     if (NET.role === 'p1' && data.p2 && !data.tossWinner && !NET.tossDecided){
-      NET.tossDecided = true;
-      NET.searching = false;
+      NET.tossDecided = true; NET.searching = false;
       const winner = Math.random() < 0.5 ? 'p1' : 'p2';
-      NET.roomRef.update({
-        tossWinner: winner,
-        currentBatsman: winner
-      }).catch(()=>{});
+      NET.roomRef.update({ tossWinner: winner, currentBatsman: winner }).catch(()=>{});
     }
-
-    /* ---- Detect toss result ---- */
     if (data.tossWinner && !NET.tossWinner){
       NET.tossWinner = data.tossWinner;
       NET.currentBatsman = data.currentBatsman || data.tossWinner;
@@ -288,16 +411,12 @@ function watchRoom(){
         setPhase('toss');
       }
     }
-
-    /* ---- Detect turn handover (opponent finished, my turn) ---- */
     if (data.currentBatsman && data.currentBatsman !== NET.currentBatsman){
       NET.currentBatsman = data.currentBatsman;
       if (NET.currentBatsman === NET.role && !NET.myDone && G.phase === 'waitingOpp'){
         beginOnlineTurn();
       }
     }
-
-    /* ---- Match complete ---- */
     if (data.p1 && data.p2 && data.p1.done && data.p2.done){
       showOnlineResults(data);
     }
@@ -306,9 +425,7 @@ function watchRoom(){
   const oppRole = NET.role === 'p1' ? 'p2' : 'p1';
   if (NET.liveRef) NET.liveRef.off();
   NET.liveRef = NET.roomRef.child('live/' + oppRole);
-  NET.liveRef.on('value', snap => {
-    NET.oppLive = snap.val();
-  });
+  NET.liveRef.on('value', snap => { NET.oppLive = snap.val(); });
 }
 
 function beginOnlineTurn(){
@@ -326,15 +443,13 @@ function reportOnlineScore(score){
   const update = {};
   update[NET.role + '/score'] = score;
   update[NET.role + '/done'] = true;
-  // Hand over turn to the other player (if it was my turn)
   if (NET.currentBatsman === NET.role && !NET.turnHandedOver){
     NET.turnHandedOver = true;
     update['currentBatsman'] = (NET.role === 'p1') ? 'p2' : 'p1';
   }
   NET.roomRef.update(update).then(()=>{
     NET.statusMsg = 'Waiting for ' + (NET.oppName || 'opponent') + '...';
-    setPhase('waitingOpp');
-    checkFinish();
+    setPhase('waitingOpp'); checkFinish();
   }).catch(()=>{ setPhase('waitingOpp'); });
 }
 
@@ -342,8 +457,7 @@ function checkFinish(){
   if (!NET.roomRef) return;
   NET.roomRef.once('value').then(snap => {
     const d = snap.val();
-    if (!d) return;
-    if (d.p1 && d.p2 && d.p1.done && d.p2.done){ showOnlineResults(d); }
+    if (d && d.p1 && d.p2 && d.p1.done && d.p2.done) showOnlineResults(d);
   });
 }
 
@@ -360,6 +474,7 @@ function showOnlineResults(data){
   ];
   G.gameOverWinner = myScore > oppScore ? 0 : (myScore < oppScore ? 1 : -1);
   G.gameOverMsg = (myScore === oppScore) ? 'DRAW!' : (myScore > oppScore ? 'YOU WIN!' : 'YOU LOSE');
+  updateStatsOnline(myScore, myScore > oppScore);
   G.celebrationTimer = 0; G.confettiTimer = 0;
   setPhase('gameOver');
   if (myScore >= oppScore){ crowdExcitement = 2; playCheer(1.4); }
@@ -368,10 +483,7 @@ function showOnlineResults(data){
 
 function cleanupOnline(){
   NET.searching = false;
-  if (NET.listener && NET.roomRef){
-    try { NET.roomRef.off('value', NET.listener); } catch(e){}
-    NET.listener = null;
-  }
+  if (NET.listener && NET.roomRef){ try{ NET.roomRef.off('value', NET.listener); }catch(e){} NET.listener = null; }
   if (NET.liveRef){ try{ NET.liveRef.off(); }catch(e){} NET.liveRef = null; }
   NET.oppLive = null;
   NET.roomId = null; NET.role = null; NET.oppName = '';
@@ -392,43 +504,39 @@ function layoutShotButtons(){
   });
 }
 layoutShotButtons();
-
 let menuButtons = [];
 
 /* ==================== AUDIO ==================== */
 let actx = null;
-function beep(freq, dur, type='sine', vol=0.12) {
-  try {
+function beep(freq, dur, type='sine', vol=0.12){
+  try{
     if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
     const o=actx.createOscillator(), g=actx.createGain();
     o.type=type; o.frequency.setValueAtTime(freq, actx.currentTime);
     g.gain.setValueAtTime(vol, actx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
-    o.connect(g); g.connect(actx.destination);
-    o.start(); o.stop(actx.currentTime+dur);
-  } catch(e){}
+    o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+dur);
+  }catch(e){}
 }
-function sweep(f1,f2,dur,type='square',vol=0.10) {
-  try {
+function sweep(f1,f2,dur,type='square',vol=0.10){
+  try{
     if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
     const o=actx.createOscillator(), g=actx.createGain();
-    o.type=type;
-    o.frequency.setValueAtTime(f1, actx.currentTime);
+    o.type=type; o.frequency.setValueAtTime(f1, actx.currentTime);
     o.frequency.exponentialRampToValueAtTime(f2, actx.currentTime+dur);
     g.gain.setValueAtTime(vol, actx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
-    o.connect(g); g.connect(actx.destination);
-    o.start(); o.stop(actx.currentTime+dur);
-  } catch(e){}
+    o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+dur);
+  }catch(e){}
 }
-function playCheer(intensity = 1) {
-  try {
+function playCheer(intensity = 1){
+  try{
     if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
     const dur = 0.5 + intensity * 0.6;
     const bufSize = Math.floor(actx.sampleRate * dur);
     const buffer = actx.createBuffer(1, bufSize, actx.sampleRate);
     const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) {
+    for (let i = 0; i < bufSize; i++){
       const phase = i / bufSize;
       const env = Math.sin(phase * Math.PI) * (1 - phase * 0.4);
       data[i] = (Math.random() * 2 - 1) * env;
@@ -439,7 +547,7 @@ function playCheer(intensity = 1) {
     const gain = actx.createGain(); gain.gain.value = 0.055 * intensity;
     src.connect(filter).connect(gain).connect(actx.destination);
     src.start(); src.stop(actx.currentTime + dur);
-  } catch(e){}
+  }catch(e){}
 }
 function playSplashChime(){
   beep(660, 0.15, 'triangle', 0.10);
@@ -466,34 +574,31 @@ function hexA(hex, a){
 }
 function setPhase(p){
   G.phase = p;
-  if (p==='menu'||p==='levelSelect'||p==='playerSelect'||p==='turnIntro'||p==='turnEnd'||p==='gameOver'){
+  if (p==='menu'||p==='levelSelect'||p==='playerSelect'||p==='turnIntro'||p==='turnEnd'||p==='gameOver'||p==='leaderboard'||p==='login'||p==='register'||p==='profileView'){
     rebuildMenuButtons();
   }
 }
 function rebuildMenuButtons(){
   menuButtons = [];
   if (G.phase === 'menu'){
-    menuButtons.push({ id:'single', label:'SINGLE PLAYER',     x: W/2 - 190, y: 240, w: 380, h: 58 });
-    menuButtons.push({ id:'multi',  label:'LOCAL MULTIPLAYER', x: W/2 - 190, y: 312, w: 380, h: 58 });
-    menuButtons.push({ id:'online', label:'🌐  PLAY ONLINE',    x: W/2 - 190, y: 384, w: 380, h: 58 });
+    menuButtons.push({ id:'single', label:'SINGLE PLAYER',      x: W/2 - 190, y: 258, w: 380, h: 50 });
+    menuButtons.push({ id:'multi',  label:'LOCAL MULTIPLAYER',  x: W/2 - 190, y: 316, w: 380, h: 50 });
+    menuButtons.push({ id:'online', label:'🌐  PLAY ONLINE',    x: W/2 - 190, y: 374, w: 380, h: 50 });
+    menuButtons.push({ id:'leaderboard', label:'🏆  LEADERBOARD', x: W/2 - 190, y: 432, w: 380, h: 50 });
   }
   else if (G.phase === 'levelSelect'){
     const bw = 140, bh = 90, gap = 20;
-    const total = bw*5 + gap*4;
-    const startX = W/2 - total/2;
+    const total = bw*5 + gap*4, startX = W/2 - total/2;
     for (let i=0; i<5; i++){
-      menuButtons.push({
-        id: 'level'+(i+1), label:'LEVEL '+(i+1),
+      menuButtons.push({ id: 'level'+(i+1), label:'LEVEL '+(i+1),
         sub: LEVELS[i].name + ' · ' + LEVELS[i].target + 'm',
-        x: startX + i*(bw+gap), y: 300, w: bw, h: bh
-      });
+        x: startX + i*(bw+gap), y: 300, w: bw, h: bh });
     }
     menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 430, w: 160, h: 46 });
   }
   else if (G.phase === 'playerSelect'){
     const bw = 150, bh = 100, gap = 18;
-    const total = bw*4 + gap*3;
-    const startX = W/2 - total/2;
+    const total = bw*4 + gap*3, startX = W/2 - total/2;
     for (let i=0; i<4; i++){
       const pc = i + 2;
       menuButtons.push({ id:'pc'+pc, label: pc+' PLAYERS',
@@ -529,46 +634,51 @@ function rebuildMenuButtons(){
       menuButtons.push({ id:'menu',      label:'MAIN MENU',  x: W/2 + 20,  y: 460, w: 220, h: 56 });
     }
   }
-  else if (G.phase === 'onlineName'){
-    menuButtons.push({ id:'findMatch', label:'🔍  FIND MATCH', x: W/2 - 160, y: 380, w: 320, h: 58 });
-    menuButtons.push({ id:'back',      label:'← BACK',         x: W/2 - 80,  y: 460, w: 160, h: 46 });
-  }
   else if (G.phase === 'searching'){
     menuButtons.push({ id:'cancelSearch', label:'✖  CANCEL', x: W/2 - 100, y: H - 70, w: 200, h: 50 });
+  }
+  else if (G.phase === 'login'){
+    menuButtons.push({ id:'doLogin',    label:'🔓  LOGIN',   x: W/2 - 160, y: 400, w: 320, h: 56 });
+    menuButtons.push({ id:'goRegister', label:'NEW? REGISTER →', x: W/2 - 160, y: 466, w: 320, h: 40 });
+  }
+  else if (G.phase === 'register'){
+    menuButtons.push({ id:'doRegister', label:'✅  REGISTER',  x: W/2 - 160, y: 420, w: 320, h: 56 });
+    menuButtons.push({ id:'goLogin',    label:'← BACK TO LOGIN', x: W/2 - 160, y: 486, w: 320, h: 40 });
+  }
+  else if (G.phase === 'leaderboard'){
+    menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 460, w: 160, h: 46 });
+  }
+  else if (G.phase === 'profileView'){
+    menuButtons.push({ id:'logout', label:'🚪 LOGOUT', x: W/2 - 250, y: 440, w: 240, h: 56 });
+    menuButtons.push({ id:'back',   label:'← BACK',   x: W/2 + 10,  y: 440, w: 240, h: 56 });
   }
 }
 
 /* ==================== CROWD ==================== */
 function drawCrowdPerson(c, p, armRaise){
   const s = p.s;
-  const headR = 4.6 * s;
-  const bodyH = 12.5 * s;
+  const headR = 4.6 * s, bodyH = 12.5 * s;
   const hipY = p.y - 2.5*s;
   const shoulderY = hipY - bodyH;
   const headY = shoulderY - headR*0.62;
   const raise = armRaise || 0;
-
   c.fillStyle = p.shirt;
   rr(c, p.x - 5.5*s, shoulderY, 11*s, bodyH + 3*s, 3.4*s); c.fill();
   c.fillStyle = 'rgba(0,0,0,0.16)';
   rr(c, p.x + 1.5*s, shoulderY + 1*s, 4*s, bodyH + 1.5*s, 2.6*s); c.fill();
-
   c.strokeStyle = p.shirt; c.lineWidth = 2.5*s; c.lineCap = 'round';
   const handY = shoulderY + (raise > 0 ? -7*s*raise : 8*s);
   c.beginPath();
   c.moveTo(p.x - 4.6*s, shoulderY + 1.5*s); c.lineTo(p.x - 7.6*s, handY);
   c.moveTo(p.x + 4.6*s, shoulderY + 1.5*s); c.lineTo(p.x + 7.6*s, handY);
   c.stroke();
-
   c.fillStyle = p.skin;
   c.beginPath(); c.arc(p.x - 7.6*s, handY, 1.7*s, 0, Math.PI*2); c.fill();
   c.beginPath(); c.arc(p.x + 7.6*s, handY, 1.7*s, 0, Math.PI*2); c.fill();
-
   c.fillStyle = p.skin;
   c.beginPath(); c.ellipse(p.x, headY, headR*0.9, headR, 0, 0, Math.PI*2); c.fill();
   c.fillStyle = p.hair;
   c.beginPath(); c.ellipse(p.x, headY - headR*0.28, headR*0.98, headR*0.78, 0, Math.PI, Math.PI*2); c.fill();
-
   if (s > 0.95){
     c.fillStyle = 'rgba(20,15,10,0.75)';
     c.beginPath(); c.arc(p.x - headR*0.36, headY + headR*0.08, headR*0.13, 0, Math.PI*2); c.fill();
@@ -589,7 +699,7 @@ function initCrowd(){
     const p = G.players[s];
     crowdSections.push({
       color: p ? p.color : '#7a8aa0',
-      name:  p ? p.name : 'FANS',
+      name: p ? p.name : 'FANS',
       x: s * sectionWidth, w: sectionWidth
     });
   }
@@ -597,19 +707,16 @@ function initCrowd(){
   crowdCanvas.width = W; crowdCanvas.height = H;
   const c = crowdCanvas.getContext('2d');
   crowdRows = []; crowdDots = []; frontRowPeople = []; flashes = []; crowdFlags = [];
-
   const ROWS = 8;
-  const startY = STADIUM_TOP + 6;
-  const endY   = STADIUM_BOTTOM - 12;
-  const rowH   = (endY - startY) / ROWS;
-
+  const startY = STADIUM_TOP + 6, endY = STADIUM_BOTTOM - 12;
+  const rowH = (endY - startY) / ROWS;
   for (let row = 0; row < ROWS; row++){
     const depth = row / (ROWS - 1);
     const isFront = (row === ROWS - 1);
     const baseY = startY + row * rowH + rowH * 0.78;
     const scale = 0.50 + depth * 0.82;
-    const gap   = 21 - depth * 9;
-    const dim   = Math.floor(depth * 30) - 26;
+    const gap = 21 - depth * 9;
+    const dim = Math.floor(depth * 30) - 26;
     crowdRows.push({ y0: startY + row * rowH, h: rowH });
     for (let x = 3 + Math.random() * gap * 0.6; x < W - 3; x += gap * (0.70 + Math.random() * 0.55)){
       let secIdx = 0;
@@ -717,7 +824,7 @@ function buildFielders(){
 }
 function startSinglePlayer(level){
   G.mode = 'single'; G.level = level;
-  G.players = [{ name:'YOU', color: PLAYER_COLORS[0], score:0, outs:0 }];
+  G.players = [{ name: ACCOUNT.name || 'YOU', color: PLAYER_COLORS[0], score:0, outs:0 }];
   G.currentPlayer = 0;
   G.gameOverWinner = null; G.gameOverMsg = ''; G.levelCleared = false;
   G.celebrationTimer = 0; G.confettiTimer = 0;
@@ -729,10 +836,11 @@ function startMultiPlayer(count){
   for (let i=0; i<count; i++){
     G.players.push({ name: PLAYER_NAMES[i], color: PLAYER_COLORS[i], score:0, outs:0 });
   }
+  G.players[0].name = ACCOUNT.name || PLAYER_NAMES[0];
   G.currentPlayer = 0;
   G.gameOverWinner = null; G.gameOverMsg = '';
   G.celebrationTimer = 0; G.confettiTimer = 0;
-  G.nameEntry = { playerIndex: 0, currentText: '', online: false };
+  G.nameEntry = { playerIndex: 1, currentText: '', online: false };
   initCrowd(); setPhase('nameEntry');
 }
 function prepareTurn(){
@@ -782,7 +890,7 @@ function lockPower(){
 function swing(){
   if (gulli.vy <= 0) return;
   const dist = Math.abs(gulli.y - ZONE_Y);
-  const acc  = clamp(1 - dist/ZONE_R, 0, 1);
+  const acc = clamp(1 - dist/ZONE_R, 0, 1);
   G.accuracy = acc; G.swingTimer = G.swingDur; G.zonePop = 0;
   const shot = SHOTS[G.shotType];
   const power = 0.70 + acc * 0.55;
@@ -796,10 +904,10 @@ function swing(){
   const cheerLevel = acc * (G.shotType === 'LOFT' ? 1.4 : G.shotType === 'DRIVE' ? 1.1 : 0.7);
   crowdExcitement = Math.max(crowdExcitement, 0.6 + cheerLevel * 1.0);
   playCheer(0.5 + acc * 0.9);
-  if (acc > 0.92)      { sweep(900,1800,0.18,'triangle',0.13); G.banner='PERFECT!'; }
-  else if (acc > 0.6)  { beep(700,0.12,'triangle',0.11); G.banner='GREAT HIT!'; }
+  if (acc > 0.92) { sweep(900,1800,0.18,'triangle',0.13); G.banner='PERFECT!'; }
+  else if (acc > 0.6) { beep(700,0.12,'triangle',0.11); G.banner='GREAT HIT!'; }
   else if (acc > 0.25) { beep(500,0.12,'triangle',0.09); G.banner='HIT'; }
-  else                 { beep(360,0.12,'triangle',0.08); G.banner='WEAK HIT'; }
+  else { beep(360,0.12,'triangle',0.08); G.banner='WEAK HIT'; }
   G.bannerTimer = 0.9;
 }
 function missGulli(){
@@ -846,21 +954,19 @@ function nextRound(){
 }
 function endTurn(){
   G.players[G.currentPlayer].score = G.score;
-  G.players[G.currentPlayer].outs  = G.outs;
+  G.players[G.currentPlayer].outs = G.outs;
   setPhase('turnEnd');
   beep(880,0.18,'triangle',0.11);
 }
 function advanceFromTurnEnd(){
-  if (G.mode === 'online'){
-    reportOnlineScore(G.score);
-    return;
-  }
+  if (G.mode === 'online'){ reportOnlineScore(G.score); return; }
   if (G.mode === 'single'){
     const lv = LEVELS[clamp(G.level-1,0,4)];
     G.levelCleared = (G.score >= lv.target);
     G.gameOverWinner = G.levelCleared ? 0 : -1;
     G.gameOverMsg = G.levelCleared ? 'LEVEL ' + G.level + ' CLEARED!' : 'LEVEL FAILED';
     G.celebrationTimer = 0; G.confettiTimer = 0;
+    updateStatsSingle(G.score);
     setPhase('gameOver');
     if (G.levelCleared){
       crowdExcitement = 2.0; playCheer(1.4);
@@ -959,13 +1065,11 @@ function updateParticles(dt){
 
 /* ==================== UPDATE ==================== */
 function update(dt){
-  // Live state sync for online mode
   NET.lastSync = (NET.lastSync || 0) + dt;
   if (NET.lastSync > 0.15 && NET.roomRef && NET.role && G.mode === 'online'){
     NET.lastSync = 0;
     let phaseLabel = G.phase;
-    if (G.phase === 'power') phaseLabel = 'BATTING';
-    else if (G.phase === 'air') phaseLabel = 'BATTING';
+    if (G.phase === 'power' || G.phase === 'air') phaseLabel = 'BATTING';
     else if (G.phase === 'fly') phaseLabel = 'HIT!';
     else if (G.phase === 'fielding') phaseLabel = 'FIELDING';
     else if (G.phase === 'throw') phaseLabel = 'THROWING';
@@ -973,23 +1077,18 @@ function update(dt){
     else if (G.phase === 'turnEnd') phaseLabel = 'INNINGS DONE';
     else if (G.phase === 'waitingOpp') phaseLabel = 'WAITING';
     NET.roomRef.child('live/' + NET.role).update({
-      phase: phaseLabel,
-      score: G.score,
-      gulliX: Math.round(gulli.x),
-      gulliY: Math.round(gulli.y),
-      ballDist: Math.round(G.hitDistance || 0),
-      ts: Date.now()
+      phase: phaseLabel, score: G.score,
+      gulliX: Math.round(gulli.x), gulliY: Math.round(gulli.y),
+      ballDist: Math.round(G.hitDistance || 0), ts: Date.now()
     }).catch(()=>{});
   }
 
   if (G.bannerTimer>0) G.bannerTimer -= dt;
-  if (G.swingTimer>0)  G.swingTimer  -= dt;
+  if (G.swingTimer>0) G.swingTimer -= dt;
   if (shake > 0) shake = Math.max(0, shake - dt * 3.0);
   updateParticles(dt);
   crowdExcitement = Math.max(0, crowdExcitement - dt * 0.7);
-  if (crowdExcitement > 0.9 && Math.random() < crowdExcitement * 0.25){
-    spawnCheerParticles();
-  }
+  if (crowdExcitement > 0.9 && Math.random() < crowdExcitement * 0.25) spawnCheerParticles();
   if (crowdCanvas && crowdDots.length){
     if (Math.random() < 0.04 + crowdExcitement * 0.55){
       const d = crowdDots[(Math.random() * crowdDots.length) | 0];
@@ -1004,13 +1103,32 @@ function update(dt){
   if (G.phase === 'splash'){
     G.splashTimer += dt;
     if (Math.random() < 0.7) spawnSplashSpark();
-    if (G.splashTimer >= SPLASH_DURATION){ setPhase('menu'); beep(880, 0.1, 'triangle', 0.08); }
+    if (G.splashTimer >= SPLASH_DURATION){
+      const session = loadSession();
+      if (session && session.phone){
+        // Try silent login
+        if (NET.ready){
+          NET.db.ref('accounts/user_' + session.phone).once('value').then(snap => {
+            if (snap.exists()){
+              const data = snap.val();
+              Object.assign(ACCOUNT, data);
+              ACCOUNT.loggedIn = true;
+              saveSession();
+              setPhase('menu');
+            } else {
+              setPhase('login');
+            }
+          }).catch(()=>{ setPhase('login'); });
+        } else { setPhase('login'); }
+      } else {
+        setPhase('login');
+      }
+      beep(880, 0.1, 'triangle', 0.08);
+    }
     return;
   }
-  if (G.phase === 'searching'){ return; }
-  if (G.phase === 'waitingOpp'){ return; }
+  if (G.phase === 'searching' || G.phase === 'waitingOpp'){ return; }
 
-  /* ---- TOSS phase ---- */
   if (G.phase === 'toss'){
     if (performance.now() - NET.tossStartTime > TOSS_DURATION){
       NET.tossResultStart = performance.now();
@@ -1018,23 +1136,18 @@ function update(dt){
     }
     return;
   }
-  /* ---- TOSS RESULT phase ---- */
   if (G.phase === 'tossResult'){
     if (performance.now() - NET.tossResultStart > TOSS_RESULT_DURATION){
-      if (NET.tossWinner === NET.role){
-        // I won the toss — I bat first
-        beginOnlineTurn();
-      } else {
-        // Opponent bats first — I watch
-        setPhase('waitingOpp');
-      }
+      if (NET.tossWinner === NET.role) beginOnlineTurn();
+      else setPhase('waitingOpp');
     }
     return;
   }
 
   if (G.phase==='turnEnd' || G.phase==='gameOver' || G.phase==='turnIntro'
       || G.phase==='menu' || G.phase==='levelSelect' || G.phase==='playerSelect'
-      || G.phase==='nameEntry' || G.phase==='onlineName'){
+      || G.phase==='nameEntry' || G.phase==='login' || G.phase==='register'
+      || G.phase==='leaderboard' || G.phase==='profileView'){
     camX += (0 - camX) * Math.min(1, dt*3);
     if (G.phase === 'gameOver'){
       G.celebrationTimer += dt; G.confettiTimer += dt;
@@ -1063,7 +1176,7 @@ function update(dt){
     case 'power':
       G.power += G.powerDir*128*dt;
       if (G.power>=100){G.power=100;G.powerDir=-1;}
-      if (G.power<=0)  {G.power=0;  G.powerDir=1;}
+      if (G.power<=0) {G.power=0; G.powerDir=1;}
       break;
     case 'air': {
       gulli.vy += GRAV*dt; gulli.y += gulli.vy*dt; gulli.rot += gulli.rotV*dt;
@@ -1213,24 +1326,27 @@ function handleMenuClick(x, y){
       beep(880, 0.06, 'triangle', 0.09);
       if (b.id === 'single'){ setPhase('levelSelect'); return true; }
       if (b.id === 'multi'){ setPhase('playerSelect'); return true; }
-      if (b.id === 'online'){
-        G.nameEntry = { playerIndex: 0, currentText: '', online: true };
-        setPhase('onlineName');
-        return true;
+      if (b.id === 'online'){ startOnlineMatchmaking(); return true; }
+      if (b.id === 'leaderboard'){
+        LEADERBOARD.data = null; fetchLeaderboard(); setPhase('leaderboard'); return true;
       }
-      if (b.id === 'findMatch'){
-        startOnlineMatchmaking(G.nameEntry.currentText || 'PLAYER');
-        return true;
+      if (b.id === 'doLogin'){
+        const p = normalizePhone(ACCOUNT.formPhone);
+        if (p.length !== 10){ ACCOUNT.error = 'Enter valid 10-digit number'; return true; }
+        loginUser(p); return true;
       }
-      if (b.id === 'cancelSearch'){
-        NET.searching = false; cleanupOnline(); setPhase('menu'); return true;
+      if (b.id === 'doRegister'){
+        const nm = (ACCOUNT.formName || '').trim().toUpperCase().slice(0,10);
+        const p = normalizePhone(ACCOUNT.formPhone);
+        if (!nm){ ACCOUNT.error = 'Enter your name'; return true; }
+        if (p.length !== 10){ ACCOUNT.error = 'Enter valid 10-digit number'; return true; }
+        registerUser(nm, p); return true;
       }
-      if (b.id === 'onlineAgain'){
-        cleanupOnline();
-        G.nameEntry = { playerIndex: 0, currentText: '', online: true };
-        setPhase('onlineName');
-        return true;
-      }
+      if (b.id === 'goRegister'){ ACCOUNT.mode = 'register'; ACCOUNT.error = ''; ACCOUNT.formFocus='name'; setPhase('register'); return true; }
+      if (b.id === 'goLogin'){ ACCOUNT.mode = 'login'; ACCOUNT.error = ''; ACCOUNT.formFocus='name'; setPhase('login'); return true; }
+      if (b.id === 'logout'){ cleanupOnline(); logoutUser(); return true; }
+      if (b.id === 'cancelSearch'){ NET.searching = false; cleanupOnline(); setPhase('menu'); return true; }
+      if (b.id === 'onlineAgain'){ cleanupOnline(); startOnlineMatchmaking(); return true; }
       if (b.id.startsWith('level')){ startSinglePlayer(parseInt(b.id.slice(5),10)); return true; }
       if (b.id.startsWith('pc')){ startMultiPlayer(parseInt(b.id.slice(2),10)); return true; }
       if (b.id === 'back'){ setPhase('menu'); return true; }
@@ -1245,9 +1361,22 @@ function handleMenuClick(x, y){
       }
       if (b.id === 'menu'){
         if (G.mode === 'onlineResults') cleanupOnline();
-        setPhase('menu');
-        return true;
+        setPhase('menu'); return true;
       }
+    }
+  }
+  // Login/register — clicking name/phone box focuses that field
+  if (G.phase === 'login' || G.phase === 'register'){
+    const nameBox = { x: W/2 - 220, y: 210, w: 440, h: 56 };
+    const phoneBox = { x: W/2 - 220, y: 290, w: 440, h: 56 };
+    if (G.phase === 'register' && pointInButton(x,y,nameBox)){
+      ACCOUNT.formFocus = 'name'; openMobileKeyboard(); return true;
+    }
+    if (pointInButton(x,y,phoneBox)){
+      ACCOUNT.formFocus = 'phone'; openMobileKeyboard(); return true;
+    }
+    if (G.phase === 'login' && pointInButton(x,y,nameBox)){
+      // Login screen doesn't have name field
     }
   }
   return false;
@@ -1261,7 +1390,8 @@ function onInput(e){
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
   if (G.phase==='menu' || G.phase==='levelSelect' || G.phase==='playerSelect'
       || G.phase==='turnIntro' || G.phase==='turnEnd' || G.phase==='gameOver'
-      || G.phase==='onlineName' || G.phase==='searching'){
+      || G.phase==='login' || G.phase==='register' || G.phase==='leaderboard'
+      || G.phase==='profileView' || G.phase==='searching'){
     if (e){ const {x,y} = canvasCoordsFromEvent(e); handleMenuClick(x, y); }
     return;
   }
@@ -1275,13 +1405,12 @@ function onInput(e){
     }
   }
   switch (G.phase){
-    case 'power':  lockPower(); break;
-    case 'air':    swing();     break;
+    case 'power': lockPower(); break;
+    case 'air': swing(); break;
     case 'result': if (G.resultTimer<1.4) G.resultTimer=0; break;
   }
 }
 function handleNameEntryKey(e){
-  if (e.key === 'Escape' && G.nameEntry.online){ setPhase('menu'); e.preventDefault(); return; }
   if (e.key === 'Enter'){ commitName(); e.preventDefault(); return; }
   if (e.key === 'Backspace'){ G.nameEntry.currentText = G.nameEntry.currentText.slice(0, -1); e.preventDefault(); return; }
   if (e.key === 'Escape'){ setPhase('menu'); e.preventDefault(); return; }
@@ -1290,22 +1419,52 @@ function handleNameEntryKey(e){
     e.preventDefault();
   }
 }
-function handleOnlineNameKey(e){
+function handleAuthKey(e){
   if (e.key === 'Escape'){ setPhase('menu'); e.preventDefault(); return; }
-  if (e.key === 'Enter'){ startOnlineMatchmaking(G.nameEntry.currentText || 'PLAYER'); e.preventDefault(); return; }
-  if (e.key === 'Backspace'){ G.nameEntry.currentText = G.nameEntry.currentText.slice(0, -1); e.preventDefault(); return; }
-  if (e.key.length === 1 && /[A-Za-z0-9 _-]/.test(e.key) && G.nameEntry.currentText.length < 10){
-    G.nameEntry.currentText += e.key.toUpperCase();
-    e.preventDefault();
+  const target = ACCOUNT.formFocus;
+  if (e.key === 'Tab'){
+    // Switch focus
+    ACCOUNT.formFocus = target === 'name' ? 'phone' : 'name';
+    openMobileKeyboard();
+    e.preventDefault(); return;
+  }
+  if (e.key === 'Enter'){
+    if (G.phase === 'login'){
+      const p = normalizePhone(ACCOUNT.formPhone);
+      if (p.length === 10) loginUser(p);
+      else ACCOUNT.error = 'Enter valid 10-digit number';
+    } else if (G.phase === 'register'){
+      const nm = (ACCOUNT.formName || '').trim().toUpperCase().slice(0,10);
+      const p = normalizePhone(ACCOUNT.formPhone);
+      if (!nm) ACCOUNT.error = 'Enter your name';
+      else if (p.length !== 10) ACCOUNT.error = 'Enter valid 10-digit number';
+      else registerUser(nm, p);
+    }
+    e.preventDefault(); return;
+  }
+  if (e.key === 'Backspace'){
+    if (target === 'name') ACCOUNT.formName = ACCOUNT.formName.slice(0, -1);
+    else ACCOUNT.formPhone = ACCOUNT.formPhone.slice(0, -1);
+    e.preventDefault(); return;
+  }
+  if (e.key.length === 1){
+    if (target === 'name' && /[A-Za-z0-9 _-]/.test(e.key) && ACCOUNT.formName.length < 10){
+      ACCOUNT.formName += e.key.toUpperCase();
+      e.preventDefault();
+    } else if (target === 'phone' && /[0-9]/.test(e.key) && ACCOUNT.formPhone.length < 10){
+      ACCOUNT.formPhone += e.key;
+      e.preventDefault();
+    }
   }
 }
+
 window.addEventListener('keydown', e=>{
   if (G.phase === 'splash'){
     if (e.code==='Space'||e.code==='Enter'||e.key===' '){ onInput(null); e.preventDefault(); }
     return;
   }
+  if (G.phase === 'login' || G.phase === 'register'){ handleAuthKey(e); return; }
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
-  if (G.phase === 'onlineName'){ handleOnlineNameKey(e); return; }
   if (G.phase === 'searching'){
     if (e.key==='Escape'){ NET.searching = false; cleanupOnline(); setPhase('menu'); e.preventDefault(); }
     return;
@@ -1315,7 +1474,9 @@ window.addEventListener('keydown', e=>{
   if (G.phase === 'menu'){
     if (e.key==='1'){ setPhase('levelSelect'); e.preventDefault(); return; }
     if (e.key==='2'){ setPhase('playerSelect'); e.preventDefault(); return; }
-    if (e.key==='3'){ G.nameEntry = { playerIndex: 0, currentText: '', online: true }; setPhase('onlineName'); e.preventDefault(); return; }
+    if (e.key==='3'){ startOnlineMatchmaking(); e.preventDefault(); return; }
+    if (e.key==='4'){ LEADERBOARD.data = null; fetchLeaderboard(); setPhase('leaderboard'); e.preventDefault(); return; }
+    if (e.key==='p' || e.key==='P'){ setPhase('profileView'); e.preventDefault(); return; }
   }
   if (G.phase === 'levelSelect'){
     if (e.key>='1' && e.key<='5'){ startSinglePlayer(parseInt(e.key,10)); e.preventDefault(); return; }
@@ -1325,12 +1486,15 @@ window.addEventListener('keydown', e=>{
     if (e.key>='2' && e.key<='5'){ startMultiPlayer(parseInt(e.key,10)); e.preventDefault(); return; }
     if (e.key==='Escape'){ setPhase('menu'); e.preventDefault(); return; }
   }
+  if (G.phase === 'leaderboard' || G.phase === 'profileView'){
+    if (e.key==='Escape'){ setPhase('menu'); e.preventDefault(); return; }
+  }
   if (e.code==='Space' || e.code==='Enter'){
     if (G.phase==='turnIntro'){ beginBatting(); e.preventDefault(); return; }
     if (G.phase==='turnEnd'){ advanceFromTurnEnd(); e.preventDefault(); return; }
   }
   if (G.phase==='gameOver' && (e.code==='Space'||e.code==='Enter')){
-    if (G.mode==='onlineResults'){ cleanupOnline(); G.nameEntry = { playerIndex: 0, currentText: '', online: true }; setPhase('onlineName'); e.preventDefault(); return; }
+    if (G.mode==='onlineResults'){ cleanupOnline(); startOnlineMatchmaking(); e.preventDefault(); return; }
     if (G.mode==='single'){
       if (G.levelCleared && G.level<5) startSinglePlayer(G.level+1);
       else if (!G.levelCleared) startSinglePlayer(G.level);
@@ -1352,27 +1516,56 @@ window.addEventListener('keydown', e=>{
   }
 });
 
-/* ========== MOBILE KEYBOARD SUPPORT ========== */
+/* ========== MOBILE KEYBOARD ========== */
 const mobileInput = document.getElementById('mobileNameInput');
 
 function isTypingPhase(){
-  return G.phase === 'onlineName' || G.phase === 'nameEntry';
+  return G.phase === 'nameEntry' || G.phase === 'login' || G.phase === 'register';
+}
+function openMobileKeyboard(){
+  mobileInput.style.pointerEvents = 'auto';
+  mobileInput.style.zIndex = '999';
+  if (G.phase === 'login' || G.phase === 'register'){
+    mobileInput.value = (ACCOUNT.formFocus === 'name') ? ACCOUNT.formName : ACCOUNT.formPhone;
+    mobileInput.setAttribute('inputmode', ACCOUNT.formFocus === 'phone' ? 'numeric' : 'text');
+  } else if (G.phase === 'nameEntry'){
+    mobileInput.value = G.nameEntry.currentText || '';
+    mobileInput.setAttribute('inputmode', 'text');
+  }
+  try { mobileInput.focus({ preventScroll: true }); } catch(err){ mobileInput.focus(); }
+  setTimeout(()=>{ try{ mobileInput.focus(); }catch(e){} }, 50);
 }
 
 canvas.addEventListener('pointerdown', e=>{
   e.preventDefault();
   if (isTypingPhase()){
-    mobileInput.style.pointerEvents = 'auto';
-    mobileInput.style.zIndex = '999';
-    mobileInput.value = G.nameEntry.currentText || '';
-    try { mobileInput.focus({ preventScroll: true }); } catch(err){ mobileInput.focus(); }
-    setTimeout(()=>{ try{ mobileInput.focus(); }catch(e){} }, 50);
+    // If they tapped a specific input box in login/register screen, respect that
+    if (G.phase === 'login' || G.phase === 'register'){
+      const {x,y} = canvasCoordsFromEvent(e);
+      const nameBox = { x: W/2 - 220, y: 210, w: 440, h: 56 };
+      const phoneBox = { x: W/2 - 220, y: 290, w: 440, h: 56 };
+      if (G.phase === 'register' && pointInButton(x,y,nameBox)) ACCOUNT.formFocus = 'name';
+      else if (pointInButton(x,y,phoneBox)) ACCOUNT.formFocus = 'phone';
+    }
+    openMobileKeyboard();
   }
   onInput(e);
 });
 
 mobileInput.addEventListener('input', ()=>{
-  G.nameEntry.currentText = (mobileInput.value || '').toUpperCase().slice(0,10);
+  const raw = mobileInput.value || '';
+  if (G.phase === 'login' || G.phase === 'register'){
+    if (ACCOUNT.formFocus === 'name'){
+      ACCOUNT.formName = raw.toUpperCase().slice(0,10);
+      mobileInput.value = ACCOUNT.formName;
+    } else {
+      ACCOUNT.formPhone = raw.replace(/\D/g,'').slice(0,10);
+      mobileInput.value = ACCOUNT.formPhone;
+    }
+  } else if (G.phase === 'nameEntry'){
+    G.nameEntry.currentText = raw.toUpperCase().slice(0,10);
+    mobileInput.value = G.nameEntry.currentText;
+  }
 });
 
 mobileInput.addEventListener('keydown', e=>{
@@ -1380,8 +1573,16 @@ mobileInput.addEventListener('keydown', e=>{
     mobileInput.blur();
     mobileInput.style.pointerEvents = 'none';
     mobileInput.style.zIndex = '-1';
-    if (G.phase === 'onlineName'){
-      startOnlineMatchmaking(G.nameEntry.currentText || 'PLAYER');
+    if (G.phase === 'login'){
+      const p = normalizePhone(ACCOUNT.formPhone);
+      if (p.length === 10) loginUser(p);
+      else ACCOUNT.error = 'Enter valid 10-digit number';
+    } else if (G.phase === 'register'){
+      const nm = (ACCOUNT.formName || '').trim().toUpperCase().slice(0,10);
+      const p = normalizePhone(ACCOUNT.formPhone);
+      if (!nm) ACCOUNT.error = 'Enter your name';
+      else if (p.length !== 10) ACCOUNT.error = 'Enter valid 10-digit number';
+      else registerUser(nm, p);
     } else if (G.phase === 'nameEntry'){
       commitName();
     }
@@ -1428,8 +1629,7 @@ function drawStadium(){
   for (const sec of crowdSections){
     const g = ctx.createLinearGradient(0, STADIUM_TOP, 0, STADIUM_BOTTOM);
     g.addColorStop(0, hexA(sec.color, 0.04)); g.addColorStop(1, hexA(sec.color, 0.28));
-    ctx.fillStyle = g;
-    ctx.fillRect(sec.x, STADIUM_TOP, sec.w, STADIUM_BOTTOM - STADIUM_TOP);
+    ctx.fillStyle = g; ctx.fillRect(sec.x, STADIUM_TOP, sec.w, STADIUM_BOTTOM - STADIUM_TOP);
   }
   const jump = Math.abs(Math.sin(t * 3.4)) * crowdExcitement * 5;
   if (crowdCanvas) ctx.drawImage(crowdCanvas, 0, -jump);
@@ -1585,7 +1785,7 @@ function drawPlayer(){
     ctx.restore();
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   }
-  if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='onlineName' && G.phase!=='searching' && G.phase!=='waitingOpp' && G.phase!=='toss' && G.phase!=='tossResult'){
+  if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='waitingOpp' && G.phase!=='toss' && G.phase!=='tossResult' && G.phase!=='login' && G.phase!=='register' && G.phase!=='leaderboard' && G.phase!=='profileView'){
     const ang = dandaAngle();
     const handX = x+6, handY = shoulderY+6;
     ctx.save(); ctx.translate(handX, handY); ctx.rotate(ang);
@@ -1672,8 +1872,7 @@ function drawFielder(f){
   ctx.fillStyle=f.hair;
   ctx.beginPath(); ctx.ellipse(x - headR*0.85, headY - 2, 3.5, 6, 0.2, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.ellipse(x + headR*0.85, headY - 2, 3.5, 6, -0.2, 0, Math.PI*2); ctx.fill();
-  const fdx = dir * 1.6;
-  const eyeY = headY - 1.5;
+  const fdx = dir * 1.6, eyeY = headY - 1.5;
   ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.ellipse(x - 4.5 + fdx*0.4, eyeY, 2.4, 2.1, 0, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.ellipse(x + 4.5 + fdx*0.4, eyeY, 2.4, 2.1, 0, 0, Math.PI*2); ctx.fill();
@@ -1907,7 +2106,7 @@ function drawMenuButton(b, highlightColor){
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
 function drawCurrentPlayerBadge(){
-  if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='onlineName'||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult') return;
+  if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'||G.phase==='login'||G.phase==='register'||G.phase==='leaderboard'||G.phase==='profileView') return;
   const p = G.players[G.currentPlayer];
   if (!p) return;
   const bw = 280, bh = 42;
@@ -1939,8 +2138,9 @@ function drawCurrentPlayerBadge(){
 function drawOverlays(){
   if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'
       ||G.phase==='turnIntro'||G.phase==='turnEnd'||G.phase==='gameOver'
-      ||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='onlineName'
-      ||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult') return;
+      ||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'
+      ||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'
+      ||G.phase==='login'||G.phase==='register'||G.phase==='leaderboard'||G.phase==='profileView') return;
   if (G.bannerTimer>0 && G.banner){
     const a = clamp(G.bannerTimer/0.4, 0, 1);
     ctx.globalAlpha = a;
@@ -2082,26 +2282,396 @@ function drawSplash(){
   }
   ctx.restore();
 }
+function drawLoginScreen(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('🔓  LOGIN', 90, 42, '#ffd166');
+  centerText('Enter your mobile number to continue', 132, 16, 'rgba(255,255,255,0.7)');
+
+  // Phone box (login only has phone)
+  const boxW = 440, boxH = 60;
+  const boxX = W/2 - boxW/2, boxY = 210;
+  const isFocusPhone = ACCOUNT.formFocus === 'phone';
+  ctx.save();
+  rr(ctx, boxX, boxY, boxW, boxH, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
+  ctx.strokeStyle = isFocusPhone ? '#ffd166' : 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = isFocusPhone ? 3 : 2; ctx.stroke();
+  ctx.font = '600 13px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(255,209,102,0.85)';
+  ctx.fillText('📱 MOBILE NUMBER', boxX + 20, boxY - 22);
+  ctx.font = '900 26px system-ui,sans-serif';
+  ctx.textBaseline = 'middle';
+  const phone = ACCOUNT.formPhone || '';
+  ctx.fillStyle = phone ? '#ffffff' : 'rgba(255,255,255,0.32)';
+  ctx.fillText(phone || '9876543210', boxX + 20, boxY + boxH/2);
+  if (isFocusPhone){
+    const blink = Math.sin(performance.now()/280) > 0;
+    if (blink && phone.length < 10){
+      const tw = ctx.measureText(phone).width;
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(boxX + 20 + tw + 3, boxY + 14, 3, boxH - 28);
+    }
+  }
+  ctx.restore();
+  centerText('Tap box to type  •  Enter to login', W/2, 300, 13, 'rgba(255,255,255,0.55)');
+
+  if (ACCOUNT.loading){
+    centerText('Logging in...', 350, 18, 'rgba(255,209,102,0.9)');
+  } else if (ACCOUNT.error){
+    centerText('⚠ ' + ACCOUNT.error, 350, 16, '#ff8a8a');
+  }
+  for (const b of menuButtons) drawMenuButton(b, b.id === 'doLogin' ? '#ffd166' : '#ffffff');
+}
+function drawRegisterScreen(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('✍  REGISTER', 60, 36, '#ffd166');
+  centerText('Create your account — one-time setup', 100, 14, 'rgba(255,255,255,0.7)');
+
+  // Name box
+  const nameBox = { x: W/2 - 220, y: 150, w: 440, h: 56 };
+  const isFocusName = ACCOUNT.formFocus === 'name';
+  ctx.save();
+  rr(ctx, nameBox.x, nameBox.y, nameBox.w, nameBox.h, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
+  ctx.strokeStyle = isFocusName ? '#ffd166' : 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = isFocusName ? 3 : 2; ctx.stroke();
+  ctx.font = '600 12px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(255,209,102,0.85)';
+  ctx.fillText('👤 YOUR NAME', nameBox.x + 20, nameBox.y - 20);
+  ctx.font = '900 24px system-ui,sans-serif';
+  ctx.textBaseline = 'middle';
+  const nm = ACCOUNT.formName || '';
+  ctx.fillStyle = nm ? '#ffffff' : 'rgba(255,255,255,0.32)';
+  ctx.fillText(nm || 'PLAYER', nameBox.x + 20, nameBox.y + nameBox.h/2);
+  if (isFocusName){
+    const blink = Math.sin(performance.now()/280) > 0;
+    if (blink && nm.length < 10){
+      const tw = ctx.measureText(nm || 'PLAYER').width;
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(nameBox.x + 20 + tw + 3, nameBox.y + 13, 3, nameBox.h - 26);
+    }
+  }
+  ctx.restore();
+
+  // Phone box
+  const phoneBox = { x: W/2 - 220, y: 250, w: 440, h: 56 };
+  const isFocusPhone = ACCOUNT.formFocus === 'phone';
+  ctx.save();
+  rr(ctx, phoneBox.x, phoneBox.y, phoneBox.w, phoneBox.h, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
+  ctx.strokeStyle = isFocusPhone ? '#ffd166' : 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = isFocusPhone ? 3 : 2; ctx.stroke();
+  ctx.font = '600 12px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(255,209,102,0.85)';
+  ctx.fillText('📱 MOBILE NUMBER (10 digits)', phoneBox.x + 20, phoneBox.y - 20);
+  ctx.font = '900 24px system-ui,sans-serif';
+  ctx.textBaseline = 'middle';
+  const ph = ACCOUNT.formPhone || '';
+  ctx.fillStyle = ph ? '#ffffff' : 'rgba(255,255,255,0.32)';
+  ctx.fillText(ph || '9876543210', phoneBox.x + 20, phoneBox.y + phoneBox.h/2);
+  if (isFocusPhone){
+    const blink = Math.sin(performance.now()/280) > 0;
+    if (blink && ph.length < 10){
+      const tw = ctx.measureText(ph).width;
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(phoneBox.x + 20 + tw + 3, phoneBox.y + 13, 3, phoneBox.h - 26);
+    }
+  }
+  ctx.restore();
+
+  centerText('Tap a box to type  •  Tab to switch', W/2, 328, 13, 'rgba(255,255,255,0.55)');
+
+  if (ACCOUNT.loading){
+    centerText('Creating account...', 380, 18, 'rgba(255,209,102,0.9)');
+  } else if (ACCOUNT.error){
+    centerText('⚠ ' + ACCOUNT.error, 380, 15, '#ff8a8a');
+  }
+  for (const b of menuButtons) drawMenuButton(b, b.id === 'doRegister' ? '#ffd166' : '#ffffff');
+}
+function drawLeaderboard(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('🏆  GLOBAL LEADERBOARD', 55, 32, '#ffd166');
+  centerText('Top online scores worldwide', 92, 14, 'rgba(255,255,255,0.65)');
+
+  if (!LEADERBOARD.data){
+    centerText('Loading...', 260, 24, 'rgba(255,255,255,0.7)');
+  } else if (LEADERBOARD.data.length === 0){
+    centerText('No scores yet. Be the first!', 260, 20, 'rgba(255,255,255,0.7)');
+  } else {
+    const bw = 620, bh = 30, gap = 6;
+    const startY = 125, startX = W/2 - bw/2;
+    for (let i=0; i<LEADERBOARD.data.length; i++){
+      const p = LEADERBOARD.data[i];
+      const y = startY + i*(bh + gap);
+      const isMe = (p.phone === ACCOUNT.phone);
+      ctx.save();
+      rr(ctx, startX, y, bw, bh, 8);
+      ctx.fillStyle = isMe ? 'rgba(255,209,102,0.25)' : 'rgba(20,25,40,0.7)';
+      ctx.fill();
+      ctx.strokeStyle = isMe ? '#ffd166' : 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = isMe ? 2.5 : 1; ctx.stroke();
+      ctx.font = '900 13px system-ui,sans-serif';
+      ctx.textAlign='left'; ctx.textBaseline='middle';
+      const medal = i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : ('#'+(i+1));
+      ctx.fillStyle = i<3 ? '#ffd166' : 'rgba(255,255,255,0.7)';
+      ctx.fillText(medal, startX + 14, y + bh/2);
+      ctx.fillStyle = isMe ? '#ffd166' : '#ffffff';
+      ctx.font = '900 14px system-ui,sans-serif';
+      ctx.fillText(p.name || 'PLAYER', startX + 62, y + bh/2);
+      ctx.textAlign='right';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText((p.bestOnline||0) + ' m', startX + bw - 14, y + bh/2);
+      ctx.restore();
+    }
+  }
+  for (const b of menuButtons) drawMenuButton(b, '#ffd166');
+}
+function drawProfileView(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('👤  YOUR PROFILE', 55, 30, '#ffd166');
+
+  // Avatar circle
+  const cx = W/2, cy = 145, r = 46;
+  ctx.save();
+  const grd = ctx.createRadialGradient(cx - 15, cy - 15, 5, cx, cy, r);
+  grd.addColorStop(0, '#ffd166'); grd.addColorStop(1, '#c99a2e');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.font = '900 44px system-ui,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillText((ACCOUNT.name || 'P').charAt(0), cx, cy + 2);
+  ctx.restore();
+
+  centerText(ACCOUNT.name, 220, 30, '#ffffff');
+  centerText('📱 ' + ACCOUNT.phone, 252, 16, 'rgba(255,255,255,0.6)');
+
+  // Stats grid
+  const stats = [
+    { label:'Best Single', value: ACCOUNT.bestSingle + 'm', color:'#ffd166' },
+    { label:'Best Online', value: ACCOUNT.bestOnline + 'm', color:'#8affa0' },
+    { label:'Wins', value: ACCOUNT.wins, color:'#5c9ee0' },
+    { label:'Losses', value: ACCOUNT.losses, color:'#ff8a8a' },
+    { label:'Matches', value: ACCOUNT.matchesPlayed, color:'#e0a95c' },
+    { label:'Total Runs', value: ACCOUNT.totalRuns + 'm', color:'#a06bff' }
+  ];
+  const cols = 3, bw = 170, bh = 62, gap = 12;
+  const totalW = cols*bw + (cols-1)*gap;
+  const startX = W/2 - totalW/2, startY = 285;
+  for (let i=0; i<stats.length; i++){
+    const col = i % cols, row = Math.floor(i / cols);
+    const x = startX + col*(bw+gap);
+    const y = startY + row*(bh+gap);
+    ctx.save();
+    rr(ctx, x, y, bw, bh, 10);
+    ctx.fillStyle = 'rgba(20,25,40,0.75)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.font = '700 11px system-ui,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillText(stats[i].label.toUpperCase(), x + bw/2, y + 18);
+    ctx.font = '900 22px system-ui,sans-serif';
+    ctx.fillStyle = stats[i].color;
+    ctx.fillText(String(stats[i].value), x + bw/2, y + 42);
+    ctx.restore();
+  }
+  for (const b of menuButtons) drawMenuButton(b, b.id === 'logout' ? '#ff8a8a' : '#ffffff');
+}
+
+function drawToss(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  centerText('🪙  TOSS', 100, 46, '#ffd166');
+  centerText('Deciding who bats first...', 155, 18, 'rgba(255,255,255,0.7)');
+  const elapsed = performance.now() - NET.tossStartTime;
+  const t = clamp(elapsed / TOSS_DURATION, 0, 1);
+  const cx = W/2, cy = 330;
+  const scaleY = Math.abs(Math.cos(t * Math.PI * 7));
+  const radius = 70;
+  ctx.save(); ctx.globalAlpha = 0.4; ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + radius + 20, radius * 0.7 * scaleY, 12 * scaleY, 0, 0, Math.PI*2);
+  ctx.fill(); ctx.restore();
+  ctx.save();
+  ctx.translate(cx, cy); ctx.scale(1, scaleY + 0.08);
+  const grd = ctx.createRadialGradient(-20, -20, 5, 0, 0, radius);
+  grd.addColorStop(0, '#fff4c2'); grd.addColorStop(0.55, '#ffd166'); grd.addColorStop(1, '#a06b12');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(120, 80, 20, 0.8)'; ctx.lineWidth = 4; ctx.stroke();
+  ctx.fillStyle = 'rgba(140, 90, 20, 0.7)';
+  drawStar(0, 0, radius * 0.55, radius * 0.22, 5);
+  ctx.restore();
+  const pbW = 320, pbH = 4, pbX = W/2 - pbW/2, pbY = 480;
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  rr(ctx, pbX, pbY, pbW, pbH, 2); ctx.fill();
+  ctx.fillStyle = '#ffd166';
+  rr(ctx, pbX, pbY, pbW * t, pbH, 2); ctx.fill();
+}
+function drawTossResult(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+  const iWon = NET.tossWinner === NET.role;
+  centerText('🪙  TOSS RESULT', 100, 38, '#ffd166');
+  const cx = W/2, cy = 210, radius = 55;
+  ctx.save();
+  ctx.translate(cx, cy);
+  const grd = ctx.createRadialGradient(-15, -15, 5, 0, 0, radius);
+  grd.addColorStop(0, '#fff4c2'); grd.addColorStop(0.55, '#ffd166'); grd.addColorStop(1, '#a06b12');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(120, 80, 20, 0.8)'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = 'rgba(140, 90, 20, 0.7)';
+  drawStar(0, 0, radius * 0.55, radius * 0.22, 5);
+  ctx.restore();
+  if (iWon){
+    const pulse = 0.85 + 0.15 * Math.sin(performance.now()/280);
+    ctx.save(); ctx.globalAlpha = pulse;
+    centerText('✨  YOU WON THE TOSS!  ✨', 310, 36, '#8affa0');
+    ctx.restore();
+    centerText('You will bat FIRST', 360, 24, '#ffffff');
+    centerText('Get ready to smash some gullis!', 395, 17, 'rgba(255,255,255,0.7)');
+  } else {
+    centerText((NET.oppName || 'OPPONENT') + ' WON THE TOSS', 310, 30, '#ff8a8a');
+    centerText('They will bat FIRST', 360, 24, '#ffffff');
+    centerText('You field first — watch their innings!', 395, 17, 'rgba(255,255,255,0.7)');
+  }
+  const elapsed = performance.now() - NET.tossResultStart;
+  const remaining = Math.max(0, Math.ceil((TOSS_RESULT_DURATION - elapsed) / 1000));
+  centerText('Starting in ' + remaining + '...', 460, 22, 'rgba(255,209,102,0.9)');
+}
+function drawWaitingOpp(){
+  ctx.fillStyle = 'rgba(12,16,28,0.88)';
+  ctx.fillRect(0,0,W,H);
+  const opp = NET.oppLive;
+  const iAmWaitingForMyTurn = !NET.myDone;
+  const headerColor = iAmWaitingForMyTurn ? PLAYER_COLORS[1] : '#ffd166';
+  if (iAmWaitingForMyTurn){
+    centerText((NET.oppName || 'OPPONENT') + ' IS BATTING FIRST', 55, 26, headerColor);
+    centerText('Watch their innings below — you bat next!', 90, 15, 'rgba(255,255,255,0.7)');
+  } else {
+    centerText('🏏  YOUR INNINGS DONE', 50, 22, '#ffd166');
+    centerText('Your Score: ' + G.score + ' m', 82, 22, '#8affa0');
+    centerText('Watching ' + (NET.oppName || 'opponent') + ' bat', 112, 14, 'rgba(255,255,255,0.7)');
+  }
+  const px = 100, py = 135, pw = W - 200, ph = 330;
+  ctx.save();
+  rr(ctx, px, py, pw, ph, 16);
+  ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
+  ctx.strokeStyle = PLAYER_COLORS[1]; ctx.lineWidth = 3; ctx.stroke();
+  ctx.font = '900 18px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = PLAYER_COLORS[1];
+  ctx.fillText('LIVE: ' + (NET.oppName || 'OPPONENT'), px + pw/2, py + 12);
+  if (opp){
+    const oppScore = opp.score || 0;
+    const phaseLabel = opp.phase || 'BATTING';
+    ctx.font = '900 36px system-ui,sans-serif';
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText(oppScore + ' m', px + pw/2, py + 38);
+    ctx.font = '700 14px system-ui,sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText('Status: ' + phaseLabel, px + pw/2, py + 82);
+    const miniX = px + 40, miniY = py + 115;
+    const miniW = pw - 80, miniH = 130;
+    ctx.fillStyle = 'rgba(90,140,70,0.35)';
+    rr(ctx, miniX, miniY, miniW, miniH, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(miniX, miniY + miniH - 20);
+    ctx.lineTo(miniX + miniW, miniY + miniH - 20);
+    ctx.stroke();
+    ctx.fillStyle = '#b07c42';
+    ctx.fillRect(miniX + 18, miniY + miniH - 30, 8, 12);
+    const scaleX = (miniW - 40) / 1600;
+    const scaleY = (miniH - 40) / 500;
+    const gx = Math.max(0, Math.min(1600, opp.gulliX || 0));
+    const gy = Math.max(0, Math.min(500, opp.gulliY || 400));
+    const dotX = miniX + 20 + gx * scaleX;
+    const dotY = miniY + miniH - 30 - (500 - gy) * scaleY;
+    ctx.strokeStyle = 'rgba(255,209,102,0.35)'; ctx.lineWidth = 1.5;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath();
+    ctx.moveTo(miniX + 22, miniY + miniH - 24);
+    ctx.lineTo(dotX, dotY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.save();
+    ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 12;
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath(); ctx.arc(dotX, dotY, 6, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+    ctx.font = '600 10px system-ui,sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText('LIVE VIEW', miniX + miniW/2, miniY + 4);
+    if (NET.oppDone){
+      centerText('OPPONENT DONE!', py + ph + 20, 22, '#8affa0');
+    } else if (iAmWaitingForMyTurn){
+      const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
+      centerText('Opponent batting' + dots + ' you bat next!', py + ph + 20, 15, 'rgba(255,255,255,0.7)');
+    } else {
+      const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
+      centerText('Waiting for opponent to finish' + dots, py + ph + 20, 15, 'rgba(255,255,255,0.7)');
+    }
+  } else {
+    centerText('Connecting to opponent stream...', py + ph/2, 20, 'rgba(255,255,255,0.7)');
+  }
+  ctx.restore();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
 function drawMenuScreen(){
   ctx.fillStyle = 'rgba(12,16,28,0.55)';
   ctx.fillRect(0,0,W,H);
-  centerText('GULLI  DANDA', 118, 68, '#ffd166');
-  centerText('CHAMPIONSHIP', 162, 26, 'rgba(255,255,255,0.85)');
-  ctx.font = '700 13px system-ui,sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(255,209,102,0.75)';
-  ctx.fillText('Powered by PRADEEP SINGH', W/2, 192);
-  ctx.textAlign = 'left';
+  centerText('GULLI  DANDA', 90, 58, '#ffd166');
+  centerText('CHAMPIONSHIP', 128, 22, 'rgba(255,255,255,0.85)');
+
+  // Account badge top-left
+  const bw = 260, bh = 52, bx = 18, by = 18;
+  ctx.save();
+  rr(ctx, bx, by, bw, bh, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
+  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.font='900 15px system-ui,sans-serif';
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillStyle='#ffd166';
+  ctx.fillText('👤 ' + ACCOUNT.name, bx + 14, by + 17);
+  ctx.font='700 10px system-ui,sans-serif';
+  ctx.fillStyle='rgba(255,255,255,0.65)';
+  ctx.fillText('📱 ' + ACCOUNT.phone + ' · W:' + ACCOUNT.wins + ' L:' + ACCOUNT.losses, bx + 14, by + 36);
+  ctx.restore();
+
+  // Profile view button (top-right)
+  const pvW = 120, pvH = 52, pvX = W - 18 - pvW, pvY = 18;
+  ctx.save();
+  rr(ctx, pvX, pvY, pvW, pvH, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.font='900 12px system-ui,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#ffffff';
+  ctx.fillText('MY PROFILE', pvX + pvW/2, pvY + pvH/2);
+  ctx.restore();
+
   const pulse = 0.6 + 0.4*Math.sin(performance.now()/320);
   ctx.globalAlpha = pulse;
-  centerText('CHOOSE A MODE', 218, 20, 'rgba(255,255,255,0.7)');
+  centerText('CHOOSE A MODE', 220, 16, 'rgba(255,255,255,0.7)');
   ctx.globalAlpha = 1;
   for (const b of menuButtons) drawMenuButton(b);
-  ctx.font = '700 12px system-ui,sans-serif';
+
+  ctx.font = '700 11px system-ui,sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillText('© PRADEEP SINGH', W/2, H - 22);
-  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255,209,102,0.75)';
+  ctx.fillText('Powered by PRADEEP SINGH', W/2, H - 18);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
 function drawLevelSelect(){
   ctx.fillStyle = 'rgba(12,16,28,0.55)';
@@ -2249,7 +2819,7 @@ function drawTurnEnd(){
       const pl = G.players[i];
       const x = startX + i*(bw+gap); const y = 360;
       const isActive = (i === G.currentPlayer);
-      const isDone   = (i <= G.currentPlayer);
+      const isDone = (i <= G.currentPlayer);
       ctx.save();
       rr(ctx, x, y, bw, 58, 10);
       ctx.fillStyle = 'rgba(20,25,40,0.75)'; ctx.fill();
@@ -2347,8 +2917,7 @@ function drawGameOver(){
       ctx.fillStyle = isWinner ? 'rgba(255,209,102,0.20)' : 'rgba(20,25,40,0.78)';
       ctx.fill();
       ctx.strokeStyle = p.color;
-      ctx.lineWidth = isWinner ? 3.5 : 2;
-      ctx.stroke();
+      ctx.lineWidth = isWinner ? 3.5 : 2; ctx.stroke();
       ctx.font='900 12px system-ui,sans-serif';
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillStyle = p.color;
@@ -2426,39 +2995,6 @@ function drawGameOver(){
   }
   for (const b of menuButtons) drawMenuButton(b, '#ffd166');
 }
-function drawOnlineNameEntry(){
-  ctx.fillStyle = 'rgba(12,16,28,0.82)';
-  ctx.fillRect(0,0,W,H);
-  centerText('🌐  PLAY ONLINE', 80, 42, '#ffd166');
-  centerText('Enter your name to find an opponent', 128, 17, 'rgba(255,255,255,0.7)');
-  centerText('Tap the box below to open keyboard', 152, 13, 'rgba(255,209,102,0.7)');
-  const boxW = 440, boxH = 68;
-  const boxX = W/2 - boxW/2, boxY = 180;
-  ctx.fillStyle = 'rgba(20,25,40,0.9)';
-  rr(ctx, boxX, boxY, boxW, boxH, 12); ctx.fill();
-  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 3; ctx.stroke();
-  const pad = 24;
-  ctx.font = '900 32px system-ui,sans-serif';
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  const text = G.nameEntry.currentText;
-  const display = text || 'PLAYER';
-  ctx.fillStyle = text ? '#ffffff' : 'rgba(255,255,255,0.32)';
-  ctx.fillText(display, boxX + pad, boxY + boxH/2 + 2);
-  const blink = Math.sin(performance.now()/280) > 0;
-  if (blink && text.length < 10){
-    const tw = ctx.measureText(display).width;
-    ctx.fillStyle = '#ffd166';
-    ctx.fillRect(boxX + pad + tw + 3, boxY + 18, 3, boxH - 36);
-  }
-  ctx.font = '600 14px system-ui,sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.fillText('Type a name  •  Enter to search', W/2, 278);
-  centerText('How it works:', 320, 15, 'rgba(255,255,255,0.55)');
-  centerText('• Toss decides who bats first', 348, 13, 'rgba(255,255,255,0.55)');
-  centerText('• Other player watches live, then bats', 370, 13, 'rgba(255,255,255,0.55)');
-  for (const b of menuButtons) drawMenuButton(b, '#ffd166');
-}
 function drawSearching(){
   ctx.fillStyle = 'rgba(12,16,28,0.88)';
   ctx.fillRect(0,0,W,H);
@@ -2467,7 +3003,7 @@ function drawSearching(){
   centerText('Looking for an opponent' + dots, 235, 22, 'rgba(255,255,255,0.85)');
   centerText('Name: ' + NET.myName, 285, 17, 'rgba(255,209,102,0.9)');
   const t = performance.now()/1000;
-  const r = 34; const cx = W/2, cy = 380;
+  const r = 34, cx = W/2, cy = 380;
   ctx.save();
   ctx.strokeStyle = 'rgba(255,209,102,0.35)'; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
@@ -2478,212 +3014,14 @@ function drawSearching(){
   for (const b of menuButtons) drawMenuButton(b);
 }
 
-function drawToss(){
-  ctx.fillStyle = 'rgba(12,16,28,0.94)';
-  ctx.fillRect(0,0,W,H);
-
-  centerText('🪙  TOSS', 100, 46, '#ffd166');
-  centerText('Deciding who bats first...', 155, 18, 'rgba(255,255,255,0.7)');
-
-  const elapsed = performance.now() - NET.tossStartTime;
-  const t = clamp(elapsed / TOSS_DURATION, 0, 1);
-
-  // Spinning coin
-  const cx = W/2, cy = 330;
-  const scaleY = Math.abs(Math.cos(t * Math.PI * 7));
-  const radius = 70;
-
-  // Shadow
-  ctx.save();
-  ctx.globalAlpha = 0.4;
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + radius + 20, radius * 0.7 * scaleY, 12 * scaleY, 0, 0, Math.PI*2);
-  ctx.fill();
-  ctx.restore();
-
-  // Coin
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(1, scaleY + 0.08);
-  const grd = ctx.createRadialGradient(-20, -20, 5, 0, 0, radius);
-  grd.addColorStop(0, '#fff4c2');
-  grd.addColorStop(0.55, '#ffd166');
-  grd.addColorStop(1, '#a06b12');
-  ctx.fillStyle = grd;
-  ctx.beginPath();
-  ctx.arc(0, 0, radius, 0, Math.PI*2);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(120, 80, 20, 0.8)';
-  ctx.lineWidth = 4;
-  ctx.stroke();
-
-  // Star on coin
-  ctx.fillStyle = 'rgba(140, 90, 20, 0.7)';
-  drawStar(0, 0, radius * 0.55, radius * 0.22, 5);
-
-  ctx.restore();
-
-  // Progress bar
-  const pbW = 320, pbH = 4;
-  const pbX = W/2 - pbW/2, pbY = 480;
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
-  rr(ctx, pbX, pbY, pbW, pbH, 2); ctx.fill();
-  ctx.fillStyle = '#ffd166';
-  rr(ctx, pbX, pbY, pbW * t, pbH, 2); ctx.fill();
-}
-
-function drawTossResult(){
-  ctx.fillStyle = 'rgba(12,16,28,0.94)';
-  ctx.fillRect(0,0,W,H);
-
-  const iWon = NET.tossWinner === NET.role;
-
-  centerText('🪙  TOSS RESULT', 100, 38, '#ffd166');
-
-  // Winning coin at top
-  const cx = W/2, cy = 210;
-  const radius = 55;
-  ctx.save();
-  ctx.translate(cx, cy);
-  const grd = ctx.createRadialGradient(-15, -15, 5, 0, 0, radius);
-  grd.addColorStop(0, '#fff4c2');
-  grd.addColorStop(0.55, '#ffd166');
-  grd.addColorStop(1, '#a06b12');
-  ctx.fillStyle = grd;
-  ctx.beginPath();
-  ctx.arc(0, 0, radius, 0, Math.PI*2);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(120, 80, 20, 0.8)';
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(140, 90, 20, 0.7)';
-  drawStar(0, 0, radius * 0.55, radius * 0.22, 5);
-  ctx.restore();
-
-  if (iWon){
-    const pulse = 0.85 + 0.15 * Math.sin(performance.now()/280);
-    ctx.save();
-    ctx.globalAlpha = pulse;
-    centerText('✨  YOU WON THE TOSS!  ✨', 310, 36, '#8affa0');
-    ctx.restore();
-    centerText('You will bat FIRST', 360, 24, '#ffffff');
-    centerText('Get ready to smash some gullis!', 395, 17, 'rgba(255,255,255,0.7)');
-  } else {
-    centerText((NET.oppName || 'OPPONENT') + ' WON THE TOSS', 310, 30, '#ff8a8a');
-    centerText('They will bat FIRST', 360, 24, '#ffffff');
-    centerText('You field first — watch their innings!', 395, 17, 'rgba(255,255,255,0.7)');
-  }
-
-  // Countdown
-  const elapsed = performance.now() - NET.tossResultStart;
-  const remaining = Math.max(0, Math.ceil((TOSS_RESULT_DURATION - elapsed) / 1000));
-  centerText('Starting in ' + remaining + '...', 460, 22, 'rgba(255,209,102,0.9)');
-}
-
-function drawWaitingOpp(){
-  ctx.fillStyle = 'rgba(12,16,28,0.88)';
-  ctx.fillRect(0,0,W,H);
-
-  const opp = NET.oppLive;
-  const iAmWaitingForMyTurn = !NET.myDone;
-  const headerColor = iAmWaitingForMyTurn ? PLAYER_COLORS[1] : '#ffd166';
-
-  if (iAmWaitingForMyTurn){
-    centerText((NET.oppName || 'OPPONENT') + ' IS BATTING FIRST', 55, 26, headerColor);
-    centerText('Watch their innings below — you bat next!', 90, 15, 'rgba(255,255,255,0.7)');
-  } else {
-    centerText('🏏  YOUR INNINGS DONE', 50, 22, '#ffd166');
-    centerText('Your Score: ' + G.score + ' m', 82, 22, '#8affa0');
-    centerText('Watching ' + (NET.oppName || 'opponent') + ' bat', 112, 14, 'rgba(255,255,255,0.7)');
-  }
-
-  const px = 100, py = 135, pw = W - 200, ph = 330;
-  ctx.save();
-  rr(ctx, px, py, pw, ph, 16);
-  ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
-  ctx.strokeStyle = PLAYER_COLORS[1]; ctx.lineWidth = 3; ctx.stroke();
-
-  ctx.font = '900 18px system-ui,sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillStyle = PLAYER_COLORS[1];
-  ctx.fillText('LIVE: ' + (NET.oppName || 'OPPONENT'), px + pw/2, py + 12);
-
-  if (opp){
-    const oppScore = opp.score || 0;
-    const phaseLabel = opp.phase || 'BATTING';
-
-    ctx.font = '900 36px system-ui,sans-serif';
-    ctx.fillStyle = '#ffd166';
-    ctx.fillText(oppScore + ' m', px + pw/2, py + 38);
-
-    ctx.font = '700 14px system-ui,sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.fillText('Status: ' + phaseLabel, px + pw/2, py + 82);
-
-    // Mini pitch
-    const miniX = px + 40, miniY = py + 115;
-    const miniW = pw - 80, miniH = 130;
-
-    ctx.fillStyle = 'rgba(90,140,70,0.35)';
-    rr(ctx, miniX, miniY, miniW, miniH, 8); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1.5; ctx.stroke();
-
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(miniX, miniY + miniH - 20);
-    ctx.lineTo(miniX + miniW, miniY + miniH - 20);
-    ctx.stroke();
-
-    ctx.fillStyle = '#b07c42';
-    ctx.fillRect(miniX + 18, miniY + miniH - 30, 8, 12);
-
-    const scaleX = (miniW - 40) / 1600;
-    const scaleY = (miniH - 40) / 500;
-    const gx = Math.max(0, Math.min(1600, opp.gulliX || 0));
-    const gy = Math.max(0, Math.min(500, opp.gulliY || 400));
-    const dotX = miniX + 20 + gx * scaleX;
-    const dotY = miniY + miniH - 30 - (500 - gy) * scaleY;
-
-    ctx.strokeStyle = 'rgba(255,209,102,0.35)'; ctx.lineWidth = 1.5;
-    ctx.setLineDash([4,4]);
-    ctx.beginPath();
-    ctx.moveTo(miniX + 22, miniY + miniH - 24);
-    ctx.lineTo(dotX, dotY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.save();
-    ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 12;
-    ctx.fillStyle = '#ffd166';
-    ctx.beginPath(); ctx.arc(dotX, dotY, 6, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
-
-    ctx.font = '600 10px system-ui,sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText('LIVE VIEW', miniX + miniW/2, miniY + 4);
-
-    if (NET.oppDone){
-      centerText('OPPONENT DONE!', py + ph + 20, 22, '#8affa0');
-    } else if (iAmWaitingForMyTurn){
-      const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
-      centerText('Opponent batting' + dots + ' you bat next!', py + ph + 20, 15, 'rgba(255,255,255,0.7)');
-    } else {
-      const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
-      centerText('Waiting for opponent to finish' + dots, py + ph + 20, 15, 'rgba(255,255,255,0.7)');
-    }
-  } else {
-    centerText('Connecting to opponent stream...', py + ph/2, 20, 'rgba(255,255,255,0.7)');
-  }
-  ctx.restore();
-
-  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-}
-
 /* ==================== MAIN RENDER ==================== */
 function draw(){
   ctx.clearRect(0,0,W,H);
   if (G.phase === 'splash'){ drawSplash(); return; }
+  if (G.phase === 'login'){ drawLoginScreen(); return; }
+  if (G.phase === 'register'){ drawRegisterScreen(); return; }
+  if (G.phase === 'leaderboard'){ drawLeaderboard(); return; }
+  if (G.phase === 'profileView'){ drawProfileView(); return; }
   ctx.save();
   if (shake > 0.002){
     const m = shake * shake * 9;
@@ -2701,7 +3039,6 @@ function draw(){
     else if (G.phase === 'levelSelect') drawLevelSelect();
     else drawPlayerSelect();
   }
-  else if (G.phase === 'onlineName'){ drawOnlineNameEntry(); }
   else if (G.phase === 'searching'){ drawSearching(); }
   else if (G.phase === 'toss'){ drawToss(); }
   else if (G.phase === 'tossResult'){ drawTossResult(); }
@@ -2744,23 +3081,23 @@ function draw(){
 
 /* ==================== HUD ==================== */
 const uiScore = document.getElementById('uiScore');
-const uiBest  = document.getElementById('uiBest');
-const uiOuts  = document.getElementById('uiOuts');
-const uiTurn  = document.getElementById('uiTurn');
+const uiBest = document.getElementById('uiBest');
+const uiOuts = document.getElementById('uiOuts');
+const uiTurn = document.getElementById('uiTurn');
 function updateHUD(){
   const hud = document.getElementById('hud');
   if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'
-      || G.phase === 'nameEntry' || G.phase === 'splash'
-      || G.phase === 'onlineName' || G.phase === 'searching'
-      || G.phase === 'toss' || G.phase === 'tossResult'
+      || G.phase === 'nameEntry' || G.phase === 'splash' || G.phase === 'login'
+      || G.phase === 'register' || G.phase === 'searching' || G.phase === 'toss'
+      || G.phase === 'tossResult' || G.phase === 'leaderboard' || G.phase === 'profileView'
       || (G.phase === 'waitingOpp' && !NET.myDone)){
     hud.style.display = 'none'; return;
   }
   hud.style.display = 'flex';
   uiScore.textContent = G.score;
-  uiBest.textContent  = G.best;
-  uiOuts.textContent  = G.outs + '/1';
-  uiTurn.textContent  = (G.currentPlayer + 1) + '/' + G.players.length;
+  uiBest.textContent = G.best;
+  uiOuts.textContent = G.outs + '/1';
+  uiTurn.textContent = (G.currentPlayer + 1) + '/' + G.players.length;
 }
 
 /* ==================== LOOP ==================== */
