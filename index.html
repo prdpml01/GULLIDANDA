@@ -35,11 +35,26 @@
   .stat span{color:#ffd166;}
   .stat.out span{color:#ff8a8a;}
   .right{display:flex;}
+  #mobileNameInput{
+    position:absolute;
+    left:50%;bottom:8px;
+    transform:translateX(-50%);
+    width:1px;height:1px;
+    opacity:0;border:0;padding:0;margin:0;
+    background:transparent;color:transparent;
+    font-size:16px;
+    caret-color:transparent;
+    z-index:-1;
+    pointer-events:none;
+  }
 </style>
 </head>
 <body>
 <div id="wrap">
   <canvas id="game" width="960" height="540"></canvas>
+  <input id="mobileNameInput" type="text" maxlength="10" 
+         autocomplete="off" autocorrect="off" autocapitalize="characters" 
+         spellcheck="false" aria-hidden="true">
   <div id="hud">
     <div class="right">
       <div class="stat">SCORE <span id="uiScore">0</span></div>
@@ -150,7 +165,10 @@ const NET = {
   oppDone: false, myDone: false,
   roomRef: null, listener: null,
   searching: false, searchStart: 0,
-  statusMsg: 'Searching...'
+  statusMsg: 'Searching...',
+  oppLive: null,
+  liveRef: null,
+  lastSync: 0
 };
 
 function initFirebase(){
@@ -168,6 +186,7 @@ function genRoomId(){ return 'GD-' + Math.random().toString(36).slice(2,7).toUpp
 function startOnlineMatchmaking(name){
   NET.myName = (name || 'PLAYER').toUpperCase().slice(0,10);
   NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppName = '';
+  NET.oppLive = null;
   if (!NET.ready && !initFirebase()){
     G.banner = 'NETWORK ERROR'; G.bannerTimer = 2.5;
     setPhase('menu'); return;
@@ -243,6 +262,14 @@ function watchRoom(){
       showOnlineResults(data);
     }
   });
+
+  // Opponent ki live game state suno
+  const oppRole = NET.role === 'p1' ? 'p2' : 'p1';
+  if (NET.liveRef) NET.liveRef.off();
+  NET.liveRef = NET.roomRef.child('live/' + oppRole);
+  NET.liveRef.on('value', snap => {
+    NET.oppLive = snap.val();
+  });
 }
 
 function beginOnlineTurn(){
@@ -301,6 +328,8 @@ function cleanupOnline(){
     try { NET.roomRef.off('value', NET.listener); } catch(e){}
     NET.listener = null;
   }
+  if (NET.liveRef){ try{ NET.liveRef.off(); }catch(e){} NET.liveRef = null; }
+  NET.oppLive = null;
   NET.roomId = null; NET.role = null; NET.oppName = '';
   NET.oppScore = null; NET.oppDone = false; NET.myDone = false;
   NET.roomRef = null;
@@ -884,6 +913,29 @@ function updateParticles(dt){
 
 /* ==================== UPDATE ==================== */
 function update(dt){
+  // Live state Firebase me push karo (agar online match chal raha hai)
+  NET.lastSync = (NET.lastSync || 0) + dt;
+  if (NET.lastSync > 0.15 && NET.roomRef && NET.role && G.mode === 'online'){
+    NET.lastSync = 0;
+    let phaseLabel = G.phase;
+    if (G.phase === 'power') phaseLabel = 'BATTING';
+    else if (G.phase === 'air') phaseLabel = 'BATTING';
+    else if (G.phase === 'fly') phaseLabel = 'HIT!';
+    else if (G.phase === 'fielding') phaseLabel = 'FIELDING';
+    else if (G.phase === 'throw') phaseLabel = 'THROWING';
+    else if (G.phase === 'result') phaseLabel = 'RESULT';
+    else if (G.phase === 'turnEnd') phaseLabel = 'INNINGS DONE';
+    else if (G.phase === 'waitingOpp') phaseLabel = 'WAITING';
+    NET.roomRef.child('live/' + NET.role).update({
+      phase: phaseLabel,
+      score: G.score,
+      gulliX: Math.round(gulli.x),
+      gulliY: Math.round(gulli.y),
+      ballDist: Math.round(G.hitDistance || 0),
+      ts: Date.now()
+    }).catch(()=>{});
+  }
+
   if (G.bannerTimer>0) G.bannerTimer -= dt;
   if (G.swingTimer>0)  G.swingTimer  -= dt;
   if (shake > 0) shake = Math.max(0, shake - dt * 3.0);
@@ -1229,7 +1281,50 @@ window.addEventListener('keydown', e=>{
     e.preventDefault(); onInput(null);
   }
 });
-canvas.addEventListener('pointerdown', e=>{ e.preventDefault(); onInput(e); });
+
+/* ========== MOBILE KEYBOARD SUPPORT ========== */
+const mobileInput = document.getElementById('mobileNameInput');
+
+function isTypingPhase(){
+  return G.phase === 'onlineName' || G.phase === 'nameEntry';
+}
+
+canvas.addEventListener('pointerdown', e=>{
+  e.preventDefault();
+  if (isTypingPhase()){
+    // Canvas pe tap karte hi mobile keyboard kholo
+    mobileInput.style.pointerEvents = 'auto';
+    mobileInput.style.zIndex = '999';
+    mobileInput.value = G.nameEntry.currentText || '';
+    try { mobileInput.focus({ preventScroll: true }); } catch(err){ mobileInput.focus(); }
+    // iOS ke liye thoda hack — click event trigger
+    setTimeout(()=>{ try{ mobileInput.focus(); }catch(e){} }, 50);
+  }
+  onInput(e);
+});
+
+mobileInput.addEventListener('input', ()=>{
+  G.nameEntry.currentText = (mobileInput.value || '').toUpperCase().slice(0,10);
+});
+
+mobileInput.addEventListener('keydown', e=>{
+  if (e.key === 'Enter'){
+    mobileInput.blur();
+    mobileInput.style.pointerEvents = 'none';
+    mobileInput.style.zIndex = '-1';
+    if (G.phase === 'onlineName'){
+      startOnlineMatchmaking(G.nameEntry.currentText || 'PLAYER');
+    } else if (G.phase === 'nameEntry'){
+      commitName();
+    }
+    e.preventDefault();
+  }
+});
+
+// Agar user input ke bahar tap kare toh keyboard band
+canvas.addEventListener('pointerup', ()=>{
+  // Don't blur immediately — wait a moment
+});
 
 /* ==================== DRAW ==================== */
 const clouds = [
@@ -1971,6 +2066,7 @@ function drawNameEntry(){
   ctx.globalAlpha = 0.18; ctx.fillRect(0, 0, W, 90); ctx.globalAlpha = 1;
   centerText('ENTER PLAYER NAME', 60, 24, 'rgba(255,255,255,0.75)');
   centerText(`PLAYER ${idx+1} of ${G.players.length}`, 92, 18, 'rgba(255,255,255,0.6)');
+  centerText('Tap anywhere to open keyboard', 116, 13, 'rgba(255,209,102,0.7)');
   ctx.save();
   const glow = ctx.createRadialGradient(W/2, 200, 5, W/2, 200, 110);
   glow.addColorStop(0, p.color); glow.addColorStop(1, 'rgba(0,0,0,0)');
@@ -2007,7 +2103,7 @@ function drawNameEntry(){
   ctx.font = '600 15px system-ui,sans-serif';
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(255,255,255,0.65)';
-  ctx.fillText('Type a name (max 10 chars)  •  Backspace to erase  •  Enter to continue', W/2, 385);
+  ctx.fillText('Max 10 chars  •  Enter to continue', W/2, 385);
   const isLast = (idx === G.players.length - 1);
   const btnLabel = isLast ? '⚔  START MATCH' : 'NEXT PLAYER  ▶';
   const btnW = 300, btnH = 56;
@@ -2272,6 +2368,7 @@ function drawOnlineNameEntry(){
   ctx.fillRect(0,0,W,H);
   centerText('🌐  PLAY ONLINE', 80, 42, '#ffd166');
   centerText('Enter your name to find an opponent', 128, 17, 'rgba(255,255,255,0.7)');
+  centerText('Tap the box below to open keyboard', 152, 13, 'rgba(255,209,102,0.7)');
   const boxW = 440, boxH = 68;
   const boxX = W/2 - boxW/2, boxY = 180;
   ctx.fillStyle = 'rgba(20,25,40,0.9)';
@@ -2317,41 +2414,110 @@ function drawSearching(){
   centerText(NET.statusMsg || 'Searching...', 460, 13, 'rgba(255,255,255,0.55)');
   for (const b of menuButtons) drawMenuButton(b);
 }
+
 function drawWaitingOpp(){
-  ctx.fillStyle = 'rgba(12,16,28,0.85)';
+  ctx.fillStyle = 'rgba(12,16,28,0.88)';
   ctx.fillRect(0,0,W,H);
+
   if (!NET.myDone){
-    centerText('OPPONENT FOUND!', 150, 40, '#8affa0');
-    centerText('Opponent: ' + (NET.oppName || '...'), 210, 22, 'rgba(255,255,255,0.85)');
+    // Main pehle se nahi khela — jab tak mera turn na aaye
+    centerText('OPPONENT FOUND!', 130, 38, '#8affa0');
+    centerText('Opponent: ' + (NET.oppName || '...'), 185, 22, 'rgba(255,255,255,0.85)');
     const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
-    centerText('Starting match' + dots, 262, 20, 'rgba(255,209,102,0.9)');
+    centerText('Match starting' + dots, 240, 20, 'rgba(255,209,102,0.9)');
     const t = performance.now()/1000;
     ctx.save();
     ctx.fillStyle = 'rgba(255,209,102,' + (0.4 + 0.6*Math.abs(Math.sin(t*2))) + ')';
-    ctx.beginPath(); ctx.arc(W/2, 340, 14, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(W/2, 320, 14, 0, Math.PI*2); ctx.fill();
     ctx.restore();
   } else {
-    centerText('🏏  YOUR INNINGS DONE', 140, 36, '#ffd166');
-    centerText('Your Score: ' + G.score + ' m', 200, 26, '#8affa0');
-    centerText('Opponent: ' + (NET.oppName || '...'), 250, 20, 'rgba(255,255,255,0.85)');
-    const oppStatus = NET.oppDone ? ('Final: ' + (NET.oppScore || 0) + ' m') : 'Still batting…';
-    centerText(oppStatus, 290, 18, NET.oppDone ? '#ffffff' : 'rgba(255,209,102,0.9)');
-    if (NET.oppDone){
-      const myScore = G.score;
-      const oppScore = NET.oppScore || 0;
-      const result = myScore > oppScore ? 'YOU WIN! 🏆' : (myScore < oppScore ? 'YOU LOSE' : 'DRAW');
-      centerText(result, 360, 34, myScore >= oppScore ? '#8affa0' : '#ff8a8a');
-    } else {
-      const t = performance.now()/1000;
-      const r = 30; const cx = W/2, cy = 390;
+    // Main innings done — opponent ko live dekho
+    centerText('🏏  YOU ARE DONE', 55, 24, '#ffd166');
+    centerText('Your Score: ' + G.score + ' m', 90, 22, '#8affa0');
+
+    const opp = NET.oppLive;
+    const px = 100, py = 125, pw = W - 200, ph = 340;
+    ctx.save();
+    rr(ctx, px, py, pw, ph, 16);
+    ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
+    ctx.strokeStyle = PLAYER_COLORS[1]; ctx.lineWidth = 3; ctx.stroke();
+
+    ctx.font = '900 18px system-ui,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillStyle = PLAYER_COLORS[1];
+    ctx.fillText('OPPONENT: ' + (NET.oppName || 'PLAYER'), px + pw/2, py + 12);
+
+    if (opp){
+      const oppScore = opp.score || 0;
+      const phaseLabel = opp.phase || 'BATTING';
+
+      ctx.font = '900 38px system-ui,sans-serif';
+      ctx.fillStyle = '#ffd166';
+      ctx.fillText(oppScore + ' m', px + pw/2, py + 40);
+
+      ctx.font = '700 15px system-ui,sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillText('Status: ' + phaseLabel, px + pw/2, py + 88);
+
+      // Mini pitch
+      const miniX = px + 40, miniY = py + 125;
+      const miniW = pw - 80, miniH = 130;
+
+      ctx.fillStyle = 'rgba(90,140,70,0.35)';
+      rr(ctx, miniX, miniY, miniW, miniH, 8); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+      // Ground line
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(miniX, miniY + miniH - 20);
+      ctx.lineTo(miniX + miniW, miniY + miniH - 20);
+      ctx.stroke();
+
+      // Danda marker
+      ctx.fillStyle = '#b07c42';
+      ctx.fillRect(miniX + 18, miniY + miniH - 30, 8, 12);
+
+      // Scale from game coords 0..1600 => mini 0..miniW
+      const scaleX = (miniW - 40) / 1600;
+      const scaleY = (miniH - 40) / 500;
+      const gx = Math.max(0, Math.min(1600, opp.gulliX || 0));
+      const gy = Math.max(0, Math.min(500, opp.gulliY || 400));
+      const dotX = miniX + 20 + gx * scaleX;
+      const dotY = miniY + miniH - 30 - (500 - gy) * scaleY;
+
+      // Trail
+      ctx.strokeStyle = 'rgba(255,209,102,0.35)'; ctx.lineWidth = 1.5;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath();
+      ctx.moveTo(miniX + 22, miniY + miniH - 24);
+      ctx.lineTo(dotX, dotY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Live dot
       ctx.save();
-      ctx.strokeStyle = 'rgba(255,209,102,0.35)'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
-      ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 4; ctx.lineCap='round';
-      ctx.beginPath(); ctx.arc(cx, cy, r, t*4, t*4 + Math.PI*1.2); ctx.stroke();
+      ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 12;
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath(); ctx.arc(dotX, dotY, 6, 0, Math.PI*2); ctx.fill();
       ctx.restore();
+
+      ctx.font = '600 10px system-ui,sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillText('LIVE VIEW', miniX + miniW/2, miniY + 4);
+
+      if (NET.oppDone){
+        centerText('OPPONENT DONE!', py + ph + 20, 22, '#8affa0');
+      } else {
+        const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
+        centerText('Waiting for opponent to finish' + dots, py + ph + 20, 15, 'rgba(255,255,255,0.7)');
+      }
+    } else {
+      centerText('Connecting to opponent stream...', py + ph/2, 20, 'rgba(255,255,255,0.7)');
     }
+    ctx.restore();
   }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
 
 /* ==================== MAIN RENDER ==================== */
