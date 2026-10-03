@@ -31,7 +31,7 @@
     padding:7px 14px;margin-right:10px;}
   .stat span{color:#ffd166;}
   .stat.out span{color:#ff8a8a;}
-  .stat.coin span{color:#ffd166;}
+  .stat.life span{color:#ff6b8a;}
   .right{display:flex;}
   #mobileNameInput{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);
     width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;
@@ -48,10 +48,11 @@
   <div id="hud">
     <div class="right">
       <div class="stat">SCORE <span id="uiScore">0</span></div>
-      <div class="stat coin">🪙 <span id="uiCoins">0</span></div>
+      <div class="stat">🪙 <span id="uiCoins">0</span></div>
       <div class="stat">BEST <span id="uiBest">0</span></div>
     </div>
     <div class="right">
+      <div class="stat life">❤️ <span id="uiLives">0</span></div>
       <div class="stat">TURN <span id="uiTurn">1</span></div>
       <div class="stat out">OUTS <span id="uiOuts">0</span></div>
     </div>
@@ -83,10 +84,31 @@ const SWEET_LO = 62, SWEET_HI = 88;
 const SKY_BOTTOM = 148, STADIUM_TOP = 140, STADIUM_BOTTOM = 300, HORIZON = 300;
 const SPLASH_DURATION = 2.6, TOSS_DURATION = 2500, TOSS_RESULT_DURATION = 2400;
 
-/* ==================== COIN SYSTEM ==================== */
-// Base coins = floor(score / 10)
-// Bonus: if score >= 2 * target → 2x coins
 const COIN_DIVISOR = 10;
+
+/* ==================== SHOP CATALOG ==================== */
+const SHOP_SKINS = [
+  { id:'red',    name:'Classic Red',   color:'#e63946', price:0   },
+  { id:'blue',   name:'Ocean Blue',    color:'#3a86ff', price:50  },
+  { id:'green',  name:'Forest Green',  color:'#06d6a0', price:100 },
+  { id:'gold',   name:'Golden Player', color:'#ffbe0b', price:250 },
+  { id:'purple', name:'Royal Purple',  color:'#a06bff', price:500 }
+];
+const SHOP_DANDAS = [
+  { id:'brown',   name:'Classic Wood',   color:'#b07c42', accent:'#8a5a2b', price:0   },
+  { id:'gold',    name:'Golden Danda',   color:'#ffd166', accent:'#c99a2e', price:150 },
+  { id:'diamond', name:'Diamond Danda',  color:'#a8d8ff', accent:'#5c9ee0', price:400 }
+];
+const SHOP_BOOSTS = [
+  { id:'normal', name:'Normal',       bonus:0,    price:0   },
+  { id:'turbo',  name:'Turbo Boost',  bonus:0.15, price:200, desc:'+15% speed' },
+  { id:'rocket', name:'Rocket Boost', bonus:0.30, price:600, desc:'+30% speed' }
+];
+const LIFE_PRICE = 300;
+
+function getActiveSkin(){ return SHOP_SKINS.find(s => s.id === ACCOUNT.activeSkin) || SHOP_SKINS[0]; }
+function getActiveDanda(){ return SHOP_DANDAS.find(d => d.id === ACCOUNT.activeDanda) || SHOP_DANDAS[0]; }
+function getActiveBoost(){ return SHOP_BOOSTS.find(b => b.id === ACCOUNT.activeBoost) || SHOP_BOOSTS[0]; }
 
 const LEVEL_NAMES = [
   'ROOKIE','AMATEUR','PRO','EXPERT','LEGEND',
@@ -110,7 +132,6 @@ function getLevel(n){
   else name = 'LEGEND ' + n;
   return { level: n, target, speed:[speed1, speed2], error, name };
 }
-
 function calcCoins(score, target){
   const base = Math.floor(score / COIN_DIVISOR);
   const isBonus = score >= 2 * target;
@@ -126,23 +147,26 @@ const PLAYER_COLORS = ['#e63946', '#3a86ff', '#06d6a0', '#ffbe0b', '#a06bff'];
 const PLAYER_NAMES  = ['RED',     'BLUE',    'GREEN',   'YELLOW',  'PURPLE'];
 const CONFETTI_COLORS = ['#ffd166','#ff8a8a','#8affa0','#5c9ee0','#e0a95c','#ff6bcb','#ffffff','#a06bff'];
 
-const SESSION_KEY = 'gulli_danda_session_v2';
+const SESSION_KEY = 'gulli_danda_session_v3';
 
 const ACCOUNT = {
   loggedIn: false,
   isGuest: false,
-  name: '',
-  username: '',
-  passwordHash: '',
+  name: '', username: '', passwordHash: '',
   bestSingle: 0, bestOnline: 0,
   matchesPlayed: 0, onlineMatches: 0,
   wins: 0, losses: 0, totalRuns: 0,
   highestUnlockedLevel: 1,
   coins: 0,
+  lives: 0,
+  ownedSkins: ['red'],
+  ownedDandas: ['brown'],
+  ownedBoosts: ['normal'],
+  activeSkin: 'red',
+  activeDanda: 'brown',
+  activeBoost: 'normal',
   loading: false, error: '',
-  formUsername: '',
-  formPassword: '',
-  formName: '',
+  formUsername: '', formPassword: '', formName: '',
   formFocus: 'username',
   mode: 'login'
 };
@@ -153,47 +177,40 @@ let suggestionsOpen = false;
 
 function saveSession(){
   try {
+    const base = {
+      coins: ACCOUNT.coins,
+      lives: ACCOUNT.lives,
+      highestUnlockedLevel: ACCOUNT.highestUnlockedLevel,
+      ownedSkins: ACCOUNT.ownedSkins,
+      ownedDandas: ACCOUNT.ownedDandas,
+      ownedBoosts: ACCOUNT.ownedBoosts,
+      activeSkin: ACCOUNT.activeSkin,
+      activeDanda: ACCOUNT.activeDanda,
+      activeBoost: ACCOUNT.activeBoost
+    };
     if (ACCOUNT.isGuest){
-      localStorage.setItem(SESSION_KEY, JSON.stringify({
-        isGuest: true, name: ACCOUNT.name,
-        highestUnlockedLevel: ACCOUNT.highestUnlockedLevel,
-        coins: ACCOUNT.coins
-      }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify(Object.assign({ isGuest: true, name: ACCOUNT.name }, base)));
     } else {
       localStorage.setItem(SESSION_KEY, JSON.stringify({ username: ACCOUNT.username, isGuest: false }));
     }
   } catch(e){}
 }
-function clearSession(){
-  try { localStorage.removeItem(SESSION_KEY); } catch(e){}
-}
+function clearSession(){ try { localStorage.removeItem(SESSION_KEY); } catch(e){} }
 function loadSession(){
   try { const raw = localStorage.getItem(SESSION_KEY); if (raw) return JSON.parse(raw); } catch(e){}
   return null;
 }
-function normalizeUsername(u){
-  return String(u || '').toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 15);
-}
+function normalizeUsername(u){ return String(u || '').toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 15); }
 function usernameKey(u){ return 'u_' + String(u || '').toLowerCase(); }
 function isValidUsername(u){ return u && u.length >= 3 && u.length <= 15; }
 function isValidPassword(p){ return p && p.length >= 4 && p.length <= 20; }
-
 function hashPassword(pw){
-  let h = 5381;
-  const str = 'gd:' + pw;
-  for (let i = 0; i < str.length; i++){
-    h = ((h << 5) + h) + str.charCodeAt(i);
-    h = h & 0xffffffff;
-  }
+  let h = 5381; const str = 'gd:' + pw;
+  for (let i = 0; i < str.length; i++){ h = ((h << 5) + h) + str.charCodeAt(i); h = h & 0xffffffff; }
   return 'h' + (h >>> 0).toString(36);
 }
-
 function trackEvent(name, params){
-  try {
-    if (window.firebaseAnalytics){
-      window.firebaseAnalytics.logEvent(name, params || {});
-    }
-  } catch(e){}
+  try { if (window.firebaseAnalytics){ window.firebaseAnalytics.logEvent(name, params || {}); } } catch(e){}
 }
 
 function onUsernameChange(){
@@ -201,11 +218,8 @@ function onUsernameChange(){
   suggestionsOpen = true;
   const typed = ACCOUNT.formUsername;
   if (!typed || typed.length < 2){ usernameSuggestions = []; return; }
-  suggestionTimer = setTimeout(() => {
-    fetchUsernameSuggestions(typed);
-  }, 250);
+  suggestionTimer = setTimeout(() => { fetchUsernameSuggestions(typed); }, 250);
 }
-
 function fetchUsernameSuggestions(prefix){
   if (!NET.ready){ usernameSuggestions = []; return; }
   const keyLow = 'u_' + prefix.toLowerCase();
@@ -213,10 +227,7 @@ function fetchUsernameSuggestions(prefix){
     .startAt(keyLow).endAt(keyLow + '\uf8ff').limitToFirst(5)
     .once('value').then(snap => {
       const out = [];
-      snap.forEach(ch => {
-        const v = ch.val();
-        if (v && v.username){ out.push(v.username); }
-      });
+      snap.forEach(ch => { const v = ch.val(); if (v && v.username){ out.push(v.username); } });
       usernameSuggestions = out;
     }).catch(() => { usernameSuggestions = []; });
 }
@@ -230,28 +241,17 @@ function registerUserAccount(username, password){
   NET.db.ref('accounts/' + key).once('value').then(snap => {
     if (snap.exists()){ ACCOUNT.error = 'Username already taken. Try another.'; ACCOUNT.loading = false; return; }
     const data = {
-      username: username,
-      passwordHash: hashPassword(password),
-      name: username,
-      bestSingle: 0, bestOnline: 0,
-      matchesPlayed: 0, onlineMatches: 0,
+      username, passwordHash: hashPassword(password), name: username,
+      bestSingle: 0, bestOnline: 0, matchesPlayed: 0, onlineMatches: 0,
       wins: 0, losses: 0, totalRuns: 0,
-      highestUnlockedLevel: 1,
-      coins: 0,
+      highestUnlockedLevel: 1, coins: 0, lives: 0,
+      ownedSkins: ['red'], ownedDandas: ['brown'], ownedBoosts: ['normal'],
+      activeSkin: 'red', activeDanda: 'brown', activeBoost: 'normal',
       createdAt: Date.now(), updatedAt: Date.now()
     };
     return NET.db.ref('accounts/' + key).set(data).then(() => {
-      ACCOUNT.username = username;
-      ACCOUNT.name = username;
-      ACCOUNT.passwordHash = data.passwordHash;
-      ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
-      ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
-      ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
-      ACCOUNT.highestUnlockedLevel = 1;
-      ACCOUNT.coins = 0;
-      ACCOUNT.loggedIn = true;
-      ACCOUNT.isGuest = false;
-      ACCOUNT.loading = false;
+      Object.assign(ACCOUNT, data);
+      ACCOUNT.loggedIn = true; ACCOUNT.isGuest = false; ACCOUNT.loading = false;
       saveSession(); setPhase('menu');
       beep(880, 0.1, 'triangle', 0.11);
       setTimeout(()=>beep(1200, 0.15, 'triangle', 0.11), 120);
@@ -269,11 +269,7 @@ function loginUserAccount(username, password){
   NET.db.ref('accounts/' + key).once('value').then(snap => {
     if (!snap.exists()){ ACCOUNT.error = 'Username not found. Register first.'; ACCOUNT.loading = false; return; }
     const data = snap.val();
-    if (data.passwordHash !== hashPassword(password)){
-      ACCOUNT.error = 'Wrong password. Try again.';
-      ACCOUNT.loading = false;
-      return;
-    }
+    if (data.passwordHash !== hashPassword(password)){ ACCOUNT.error = 'Wrong password. Try again.'; ACCOUNT.loading = false; return; }
     ACCOUNT.username = data.username || username;
     ACCOUNT.name = data.name || ACCOUNT.username;
     ACCOUNT.passwordHash = data.passwordHash;
@@ -286,9 +282,14 @@ function loginUserAccount(username, password){
     ACCOUNT.totalRuns = data.totalRuns || 0;
     ACCOUNT.highestUnlockedLevel = Math.max(1, data.highestUnlockedLevel || 1);
     ACCOUNT.coins = Math.max(0, data.coins || 0);
-    ACCOUNT.loggedIn = true;
-    ACCOUNT.isGuest = false;
-    ACCOUNT.loading = false;
+    ACCOUNT.lives = Math.max(0, data.lives || 0);
+    ACCOUNT.ownedSkins = data.ownedSkins || ['red'];
+    ACCOUNT.ownedDandas = data.ownedDandas || ['brown'];
+    ACCOUNT.ownedBoosts = data.ownedBoosts || ['normal'];
+    ACCOUNT.activeSkin = data.activeSkin || 'red';
+    ACCOUNT.activeDanda = data.activeDanda || 'brown';
+    ACCOUNT.activeBoost = data.activeBoost || 'normal';
+    ACCOUNT.loggedIn = true; ACCOUNT.isGuest = false; ACCOUNT.loading = false;
     saveSession(); setPhase('menu');
     beep(880, 0.1, 'triangle', 0.11);
     trackEvent('login', { method: 'username' });
@@ -297,39 +298,34 @@ function loginUserAccount(username, password){
 
 function guestLogin(name){
   const nm = normalizeUsername(name) || ('GUEST' + Math.floor(1000 + Math.random()*9000));
-  ACCOUNT.loggedIn = true;
-  ACCOUNT.isGuest = true;
-  ACCOUNT.username = '';
-  ACCOUNT.name = nm;
-  ACCOUNT.passwordHash = '';
+  ACCOUNT.loggedIn = true; ACCOUNT.isGuest = true;
+  ACCOUNT.username = ''; ACCOUNT.name = nm; ACCOUNT.passwordHash = '';
   ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
   ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
   ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
-  ACCOUNT.highestUnlockedLevel = 1;
-  ACCOUNT.coins = 0;
+  ACCOUNT.highestUnlockedLevel = 1; ACCOUNT.coins = 0; ACCOUNT.lives = 0;
+  ACCOUNT.ownedSkins = ['red']; ACCOUNT.ownedDandas = ['brown']; ACCOUNT.ownedBoosts = ['normal'];
+  ACCOUNT.activeSkin = 'red'; ACCOUNT.activeDanda = 'brown'; ACCOUNT.activeBoost = 'normal';
   ACCOUNT.error = '';
-  saveSession();
-  setPhase('menu');
+  saveSession(); setPhase('menu');
   beep(880, 0.1, 'triangle', 0.11);
   trackEvent('guest_login', {});
 }
 
 function logoutUser(){
   trackEvent('logout', {});
-  ACCOUNT.loggedIn = false;
-  ACCOUNT.isGuest = false;
+  ACCOUNT.loggedIn = false; ACCOUNT.isGuest = false;
   ACCOUNT.name = ''; ACCOUNT.username = ''; ACCOUNT.passwordHash = '';
   ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
   ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
   ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
-  ACCOUNT.highestUnlockedLevel = 1;
-  ACCOUNT.coins = 0;
+  ACCOUNT.highestUnlockedLevel = 1; ACCOUNT.coins = 0; ACCOUNT.lives = 0;
+  ACCOUNT.ownedSkins = ['red']; ACCOUNT.ownedDandas = ['brown']; ACCOUNT.ownedBoosts = ['normal'];
+  ACCOUNT.activeSkin = 'red'; ACCOUNT.activeDanda = 'brown'; ACCOUNT.activeBoost = 'normal';
   ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.formName = '';
-  ACCOUNT.formFocus = 'username';
-  ACCOUNT.mode = 'login'; ACCOUNT.error = '';
+  ACCOUNT.formFocus = 'username'; ACCOUNT.mode = 'login'; ACCOUNT.error = '';
   usernameSuggestions = []; suggestionsOpen = false;
-  clearSession();
-  setPhase('login');
+  clearSession(); setPhase('login');
 }
 
 function syncAccountStats(){
@@ -342,6 +338,13 @@ function syncAccountStats(){
     wins: ACCOUNT.wins, losses: ACCOUNT.losses, totalRuns: ACCOUNT.totalRuns,
     highestUnlockedLevel: ACCOUNT.highestUnlockedLevel,
     coins: ACCOUNT.coins,
+    lives: ACCOUNT.lives,
+    ownedSkins: ACCOUNT.ownedSkins,
+    ownedDandas: ACCOUNT.ownedDandas,
+    ownedBoosts: ACCOUNT.ownedBoosts,
+    activeSkin: ACCOUNT.activeSkin,
+    activeDanda: ACCOUNT.activeDanda,
+    activeBoost: ACCOUNT.activeBoost,
     updatedAt: Date.now()
   }).catch(()=>{});
 }
@@ -366,10 +369,7 @@ function fetchLeaderboard(cb){
   LEADERBOARD.loading = true;
   NET.db.ref('accounts').orderByChild('bestOnline').limitToLast(10).once('value').then(snap => {
     const arr = [];
-    snap.forEach(child => {
-      const v = child.val();
-      if (v && v.username && !v.isGuest) arr.push(v);
-    });
+    snap.forEach(child => { const v = child.val(); if (v && v.username && !v.isGuest) arr.push(v); });
     arr.sort((a,b) => (b.bestOnline||0) - (a.bestOnline||0));
     LEADERBOARD.data = arr; LEADERBOARD.loading = false;
     if (cb) cb(arr);
@@ -378,12 +378,10 @@ function fetchLeaderboard(cb){
 
 const G = {
   phase: 'splash',
-  mode: 'single', level: 1,
-  levelPage: 0,
+  mode: 'single', level: 1, levelPage: 0,
   score: 0, best: 0, outs: 0,
   power: 0, powerDir: 1,
-  quality: 0, accuracy: 0,
-  hitDistance: 0,
+  quality: 0, accuracy: 0, hitDistance: 0,
   swingTimer: 0, swingDur: 0.28,
   resultTimer: 0,
   banner: '', bannerTimer: 0,
@@ -397,8 +395,9 @@ const G = {
   celebrationTimer: 0, confettiTimer: 0,
   nameEntry: { playerIndex: 0, currentText: '', online: false },
   splashTimer: 0,
-  coinsEarned: 0,
-  coinsBonus: false
+  coinsEarned: 0, coinsBonus: false,
+  marketTab: 'skins',
+  marketMsg: '', marketMsgTimer: 0
 };
 
 const gulli = { x:0, y:0, vx:0, vy:0, rot:0, rotV:0, grounded:true };
@@ -439,38 +438,28 @@ function initFirebase(){
       if (firebase.analytics){
         window.firebaseAnalytics = firebase.analytics();
         window.firebaseAnalytics.logEvent('page_view', {
-          page_title: 'Gulli Danda Game',
-          page_location: window.location.href,
-          timestamp: Date.now()
+          page_title: 'Gulli Danda Game', page_location: window.location.href, timestamp: Date.now()
         });
       }
-    } catch(e){ console.warn('Analytics init failed', e); }
+    } catch(e){}
     return true;
-  } catch(e){ console.error(e); return false; }
+  } catch(e){ return false; }
 }
 function genRoomId(){ return 'GD-' + Math.random().toString(36).slice(2,7).toUpperCase(); }
 
 function startOnlineMatchmaking(){
   if (!ACCOUNT.loggedIn){ setPhase('login'); return; }
-  if (ACCOUNT.isGuest){
-    G.banner = 'REGISTER TO PLAY ONLINE';
-    G.bannerTimer = 2.5;
-    return;
-  }
+  if (ACCOUNT.isGuest){ G.banner = 'REGISTER TO PLAY ONLINE'; G.bannerTimer = 2.5; return; }
   NET.myName = ACCOUNT.name;
   NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppName = '';
-  NET.oppLive = null;
-  NET.tossWinner = null; NET.currentBatsman = null;
+  NET.oppLive = null; NET.tossWinner = null; NET.currentBatsman = null;
   NET.tossDecided = false; NET.turnHandedOver = false;
   if (!NET.ready && !initFirebase()){ G.banner = 'NETWORK ERROR'; G.bannerTimer = 2.5; setPhase('menu'); return; }
-  setPhase('searching');
-  NET.searching = true;
-  NET.searchStart = performance.now();
-  NET.statusMsg = 'Searching for players...';
+  setPhase('searching'); NET.searching = true;
+  NET.searchStart = performance.now(); NET.statusMsg = 'Searching for players...';
   trackEvent('matchmaking_start', {});
   tryFindRoom();
 }
-
 function tryFindRoom(){
   if (!NET.searching) return;
   NET.db.ref('rooms').orderByChild('status').equalTo('waiting').limitToFirst(5).once('value').then(snap => {
@@ -479,9 +468,7 @@ function tryFindRoom(){
     snap.forEach(child => {
       if (joined) return;
       const room = child.val();
-      if (room && room.p1 && room.p1.name !== NET.myName && !room.p2){
-        joined = true; joinRoom(child.key, room);
-      }
+      if (room && room.p1 && room.p1.name !== NET.myName && !room.p2){ joined = true; joinRoom(child.key, room); }
     });
     if (!joined){
       if (performance.now() - NET.searchStart > 4000){ createRoom(); }
@@ -489,20 +476,15 @@ function tryFindRoom(){
     }
   }).catch(()=>{ createRoom(); });
 }
-
 function createRoom(){
   if (!NET.searching) return;
-  const id = genRoomId();
-  NET.roomId = id; NET.role = 'p1';
+  const id = genRoomId(); NET.roomId = id; NET.role = 'p1';
   NET.roomRef = NET.db.ref('rooms/' + id);
   NET.roomRef.set({
     status: 'waiting', createdAt: Date.now(),
-    p1: { name: NET.myName, score: 0, done: false },
-    p2: null
-  }).then(()=>{ NET.statusMsg = 'Room created. Waiting for opponent...'; watchRoom(); })
-    .catch(err => console.error(err));
+    p1: { name: NET.myName, score: 0, done: false }, p2: null
+  }).then(()=>{ NET.statusMsg = 'Room created. Waiting for opponent...'; watchRoom(); }).catch(()=>{});
 }
-
 function joinRoom(id, room){
   NET.roomId = id; NET.role = 'p2';
   NET.oppName = room.p1 ? room.p1.name : '';
@@ -512,18 +494,12 @@ function joinRoom(id, room){
     p2: { name: NET.myName, score: 0, done: false }
   }).then(()=>{ watchRoom(); trackEvent('matchmaking_success', {}); });
 }
-
 function watchRoom(){
   if (NET.listener && NET.roomRef) NET.roomRef.off('value', NET.listener);
   NET.listener = NET.roomRef.on('value', snap => {
-    const data = snap.val();
-    if (!data) return;
+    const data = snap.val(); if (!data) return;
     const opp = NET.role === 'p1' ? data.p2 : data.p1;
-    if (opp){
-      NET.oppName = opp.name || NET.oppName;
-      NET.oppScore = typeof opp.score === 'number' ? opp.score : null;
-      NET.oppDone = !!opp.done;
-    }
+    if (opp){ NET.oppName = opp.name || NET.oppName; NET.oppScore = typeof opp.score === 'number' ? opp.score : null; NET.oppDone = !!opp.done; }
     if (NET.role === 'p1' && data.p2 && !data.tossWinner && !NET.tossDecided){
       NET.tossDecided = true; NET.searching = false;
       const winner = Math.random() < 0.5 ? 'p1' : 'p2';
@@ -533,36 +509,27 @@ function watchRoom(){
       NET.tossWinner = data.tossWinner;
       NET.currentBatsman = data.currentBatsman || data.tossWinner;
       NET.searching = false;
-      if (G.phase !== 'toss' && G.phase !== 'tossResult'){
-        NET.tossStartTime = performance.now();
-        setPhase('toss');
-      }
+      if (G.phase !== 'toss' && G.phase !== 'tossResult'){ NET.tossStartTime = performance.now(); setPhase('toss'); }
     }
     if (data.currentBatsman && data.currentBatsman !== NET.currentBatsman){
       NET.currentBatsman = data.currentBatsman;
-      if (NET.currentBatsman === NET.role && !NET.myDone && G.phase === 'waitingOpp'){
-        beginOnlineTurn();
-      }
+      if (NET.currentBatsman === NET.role && !NET.myDone && G.phase === 'waitingOpp'){ beginOnlineTurn(); }
     }
-    if (data.p1 && data.p2 && data.p1.done && data.p2.done){
-      showOnlineResults(data);
-    }
+    if (data.p1 && data.p2 && data.p1.done && data.p2.done){ showOnlineResults(data); }
   });
   const oppRole = NET.role === 'p1' ? 'p2' : 'p1';
   if (NET.liveRef) NET.liveRef.off();
   NET.liveRef = NET.roomRef.child('live/' + oppRole);
   NET.liveRef.on('value', snap => { NET.oppLive = snap.val(); });
 }
-
 function beginOnlineTurn(){
   G.mode = 'online';
-  G.players = [{ name: NET.myName, color: PLAYER_COLORS[0], score:0, outs:0 }];
+  G.players = [{ name: NET.myName, color: getActiveSkin().color, score:0, outs:0 }];
   G.currentPlayer = 0;
   G.gameOverWinner = null; G.gameOverMsg = ''; G.levelCleared = false;
   G.celebrationTimer = 0; G.confettiTimer = 0;
   initCrowd(); prepareTurn();
 }
-
 function reportOnlineScore(score){
   if (!NET.roomRef) return;
   NET.myDone = true;
@@ -578,7 +545,6 @@ function reportOnlineScore(score){
     setPhase('waitingOpp'); checkFinish();
   }).catch(()=>{ setPhase('waitingOpp'); });
 }
-
 function checkFinish(){
   if (!NET.roomRef) return;
   NET.roomRef.once('value').then(snap => {
@@ -586,7 +552,6 @@ function checkFinish(){
     if (d && d.p1 && d.p2 && d.p1.done && d.p2.done) showOnlineResults(d);
   });
 }
-
 function showOnlineResults(data){
   if (G.phase === 'gameOver' && G.mode === 'onlineResults') return;
   G.mode = 'onlineResults';
@@ -595,7 +560,7 @@ function showOnlineResults(data){
   const myName   = (data[NET.role] && data[NET.role].name) || NET.myName || 'YOU';
   const oppName  = ((NET.role === 'p1' ? data.p2 : data.p1)?.name) || NET.oppName || 'OPPONENT';
   G.players = [
-    { name: myName,  color: PLAYER_COLORS[0], score: myScore },
+    { name: myName,  color: getActiveSkin().color, score: myScore },
     { name: oppName, color: PLAYER_COLORS[1], score: oppScore }
   ];
   G.gameOverWinner = myScore > oppScore ? 0 : (myScore < oppScore ? 1 : -1);
@@ -606,15 +571,12 @@ function showOnlineResults(data){
   if (myScore >= oppScore){ crowdExcitement = 2; playCheer(1.4); }
   else { beep(240,0.3,'sawtooth',0.10); }
 }
-
 function cleanupOnline(){
   NET.searching = false;
   if (NET.listener && NET.roomRef){ try{ NET.roomRef.off('value', NET.listener); }catch(e){} NET.listener = null; }
   if (NET.liveRef){ try{ NET.liveRef.off(); }catch(e){} NET.liveRef = null; }
-  NET.oppLive = null;
-  NET.roomId = null; NET.role = null; NET.oppName = '';
-  NET.oppScore = null; NET.oppDone = false; NET.myDone = false;
-  NET.roomRef = null;
+  NET.oppLive = null; NET.roomId = null; NET.role = null; NET.oppName = '';
+  NET.oppScore = null; NET.oppDone = false; NET.myDone = false; NET.roomRef = null;
   NET.tossWinner = null; NET.currentBatsman = null;
   NET.tossDecided = false; NET.turnHandedOver = false;
 }
@@ -625,9 +587,7 @@ function layoutShotButtons(){
   const total = bw*3 + gap*2;
   const startX = W/2 - total/2, y = H - 74;
   shotButtons.length = 0;
-  ['PUSH','DRIVE','LOFT'].forEach((id, i) => {
-    shotButtons.push({ id, x: startX + i*(bw+gap), y, w: bw, h: bh });
-  });
+  ['PUSH','DRIVE','LOFT'].forEach((id, i) => { shotButtons.push({ id, x: startX + i*(bw+gap), y, w: bw, h: bh }); });
 }
 layoutShotButtons();
 let menuButtons = [];
@@ -684,6 +644,11 @@ function playCoinSound(){
   setTimeout(()=>beep(1600, 0.10, 'sine', 0.10), 70);
   setTimeout(()=>beep(2000, 0.14, 'sine', 0.10), 150);
 }
+function playPurchaseSound(){
+  beep(880, 0.08, 'triangle', 0.11);
+  setTimeout(()=>beep(1100, 0.08, 'triangle', 0.11), 60);
+  setTimeout(()=>beep(1320, 0.14, 'triangle', 0.12), 130);
+}
 
 function rr(c,x,y,w,h,r){
   r=Math.min(r,w/2,h/2); c.beginPath();
@@ -706,29 +671,27 @@ function setPhase(p){
   if (p === 'login'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = false; usernameSuggestions = []; }
   if (p === 'register'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = false; usernameSuggestions = []; }
   if (p === 'guest'){ ACCOUNT.formFocus = 'guestName'; }
-  if (p === 'levelSelect'){
-    G.levelPage = Math.max(0, Math.floor((ACCOUNT.highestUnlockedLevel - 1) / 5));
-  }
-  if (p==='menu'||p==='levelSelect'||p==='playerSelect'||p==='turnIntro'||p==='turnEnd'||p==='gameOver'||p==='leaderboard'||p==='login'||p==='register'||p==='guest'||p==='profileView'){
+  if (p === 'levelSelect'){ G.levelPage = Math.max(0, Math.floor((ACCOUNT.highestUnlockedLevel - 1) / 5)); }
+  if (p === 'market'){ G.marketTab = 'skins'; G.marketMsg = ''; }
+  if (p==='menu'||p==='levelSelect'||p==='playerSelect'||p==='turnIntro'||p==='turnEnd'||p==='gameOver'||p==='leaderboard'||p==='login'||p==='register'||p==='guest'||p==='profileView'||p==='market'){
     rebuildMenuButtons();
   }
-  if (p === 'menu' || p === 'login' || p === 'register' || p === 'guest'){
+  if (p === 'menu' || p === 'login' || p === 'register' || p === 'guest' || p === 'market'){
     trackEvent('screen_view', { screen_name: p });
   }
 }
 function rebuildMenuButtons(){
   menuButtons = [];
   if (G.phase === 'menu'){
-    menuButtons.push({ id:'single', label:'SINGLE PLAYER',      x: W/2 - 190, y: 258, w: 380, h: 50 });
-    menuButtons.push({ id:'multi',  label:'LOCAL MULTIPLAYER',  x: W/2 - 190, y: 316, w: 380, h: 50 });
-    menuButtons.push({ id:'online', label:'🌐  PLAY ONLINE',    x: W/2 - 190, y: 374, w: 380, h: 50 });
-    menuButtons.push({ id:'leaderboard', label:'🏆  LEADERBOARD', x: W/2 - 190, y: 432, w: 380, h: 50 });
+    menuButtons.push({ id:'single', label:'SINGLE PLAYER',      x: W/2 - 190, y: 240, w: 380, h: 46 });
+    menuButtons.push({ id:'multi',  label:'LOCAL MULTIPLAYER',  x: W/2 - 190, y: 294, w: 380, h: 46 });
+    menuButtons.push({ id:'online', label:'🌐  PLAY ONLINE',    x: W/2 - 190, y: 348, w: 380, h: 46 });
+    menuButtons.push({ id:'market', label:'🏪  MARKET',         x: W/2 - 190, y: 402, w: 380, h: 46 });
+    menuButtons.push({ id:'leaderboard', label:'🏆  LEADERBOARD', x: W/2 - 190, y: 456, w: 380, h: 46 });
   }
   else if (G.phase === 'levelSelect'){
     const page = G.levelPage || 0;
-    if (page > 0){
-      menuButtons.push({ id:'pagePrev', label:'◀ PREV', x: W/2 - 260, y: 390, w: 140, h: 42 });
-    }
+    if (page > 0){ menuButtons.push({ id:'pagePrev', label:'◀ PREV', x: W/2 - 260, y: 390, w: 140, h: 42 }); }
     menuButtons.push({ id:'pageNext', label:'NEXT ▶', x: W/2 + 120, y: 390, w: 140, h: 42 });
     menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 452, w: 160, h: 42 });
   }
@@ -743,12 +706,8 @@ function rebuildMenuButtons(){
     }
     menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 430, w: 160, h: 46 });
   }
-  else if (G.phase === 'turnIntro'){
-    menuButtons.push({ id:'startBat', label:'🏏  START BATTING', x: W/2 - 170, y: 400, w: 340, h: 60 });
-  }
-  else if (G.phase === 'turnEnd'){
-    menuButtons.push({ id:'continue', label:'CONTINUE  ▶', x: W/2 - 130, y: 430, w: 260, h: 56 });
-  }
+  else if (G.phase === 'turnIntro'){ menuButtons.push({ id:'startBat', label:'🏏  START BATTING', x: W/2 - 170, y: 400, w: 340, h: 60 }); }
+  else if (G.phase === 'turnEnd'){ menuButtons.push({ id:'continue', label:'CONTINUE  ▶', x: W/2 - 130, y: 430, w: 260, h: 56 }); }
   else if (G.phase === 'gameOver'){
     if (G.mode === 'onlineResults'){
       menuButtons.push({ id:'onlineAgain', label:'FIND NEW MATCH', x: W/2 - 250, y: 440, w: 240, h: 56 });
@@ -768,30 +727,38 @@ function rebuildMenuButtons(){
       menuButtons.push({ id:'menu',      label:'MAIN MENU',  x: W/2 + 20,  y: 460, w: 220, h: 56 });
     }
   }
-  else if (G.phase === 'searching'){
-    menuButtons.push({ id:'cancelSearch', label:'✖  CANCEL', x: W/2 - 100, y: H - 70, w: 200, h: 50 });
-  }
+  else if (G.phase === 'searching'){ menuButtons.push({ id:'cancelSearch', label:'✖  CANCEL', x: W/2 - 100, y: H - 70, w: 200, h: 50 }); }
   else if (G.phase === 'login'){
-    menuButtons.push({ id:'doLogin',    label:'🔓  LOGIN',            x: W/2 - 180, y: 340, w: 360, h: 54 });
-    menuButtons.push({ id:'goRegister', label:'NEW? REGISTER  →',     x: W/2 - 180, y: 458, w: 360, h: 40 });
+    menuButtons.push({ id:'doLogin',    label:'🔓  LOGIN',        x: W/2 - 180, y: 340, w: 360, h: 54 });
+    menuButtons.push({ id:'goRegister', label:'NEW? REGISTER  →', x: W/2 - 180, y: 458, w: 360, h: 40 });
   }
   else if (G.phase === 'register'){
-    menuButtons.push({ id:'doRegister', label:'✅  CREATE ACCOUNT',   x: W/2 - 180, y: 400, w: 360, h: 54 });
-    menuButtons.push({ id:'goLogin',    label:'← BACK TO LOGIN',      x: W/2 - 180, y: 468, w: 360, h: 40 });
+    menuButtons.push({ id:'doRegister', label:'✅  CREATE ACCOUNT', x: W/2 - 180, y: 400, w: 360, h: 54 });
+    menuButtons.push({ id:'goLogin',    label:'← BACK TO LOGIN',    x: W/2 - 180, y: 468, w: 360, h: 40 });
   }
   else if (G.phase === 'guest'){
-    menuButtons.push({ id:'doGuest',    label:'🎮  PLAY AS GUEST',    x: W/2 - 180, y: 300, w: 360, h: 54 });
+    menuButtons.push({ id:'doGuest',    label:'🎮  PLAY AS GUEST',  x: W/2 - 180, y: 300, w: 360, h: 54 });
     menuButtons.push({ id:'goLoginFromGuest', label:'← BACK TO LOGIN', x: W/2 - 180, y: 386, w: 360, h: 40 });
   }
-  else if (G.phase === 'leaderboard'){
-    menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 460, w: 160, h: 46 });
-  }
+  else if (G.phase === 'leaderboard'){ menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 460, w: 160, h: 46 }); }
   else if (G.phase === 'profileView'){
     menuButtons.push({ id:'logout', label:'🚪 LOGOUT', x: W/2 - 250, y: 440, w: 240, h: 56 });
     menuButtons.push({ id:'back',   label:'← BACK',   x: W/2 + 10,  y: 440, w: 240, h: 56 });
   }
+  else if (G.phase === 'market'){
+    // Tab buttons
+    const tabW = 180, tabH = 44, tabGap = 8;
+    const total = tabW*4 + tabGap*3;
+    const startX = W/2 - total/2;
+    menuButtons.push({ id:'tab_skins',  label:'🎨 SKINS',  x: startX + 0*(tabW+tabGap), y: 88, w: tabW, h: tabH });
+    menuButtons.push({ id:'tab_dandas', label:'🏏 DANDAS', x: startX + 1*(tabW+tabGap), y: 88, w: tabW, h: tabH });
+    menuButtons.push({ id:'tab_boosts', label:'⚡ BOOSTS', x: startX + 2*(tabW+tabGap), y: 88, w: tabW, h: tabH });
+    menuButtons.push({ id:'tab_lives',  label:'❤️ LIVES',  x: startX + 3*(tabW+tabGap), y: 88, w: tabW, h: tabH });
+    menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 490, w: 160, h: 40 });
+  }
 }
 
+/* ==================== CROWD ==================== */
 function drawCrowdPerson(c, p, armRaise){
   const s = p.s;
   const headR = 4.6 * s, bodyH = 12.5 * s;
@@ -827,18 +794,13 @@ function drawCrowdPerson(c, p, armRaise){
     c.beginPath(); c.ellipse(p.x + headR*0.55, headY - headR*0.62, headR*0.9, headR*0.30, 0, 0, Math.PI*2); c.fill();
   }
 }
-
 function initCrowd(){
   const numPlayers = Math.max(G.players.length || 1, 1);
   const sectionWidth = W / numPlayers;
   crowdSections = [];
   for (let s = 0; s < numPlayers; s++){
     const p = G.players[s];
-    crowdSections.push({
-      color: p ? p.color : '#7a8aa0',
-      name: p ? p.name : 'FANS',
-      x: s * sectionWidth, w: sectionWidth
-    });
+    crowdSections.push({ color: p ? p.color : '#7a8aa0', name: p ? p.name : 'FANS', x: s * sectionWidth, w: sectionWidth });
   }
   crowdCanvas = document.createElement('canvas');
   crowdCanvas.width = W; crowdCanvas.height = H;
@@ -863,17 +825,13 @@ function initCrowd(){
       }
       const sec = crowdSections[secIdx];
       const teamColors = Math.random() < 0.55;
-      const rawShirt = teamColors
-        ? shade(sec.color, Math.floor((Math.random() - 0.5) * 50))
-        : SHIRT_TONES[(Math.random() * SHIRT_TONES.length) | 0];
+      const rawShirt = teamColors ? shade(sec.color, Math.floor((Math.random() - 0.5) * 50)) : SHIRT_TONES[(Math.random() * SHIRT_TONES.length) | 0];
       const person = {
-        x: x + (Math.random() - 0.5) * 3,
-        y: baseY + (Math.random() - 0.5) * 3,
+        x: x + (Math.random() - 0.5) * 3, y: baseY + (Math.random() - 0.5) * 3,
         s: scale * (0.88 + Math.random() * 0.26),
         skin: SKIN_TONES[(Math.random() * SKIN_TONES.length) | 0],
         hair: HAIR_TONES[(Math.random() * HAIR_TONES.length) | 0],
-        shirt: shade(rawShirt, dim),
-        hat: Math.random() < 0.11,
+        shirt: shade(rawShirt, dim), hat: Math.random() < 0.11,
         phase: Math.random() * Math.PI * 2
       };
       if (isFront) frontRowPeople.push(person);
@@ -884,33 +842,23 @@ function initCrowd(){
   for (const sec of crowdSections){
     const n = Math.max(1, Math.round(sec.w / 210));
     for (let i = 0; i < n; i++){
-      crowdFlags.push({
-        x: sec.x + sec.w * (i + 0.5) / n,
-        color: sec.color, phase: Math.random() * Math.PI * 2,
-        w: 46 + Math.random() * 26
-      });
+      crowdFlags.push({ x: sec.x + sec.w * (i + 0.5) / n, color: sec.color, phase: Math.random() * Math.PI * 2, w: 46 + Math.random() * 26 });
     }
   }
 }
 
-function resetGulli(){
-  gulli.x = GULLI_START_X; gulli.y = GROUND_Y - 7;
-  gulli.vx = 0; gulli.vy = 0; gulli.rot = 0; gulli.rotV = 0; gulli.grounded = true;
-}
+/* ==================== GAME FLOW ==================== */
+function resetGulli(){ gulli.x = GULLI_START_X; gulli.y = GROUND_Y - 7; gulli.vx = 0; gulli.vy = 0; gulli.rot = 0; gulli.rotV = 0; gulli.grounded = true; }
 function resetFielders(){
-  for (const f of fielders){
-    f.x = f.homeX; f.moving = false; f.runPhase = 0;
-    f.isCatcher = false; f.chasing = false;
-    f.facing = -1; f.speed = f.topSpeed;
-  }
+  for (const f of fielders){ f.x = f.homeX; f.moving = false; f.runPhase = 0; f.isCatcher = false; f.chasing = false; f.facing = -1; f.speed = f.topSpeed; }
   activeFielder = null;
 }
 function getFieldingPositions(n){
   const patterns = {
-    1: [{homeX: 750,  patrol: 250}],
-    2: [{homeX: 575,  patrol: 175}, {homeX: 1200, patrol: 300}],
-    3: [{homeX: 480,  patrol: 120}, {homeX: 850,  patrol: 180}, {homeX: 1300, patrol: 280}],
-    4: [{homeX: 450,  patrol: 90 }, {homeX: 700,  patrol: 120}, {homeX: 1000, patrol: 180}, {homeX: 1350, patrol: 280}]
+    1: [{homeX: 750, patrol: 250}],
+    2: [{homeX: 575, patrol: 175}, {homeX: 1200, patrol: 300}],
+    3: [{homeX: 480, patrol: 120}, {homeX: 850, patrol: 180}, {homeX: 1300, patrol: 280}],
+    4: [{homeX: 450, patrol: 90 }, {homeX: 700, patrol: 120}, {homeX: 1000, patrol: 180}, {homeX: 1350, patrol: 280}]
   };
   return patterns[Math.min(n, 4)] || patterns[4];
 }
@@ -919,25 +867,11 @@ function buildFielders(){
   const lv = getLevel(G.level);
   G.throwErrorBase = lv.error;
   if (G.mode === 'single' || G.mode === 'online'){
-    fielders.push({
-      homeX: 575, patrol: 175, patrolSpeed: 1.7, patrolPhase: 0,
-      x: 575, color:'#5c9ee0', skin:'#f0c49a', hair:'#3a2416',
-      topSpeed: lv.speed[0], speed: lv.speed[0],
-      runPhase:0, moving:false, facing:-1, isCatcher:false, chasing:false,
-      number:'7', playerName:null
-    });
-    fielders.push({
-      homeX: 1200, patrol: 300, patrolSpeed: 1.3, patrolPhase: Math.PI,
-      x: 1200, color:'#e0a95c', skin:'#c98d5e', hair:'#1a1a1a',
-      topSpeed: lv.speed[1], speed: lv.speed[1],
-      runPhase:0, moving:false, facing:-1, isCatcher:false, chasing:false,
-      number:'9', playerName:null
-    });
+    fielders.push({ homeX: 575, patrol: 175, patrolSpeed: 1.7, patrolPhase: 0, x: 575, color:'#5c9ee0', skin:'#f0c49a', hair:'#3a2416', topSpeed: lv.speed[0], speed: lv.speed[0], runPhase:0, moving:false, facing:-1, isCatcher:false, chasing:false, number:'7', playerName:null });
+    fielders.push({ homeX: 1200, patrol: 300, patrolSpeed: 1.3, patrolPhase: Math.PI, x: 1200, color:'#e0a95c', skin:'#c98d5e', hair:'#1a1a1a', topSpeed: lv.speed[1], speed: lv.speed[1], runPhase:0, moving:false, facing:-1, isCatcher:false, chasing:false, number:'9', playerName:null });
   } else {
     const fieldingPlayers = [];
-    for (let i = 0; i < G.players.length; i++){
-      if (i !== G.currentPlayer) fieldingPlayers.push({ player: G.players[i], index: i });
-    }
+    for (let i = 0; i < G.players.length; i++){ if (i !== G.currentPlayer) fieldingPlayers.push({ player: G.players[i], index: i }); }
     const positions = getFieldingPositions(fieldingPlayers.length);
     const skins = ['#f0c49a','#e8b98a','#c98d5e','#d9b48a','#f5d0a9'];
     const hairs = ['#3a2416','#1a1a1a','#2d1810','#4a2a10','#2a1810'];
@@ -946,13 +880,11 @@ function buildFielders(){
       const baseSpeed = lv.speed[0] + i * 40;
       fielders.push({
         homeX: pos.homeX, patrol: pos.patrol,
-        patrolSpeed: 1.2 + Math.random() * 0.5,
-        patrolPhase: Math.random() * Math.PI * 2,
+        patrolSpeed: 1.2 + Math.random() * 0.5, patrolPhase: Math.random() * Math.PI * 2,
         x: pos.homeX, color: fp.player.color,
         skin: skins[i % skins.length], hair: hairs[i % hairs.length],
         topSpeed: baseSpeed, speed: baseSpeed,
-        runPhase: 0, moving: false, facing: -1,
-        isCatcher: false, chasing: false,
+        runPhase: 0, moving: false, facing: -1, isCatcher: false, chasing: false,
         number: String(i + 1), playerName: fp.player.name, playerIndex: fp.index
       });
     });
@@ -960,14 +892,10 @@ function buildFielders(){
 }
 function startSinglePlayer(level){
   level = Math.max(1, Math.floor(level));
-  if (level > ACCOUNT.highestUnlockedLevel){
-    G.banner = 'LOCKED — CLEAR LEVEL ' + (level-1) + ' FIRST';
-    G.bannerTimer = 2.2;
-    beep(200, 0.2, 'sawtooth', 0.10);
-    return;
-  }
+  if (level > ACCOUNT.highestUnlockedLevel){ G.banner = 'LOCKED — CLEAR LEVEL ' + (level-1) + ' FIRST'; G.bannerTimer = 2.2; beep(200, 0.2, 'sawtooth', 0.10); return; }
   G.mode = 'single'; G.level = level;
-  G.players = [{ name: ACCOUNT.name || 'YOU', color: PLAYER_COLORS[0], score:0, outs:0 }];
+  const skin = getActiveSkin();
+  G.players = [{ name: ACCOUNT.name || 'YOU', color: skin.color, score:0, outs:0 }];
   G.currentPlayer = 0;
   G.gameOverWinner = null; G.gameOverMsg = ''; G.levelCleared = false;
   G.celebrationTimer = 0; G.confettiTimer = 0;
@@ -978,9 +906,7 @@ function startSinglePlayer(level){
 function startMultiPlayer(count){
   G.mode = 'multi'; G.level = 1;
   G.players = [];
-  for (let i=0; i<count; i++){
-    G.players.push({ name: PLAYER_NAMES[i], color: PLAYER_COLORS[i], score:0, outs:0 });
-  }
+  for (let i=0; i<count; i++){ G.players.push({ name: PLAYER_NAMES[i], color: PLAYER_COLORS[i], score:0, outs:0 }); }
   G.players[0].name = ACCOUNT.name || PLAYER_NAMES[0];
   G.currentPlayer = 0;
   G.gameOverWinner = null; G.gameOverMsg = '';
@@ -991,14 +917,11 @@ function startMultiPlayer(count){
   trackEvent('local_multi_start', { players: count });
 }
 function prepareTurn(){
-  G.score = 0; G.outs = 0;
-  G.outcome = ''; G.outReason = '';
-  G.power = 0; G.powerDir = 1;
-  G.shotType = 'DRIVE';
+  G.score = 0; G.outs = 0; G.outcome = ''; G.outReason = '';
+  G.power = 0; G.powerDir = 1; G.shotType = 'DRIVE';
   G.banner = ''; G.bannerTimer = 0;
   resetGulli(); buildFielders(); resetFielders();
-  camX = 0;
-  G.particles.length = 0; G.ring = null;
+  camX = 0; G.particles.length = 0; G.ring = null;
   crowdExcitement = 0.3;
   setPhase('turnIntro');
   beep(600, 0.10, 'triangle', 0.10);
@@ -1010,17 +933,11 @@ function commitName(){
   G.players[idx].name = typed || PLAYER_NAMES[idx];
   initCrowd();
   if (idx === G.players.length - 1){ prepareTurn(); }
-  else {
-    G.nameEntry.playerIndex = idx + 1;
-    G.nameEntry.currentText = '';
-  }
+  else { G.nameEntry.playerIndex = idx + 1; G.nameEntry.currentText = ''; }
   beep(880, 0.08, 'triangle', 0.10);
 }
 function evalQuality(v){
-  if (v>=SWEET_LO && v<=SWEET_HI){
-    const mid=(SWEET_LO+SWEET_HI)/2;
-    return 0.88 + 0.12*(1-Math.abs(v-mid)/((SWEET_HI-SWEET_LO)/2));
-  }
+  if (v>=SWEET_LO && v<=SWEET_HI){ const mid=(SWEET_LO+SWEET_HI)/2; return 0.88 + 0.12*(1-Math.abs(v-mid)/((SWEET_HI-SWEET_LO)/2)); }
   if (v<SWEET_LO) return Math.max(0, 0.88*(v/SWEET_LO));
   return Math.max(0, 0.88*((100-v)/(100-SWEET_HI)));
 }
@@ -1041,8 +958,10 @@ function swing(){
   G.accuracy = acc; G.swingTimer = G.swingDur; G.zonePop = 0;
   const shot = SHOTS[G.shotType];
   const power = 0.70 + acc * 0.55;
-  gulli.vy = shot.vyBase * power;
-  gulli.vx = shot.vxBase * power;
+  const boost = getActiveBoost();
+  const boostMul = 1 + boost.bonus;
+  gulli.vy = shot.vyBase * power * boostMul;
+  gulli.vx = shot.vxBase * power * boostMul;
   gulli.rotV = 20;
   G.phase = 'fly';
   shake = 0.35 + acc * 0.75;
@@ -1058,8 +977,7 @@ function swing(){
   G.bannerTimer = 0.9;
 }
 function missGulli(){
-  G.phase='result'; G.resultTimer=2.2;
-  G.hitDistance=0;
+  G.phase='result'; G.resultTimer=2.2; G.hitDistance=0;
   G.outcome='out'; G.outReason='miss';
   G.banner='MISS!'; G.bannerTimer=1.4;
   G.outs++;
@@ -1072,10 +990,7 @@ function beginFielding(){
   G.hitDistance = Math.max(0, (gulli.x - GULLI_START_X)/PPM);
   G.phase = 'fielding';
   let best=0, bestD=Infinity;
-  for (let i=0;i<fielders.length;i++){
-    const d = Math.abs(fielders[i].x - gulli.x);
-    if (d<bestD){ bestD=d; best=i; }
-  }
+  for (let i=0;i<fielders.length;i++){ const d = Math.abs(fielders[i].x - gulli.x); if (d<bestD){ bestD=d; best=i; } }
   activeFielder = fielders[best];
   activeFielder.moving = true; activeFielder.chasing = true;
   const dist = Math.abs(gulli.x - activeFielder.x);
@@ -1084,16 +999,29 @@ function beginFielding(){
 }
 function finishRound(){
   if (G.outcome === 'out') G.outs++;
-  else {
-    const pts = Math.round(G.hitDistance);
-    G.score += pts;
-    if (G.score > G.best) G.best = G.score;
-  }
+  else { const pts = Math.round(G.hitDistance); G.score += pts; if (G.score > G.best) G.best = G.score; }
   G.phase = 'result';
   G.resultTimer = 2.4;
 }
 function nextRound(){
-  if (G.outcome === 'out'){ endTurn(); return; }
+  if (G.outcome === 'out'){
+    // Check for life (single player only)
+    if (G.mode === 'single' && ACCOUNT.lives > 0){
+      ACCOUNT.lives--;
+      G.outs = 0;
+      saveSession(); syncAccountStats();
+      G.banner = '❤️ LIFE USED! (' + ACCOUNT.lives + ' left)';
+      G.bannerTimer = 2.5;
+      beep(1400, 0.15, 'triangle', 0.12);
+      setTimeout(()=>beep(1000, 0.2, 'triangle', 0.10), 150);
+      resetGulli(); resetFielders();
+      G.power=0; G.powerDir=1;
+      G.outcome=''; G.outReason='';
+      G.phase='power';
+      return;
+    }
+    endTurn(); return;
+  }
   resetGulli(); resetFielders();
   G.power=0; G.powerDir=1;
   G.outcome=''; G.outReason='';
@@ -1113,38 +1041,27 @@ function advanceFromTurnEnd(){
     G.gameOverWinner = G.levelCleared ? 0 : -1;
     G.gameOverMsg = G.levelCleared ? ('LEVEL ' + G.level + ' CLEARED!') : 'LEVEL FAILED';
     G.celebrationTimer = 0; G.confettiTimer = 0;
-
-    // ====== COIN CALCULATION ======
     const c = calcCoins(G.score, lv.target);
     G.coinsEarned = c.total;
     G.coinsBonus = c.bonus;
     updateStatsSingle(G.score, G.coinsEarned);
-
-    // Unlock next level on clear
-    if (G.levelCleared){
-      if (G.level + 1 > ACCOUNT.highestUnlockedLevel){
-        ACCOUNT.highestUnlockedLevel = G.level + 1;
-        saveSession();
-        syncAccountStats();
-      }
+    if (G.levelCleared && G.level + 1 > ACCOUNT.highestUnlockedLevel){
+      ACCOUNT.highestUnlockedLevel = G.level + 1;
+      saveSession(); syncAccountStats();
     }
-
     setPhase('gameOver');
     if (G.levelCleared){
       crowdExcitement = 2.0; playCheer(1.4);
       beep(1200, 0.2, 'triangle', 0.13);
       setTimeout(()=>beep(1600, 0.2, 'triangle', 0.13), 180);
       setTimeout(()=>beep(2000, 0.25, 'triangle', 0.12), 360);
-      // Coin sounds
       if (G.coinsEarned > 0) setTimeout(()=>playCoinSound(), 500);
     } else { crowdExcitement = 0.3; beep(240, 0.3, 'sawtooth', 0.10); }
   } else {
     G.currentPlayer++;
     if (G.currentPlayer >= G.players.length){
       let bestIdx = 0, bestScore = -1;
-      for (let i=0; i<G.players.length; i++){
-        if (G.players[i].score > bestScore){ bestScore = G.players[i].score; bestIdx = i; }
-      }
+      for (let i=0; i<G.players.length; i++){ if (G.players[i].score > bestScore){ bestScore = G.players[i].score; bestIdx = i; } }
       G.gameOverWinner = bestIdx;
       G.gameOverMsg = G.players[bestIdx].name + ' WINS!';
       G.celebrationTimer = 0; G.confettiTimer = 0;
@@ -1158,56 +1075,34 @@ function advanceFromTurnEnd(){
   }
 }
 
+/* ==================== PARTICLES ==================== */
 function spawnBurst(x,y,acc){
   const n = 12 + Math.round(acc*16);
   for (let i=0;i<n;i++){
     const a = Math.random()*Math.PI*2;
     const sp = 120 + Math.random()*520*(0.5+acc);
-    G.particles.push({ x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - 100,
-      life:0.55+Math.random()*0.4, max:0.95, size:2+Math.random()*4.5,
-      c: Math.random()>0.45 ? '#ffd166' : '#ffffff' });
+    G.particles.push({ x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - 100, life:0.55+Math.random()*0.4, max:0.95, size:2+Math.random()*4.5, c: Math.random()>0.45 ? '#ffd166' : '#ffffff' });
   }
 }
 function spawnDust(x,y){
-  for (let i=0;i<12;i++){
-    G.particles.push({ x: x+(Math.random()-0.5)*24, y: y-4,
-      vx: (Math.random()-0.5)*220, vy: -Math.random()*170,
-      life: 0.4+Math.random()*0.35, max:0.75, size: 3+Math.random()*5, c:'#c8b48a' });
-  }
+  for (let i=0;i<12;i++){ G.particles.push({ x: x+(Math.random()-0.5)*24, y: y-4, vx: (Math.random()-0.5)*220, vy: -Math.random()*170, life: 0.4+Math.random()*0.35, max:0.75, size: 3+Math.random()*5, c:'#c8b48a' }); }
 }
 function spawnConfetti(){
   for (let i=0; i<4; i++){
     const x = Math.random() * W;
     const size = 4 + Math.random() * 5;
-    G.particles.push({
-      x, y: 130 + Math.random()*60,
-      vx: (Math.random()-0.5) * 100, vy: 60 + Math.random()*140,
-      life: 2.5 + Math.random()*2, max: 4.5, size,
-      c: CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)],
-      confetti: true, rot: Math.random()*Math.PI*2, rotV: (Math.random()-0.5)*8
-    });
+    G.particles.push({ x, y: 130 + Math.random()*60, vx: (Math.random()-0.5) * 100, vy: 60 + Math.random()*140, life: 2.5 + Math.random()*2, max: 4.5, size, c: CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)], confetti: true, rot: Math.random()*Math.PI*2, rotV: (Math.random()-0.5)*8 });
   }
 }
 function spawnCheerParticles(){
   if (crowdDots.length === 0) return;
   const dot = crowdDots[Math.floor(Math.random() * crowdDots.length)];
-  G.particles.push({
-    x: dot.x, y: dot.y - 4,
-    vx: (Math.random() - 0.5) * 50, vy: -80 - Math.random() * 120,
-    life: 0.7 + Math.random() * 0.5, max: 1.2,
-    size: 2 + Math.random() * 3, c: dot.color, cheer: true
-  });
+  G.particles.push({ x: dot.x, y: dot.y - 4, vx: (Math.random() - 0.5) * 50, vy: -80 - Math.random() * 120, life: 0.7 + Math.random() * 0.5, max: 1.2, size: 2 + Math.random() * 3, c: dot.color, cheer: true });
 }
 function spawnSplashSpark(){
   const a = Math.random() * Math.PI * 2;
   const r = 60 + Math.random() * 320;
-  G.particles.push({
-    x: W/2 + Math.cos(a) * r, y: H/2 + Math.sin(a) * r * 0.5,
-    vx: Math.cos(a) * 20, vy: -30 - Math.random() * 60,
-    life: 0.9 + Math.random() * 0.6, max: 1.5,
-    size: 1.5 + Math.random() * 2.5,
-    c: Math.random() > 0.4 ? '#ffd166' : '#fff6c8', spark: true
-  });
+  G.particles.push({ x: W/2 + Math.cos(a) * r, y: H/2 + Math.sin(a) * r * 0.5, vx: Math.cos(a) * 20, vy: -30 - Math.random() * 60, life: 0.9 + Math.random() * 0.6, max: 1.5, size: 1.5 + Math.random() * 2.5, c: Math.random() > 0.4 ? '#ffd166' : '#fff6c8', spark: true });
 }
 function updateParticles(dt){
   for (let i=G.particles.length-1;i>=0;i--){
@@ -1216,16 +1111,14 @@ function updateParticles(dt){
     else if (p.cheer) p.vy += 180 * dt;
     else if (p.spark) p.vy += 20 * dt;
     else p.vy += 1000 * dt;
-    if (p.confetti){
-      p.vx += Math.sin(performance.now()/300 + i) * 20 * dt;
-      p.rot = (p.rot || 0) + (p.rotV || 0) * dt;
-    }
+    if (p.confetti){ p.vx += Math.sin(performance.now()/300 + i) * 20 * dt; p.rot = (p.rot || 0) + (p.rotV || 0) * dt; }
     p.x += p.vx*dt; p.y += p.vy*dt; p.life -= dt;
     if (p.life<=0 || p.y > H + 60) G.particles.splice(i,1);
   }
   if (G.ring){ G.ring.t += dt*2.6; if (G.ring.t>=1) G.ring=null; }
 }
 
+/* ==================== UPDATE ==================== */
 function update(dt){
   NET.lastSync = (NET.lastSync || 0) + dt;
   if (NET.lastSync > 0.15 && NET.roomRef && NET.role && G.mode === 'online'){
@@ -1244,24 +1137,17 @@ function update(dt){
       ballDist: Math.round(G.hitDistance || 0), ts: Date.now()
     }).catch(()=>{});
   }
-
   if (G.bannerTimer>0) G.bannerTimer -= dt;
   if (G.swingTimer>0) G.swingTimer -= dt;
+  if (G.marketMsgTimer>0) G.marketMsgTimer -= dt;
   if (shake > 0) shake = Math.max(0, shake - dt * 3.0);
   updateParticles(dt);
   crowdExcitement = Math.max(0, crowdExcitement - dt * 0.7);
   if (crowdExcitement > 0.9 && Math.random() < crowdExcitement * 0.25) spawnCheerParticles();
   if (crowdCanvas && crowdDots.length){
-    if (Math.random() < 0.04 + crowdExcitement * 0.55){
-      const d = crowdDots[(Math.random() * crowdDots.length) | 0];
-      flashes.push({ x: d.x, y: d.y, life: 0.32, max: 0.32 });
-    }
-    for (let i = flashes.length - 1; i >= 0; i--){
-      flashes[i].life -= dt;
-      if (flashes[i].life <= 0) flashes.splice(i, 1);
-    }
+    if (Math.random() < 0.04 + crowdExcitement * 0.55){ const d = crowdDots[(Math.random() * crowdDots.length) | 0]; flashes.push({ x: d.x, y: d.y, life: 0.32, max: 0.32 }); }
+    for (let i = flashes.length - 1; i >= 0; i--){ flashes[i].life -= dt; if (flashes[i].life <= 0) flashes.splice(i, 1); }
   }
-
   if (G.phase === 'splash'){
     G.splashTimer += dt;
     if (Math.random() < 0.7) spawnSplashSpark();
@@ -1269,11 +1155,17 @@ function update(dt){
       const session = loadSession();
       if (session){
         if (session.isGuest){
-          ACCOUNT.loggedIn = true;
-          ACCOUNT.isGuest = true;
+          ACCOUNT.loggedIn = true; ACCOUNT.isGuest = true;
           ACCOUNT.name = session.name || 'GUEST';
           ACCOUNT.highestUnlockedLevel = Math.max(1, session.highestUnlockedLevel || 1);
           ACCOUNT.coins = Math.max(0, session.coins || 0);
+          ACCOUNT.lives = Math.max(0, session.lives || 0);
+          ACCOUNT.ownedSkins = session.ownedSkins || ['red'];
+          ACCOUNT.ownedDandas = session.ownedDandas || ['brown'];
+          ACCOUNT.ownedBoosts = session.ownedBoosts || ['normal'];
+          ACCOUNT.activeSkin = session.activeSkin || 'red';
+          ACCOUNT.activeDanda = session.activeDanda || 'brown';
+          ACCOUNT.activeBoost = session.activeBoost || 'normal';
           setPhase('menu');
         } else if (session.username && NET.ready){
           const key = usernameKey(session.username);
@@ -1292,8 +1184,14 @@ function update(dt){
               ACCOUNT.totalRuns = data.totalRuns || 0;
               ACCOUNT.highestUnlockedLevel = Math.max(1, data.highestUnlockedLevel || 1);
               ACCOUNT.coins = Math.max(0, data.coins || 0);
-              ACCOUNT.loggedIn = true;
-              ACCOUNT.isGuest = false;
+              ACCOUNT.lives = Math.max(0, data.lives || 0);
+              ACCOUNT.ownedSkins = data.ownedSkins || ['red'];
+              ACCOUNT.ownedDandas = data.ownedDandas || ['brown'];
+              ACCOUNT.ownedBoosts = data.ownedBoosts || ['normal'];
+              ACCOUNT.activeSkin = data.activeSkin || 'red';
+              ACCOUNT.activeDanda = data.activeDanda || 'brown';
+              ACCOUNT.activeBoost = data.activeBoost || 'normal';
+              ACCOUNT.loggedIn = true; ACCOUNT.isGuest = false;
               setPhase('menu');
             } else { setPhase('login'); }
           }).catch(()=>{ setPhase('login'); });
@@ -1303,13 +1201,9 @@ function update(dt){
     }
     return;
   }
-  if (G.phase === 'searching' || G.phase === 'waitingOpp'){ return; }
-
+  if (G.phase === 'searching' || G.phase === 'waitingOpp' || G.phase === 'market'){ return; }
   if (G.phase === 'toss'){
-    if (performance.now() - NET.tossStartTime > TOSS_DURATION){
-      NET.tossResultStart = performance.now();
-      setPhase('tossResult');
-    }
+    if (performance.now() - NET.tossStartTime > TOSS_DURATION){ NET.tossResultStart = performance.now(); setPhase('tossResult'); }
     return;
   }
   if (G.phase === 'tossResult'){
@@ -1319,35 +1213,26 @@ function update(dt){
     }
     return;
   }
-
   if (G.phase==='turnEnd' || G.phase==='gameOver' || G.phase==='turnIntro'
       || G.phase==='menu' || G.phase==='levelSelect' || G.phase==='playerSelect'
       || G.phase==='nameEntry' || G.phase==='login' || G.phase==='register' || G.phase==='guest'
       || G.phase==='leaderboard' || G.phase==='profileView'){
     camX += (0 - camX) * Math.min(1, dt*3);
-    if (G.phase === 'gameOver'){
-      G.celebrationTimer += dt; G.confettiTimer += dt;
-      if (G.confettiTimer > 0.06){ G.confettiTimer = 0; spawnConfetti(); }
-    }
+    if (G.phase === 'gameOver'){ G.celebrationTimer += dt; G.confettiTimer += dt; if (G.confettiTimer > 0.06){ G.confettiTimer = 0; spawnConfetti(); } }
     return;
   }
-
   let camTarget = 0;
   if (G.phase==='fly') camTarget = Math.max(0, gulli.x - W*0.35);
-  else if ((G.phase==='fielding'||G.phase==='throw') && activeFielder)
-    camTarget = Math.max(0, activeFielder.x - W*0.5);
+  else if ((G.phase==='fielding'||G.phase==='throw') && activeFielder) camTarget = Math.max(0, activeFielder.x - W*0.5);
   camX += (camTarget - camX) * Math.min(1, dt*5);
-
   for (const f of fielders){
     if (f.chasing) continue;
     f.patrolPhase += dt * f.patrolSpeed;
     f.x = f.homeX + Math.sin(f.patrolPhase) * f.patrol;
     f.facing = Math.cos(f.patrolPhase) > 0 ? 1 : -1;
-    if (Math.abs(Math.cos(f.patrolPhase)) > 0.15){
-      f.moving = true; f.runPhase += dt * 12; f.speed = 180;
-    } else { f.moving = false; f.runPhase = 0; f.speed = 0; }
+    if (Math.abs(Math.cos(f.patrolPhase)) > 0.15){ f.moving = true; f.runPhase += dt * 12; f.speed = 180; }
+    else { f.moving = false; f.runPhase = 0; f.speed = 0; }
   }
-
   switch (G.phase){
     case 'power':
       G.power += G.powerDir*128*dt;
@@ -1391,8 +1276,7 @@ function update(dt){
               G.outcome='out'; G.outReason='caught';
               G.hitDistance = Math.max(0, (gulli.x-GULLI_START_X)/PPM);
               G.banner='CAUGHT!'; G.bannerTimer=1.6;
-              shake = 0.6;
-              spawnBurst(gulli.x, gulli.y, 1);
+              shake = 0.6; spawnBurst(gulli.x, gulli.y, 1);
               sweep(500,120,0.35,'sawtooth',0.13);
               crowdExcitement = 1.8; playCheer(1.3);
               finishRound(); return;
@@ -1402,17 +1286,8 @@ function update(dt){
       }
       if (gulli.y > GROUND_Y-7){
         gulli.y = GROUND_Y-7;
-        if (Math.abs(gulli.vy)>230){
-          gulli.vy = -Math.abs(gulli.vy)*0.42;
-          gulli.vx *= 0.80;
-          spawnDust(gulli.x, GROUND_Y);
-          beep(240,0.06,'sine',0.05);
-        } else {
-          gulli.vy = 0;
-          gulli.vx *= Math.pow(0.012, dt);
-          gulli.rotV *= Math.pow(0.05, dt);
-          if (Math.abs(gulli.vx)<28){ gulli.vx=0; beginFielding(); }
-        }
+        if (Math.abs(gulli.vy)>230){ gulli.vy = -Math.abs(gulli.vy)*0.42; gulli.vx *= 0.80; spawnDust(gulli.x, GROUND_Y); beep(240,0.06,'sine',0.05); }
+        else { gulli.vy = 0; gulli.vx *= Math.pow(0.012, dt); gulli.rotV *= Math.pow(0.05, dt); if (Math.abs(gulli.vx)<28){ gulli.vx=0; beginFielding(); } }
       }
       break;
     }
@@ -1460,16 +1335,13 @@ function update(dt){
           const diff = Math.abs(gulli.x - DANDA_X);
           if (diff < 40){
             G.outcome='out'; G.outReason='danda'; G.banner='OUT!';
-            shake = 0.7;
-            spawnBurst(DANDA_X, GROUND_Y-24, 1);
-            sweep(760,140,0.38,'sawtooth',0.14);
-            beep(120,0.4,'sawtooth',0.10);
+            shake = 0.7; spawnBurst(DANDA_X, GROUND_Y-24, 1);
+            sweep(760,140,0.38,'sawtooth',0.14); beep(120,0.4,'sawtooth',0.10);
             crowdExcitement = 1.6; playCheer(1.1);
           } else {
             G.outcome='safe'; G.outReason=''; G.banner='SAFE!';
             spawnDust(gulli.x, GROUND_Y);
-            beep(880,0.14,'triangle',0.11);
-            beep(1180,0.14,'triangle',0.08);
+            beep(880,0.14,'triangle',0.11); beep(1180,0.14,'triangle',0.08);
             crowdExcitement = 0.5;
           }
           G.bannerTimer = 1.6;
@@ -1485,16 +1357,10 @@ function update(dt){
   }
 }
 
-function pointInButton(px, py, b){
-  return px>=b.x && px<=b.x+b.w && py>=b.y && py<=b.y+b.h;
-}
-function canvasCoordsFromEvent(e){
-  const r = canvas.getBoundingClientRect();
-  return { x:(e.clientX - r.left)*(W/r.width), y:(e.clientY - r.top)*(H/r.height) };
-}
-function setShot(id){
-  if (G.shotType !== id){ G.shotType = id; beep(720, 0.05, 'sine', 0.06); }
-}
+/* ==================== INPUT ==================== */
+function pointInButton(px, py, b){ return px>=b.x && px<=b.x+b.w && py>=b.y && py<=b.y+b.h; }
+function canvasCoordsFromEvent(e){ const r = canvas.getBoundingClientRect(); return { x:(e.clientX - r.left)*(W/r.width), y:(e.clientY - r.top)*(H/r.height) }; }
+function setShot(id){ if (G.shotType !== id){ G.shotType = id; beep(720, 0.05, 'sine', 0.06); } }
 
 const FOOTER_LINK_Y = H - 46;
 const FOOTER_LINKS = [
@@ -1502,25 +1368,65 @@ const FOOTER_LINKS = [
   { id: 'about',   label: 'About',          x: W/2 - 30,  w: 60  },
   { id: 'contact', label: 'Contact',        x: W/2 + 60,  w: 80  }
 ];
-
 const AUTH_BOXES = {
-  login: {
-    username: { x: W/2 - 220, y: 175, w: 440, h: 52 },
-    password: { x: W/2 - 220, y: 250, w: 440, h: 52 }
-  },
-  register: {
-    username: { x: W/2 - 220, y: 145, w: 440, h: 52 },
-    password: { x: W/2 - 220, y: 220, w: 440, h: 52 }
-  },
-  guest: {
-    name: { x: W/2 - 220, y: 200, w: 440, h: 52 }
-  }
+  login: { username: { x: W/2 - 220, y: 175, w: 440, h: 52 }, password: { x: W/2 - 220, y: 250, w: 440, h: 52 } },
+  register: { username: { x: W/2 - 220, y: 145, w: 440, h: 52 }, password: { x: W/2 - 220, y: 220, w: 440, h: 52 } },
+  guest: { name: { x: W/2 - 220, y: 200, w: 440, h: 52 } }
 };
+function getLevelButtonRect(i){ const bw = 140, bh = 90, gap = 20; const total = bw*5 + gap*4, startX = W/2 - total/2; return { x: startX + i*(bw+gap), y: 200, w: bw, h: bh }; }
 
-function getLevelButtonRect(i){
-  const bw = 140, bh = 90, gap = 20;
-  const total = bw*5 + gap*4, startX = W/2 - total/2;
-  return { x: startX + i*(bw+gap), y: 200, w: bw, h: bh };
+/* Market item rects */
+function getMarketItemRects(tab, count){
+  const cols = 3;
+  const bw = 240, bh = 170, gapX = 30, gapY = 20;
+  const totalW = bw*cols + gapX*(cols-1);
+  const startX = W/2 - totalW/2;
+  const startY = 150;
+  const rects = [];
+  for (let i = 0; i < count; i++){
+    const col = i % cols, row = Math.floor(i / cols);
+    rects.push({ x: startX + col*(bw+gapX), y: startY + row*(bh+gapY), w: bw, h: bh });
+  }
+  return rects;
+}
+
+/* Purchase/equip logic */
+function marketBuySkin(id){
+  const item = SHOP_SKINS.find(s => s.id === id); if (!item) return;
+  if (ACCOUNT.ownedSkins.indexOf(id) >= 0){ ACCOUNT.activeSkin = id; saveSession(); syncAccountStats(); playPurchaseSound(); G.marketMsg = 'Equipped: ' + item.name; G.marketMsgTimer = 1.5; return; }
+  if (ACCOUNT.coins < item.price){ G.marketMsg = 'Not enough coins!'; G.marketMsgTimer = 1.8; beep(200, 0.15, 'sawtooth', 0.10); return; }
+  ACCOUNT.coins -= item.price;
+  ACCOUNT.ownedSkins.push(id);
+  ACCOUNT.activeSkin = id;
+  saveSession(); syncAccountStats();
+  playPurchaseSound(); G.marketMsg = 'Purchased: ' + item.name + '!'; G.marketMsgTimer = 1.8;
+}
+function marketBuyDanda(id){
+  const item = SHOP_DANDAS.find(d => d.id === id); if (!item) return;
+  if (ACCOUNT.ownedDandas.indexOf(id) >= 0){ ACCOUNT.activeDanda = id; saveSession(); syncAccountStats(); playPurchaseSound(); G.marketMsg = 'Equipped: ' + item.name; G.marketMsgTimer = 1.5; return; }
+  if (ACCOUNT.coins < item.price){ G.marketMsg = 'Not enough coins!'; G.marketMsgTimer = 1.8; beep(200, 0.15, 'sawtooth', 0.10); return; }
+  ACCOUNT.coins -= item.price;
+  ACCOUNT.ownedDandas.push(id);
+  ACCOUNT.activeDanda = id;
+  saveSession(); syncAccountStats();
+  playPurchaseSound(); G.marketMsg = 'Purchased: ' + item.name + '!'; G.marketMsgTimer = 1.8;
+}
+function marketBuyBoost(id){
+  const item = SHOP_BOOSTS.find(b => b.id === id); if (!item) return;
+  if (ACCOUNT.ownedBoosts.indexOf(id) >= 0){ ACCOUNT.activeBoost = id; saveSession(); syncAccountStats(); playPurchaseSound(); G.marketMsg = 'Equipped: ' + item.name; G.marketMsgTimer = 1.5; return; }
+  if (ACCOUNT.coins < item.price){ G.marketMsg = 'Not enough coins!'; G.marketMsgTimer = 1.8; beep(200, 0.15, 'sawtooth', 0.10); return; }
+  ACCOUNT.coins -= item.price;
+  ACCOUNT.ownedBoosts.push(id);
+  ACCOUNT.activeBoost = id;
+  saveSession(); syncAccountStats();
+  playPurchaseSound(); G.marketMsg = 'Purchased: ' + item.name + '!'; G.marketMsgTimer = 1.8;
+}
+function marketBuyLife(){
+  if (ACCOUNT.coins < LIFE_PRICE){ G.marketMsg = 'Not enough coins! Need ' + LIFE_PRICE; G.marketMsgTimer = 1.8; beep(200, 0.15, 'sawtooth', 0.10); return; }
+  ACCOUNT.coins -= LIFE_PRICE;
+  ACCOUNT.lives++;
+  saveSession(); syncAccountStats();
+  playPurchaseSound(); G.marketMsg = 'Life purchased! Total: ' + ACCOUNT.lives; G.marketMsgTimer = 1.8;
 }
 
 function handleMenuClick(x, y){
@@ -1530,16 +1436,35 @@ function handleMenuClick(x, y){
       const rect = getLevelButtonRect(i);
       if (pointInButton(x, y, rect)){
         const lvlNum = page*5 + i + 1;
-        if (lvlNum > ACCOUNT.highestUnlockedLevel){
-          beep(200, 0.2, 'sawtooth', 0.10);
-          G.banner = 'LOCKED — CLEAR LEVEL ' + (lvlNum-1) + ' FIRST';
-          G.bannerTimer = 2.2;
-          return true;
-        }
+        if (lvlNum > ACCOUNT.highestUnlockedLevel){ beep(200, 0.2, 'sawtooth', 0.10); G.banner = 'LOCKED — CLEAR LEVEL ' + (lvlNum-1) + ' FIRST'; G.bannerTimer = 2.2; return true; }
         beep(880, 0.06, 'triangle', 0.09);
         startSinglePlayer(lvlNum);
         return true;
       }
+    }
+  }
+  // Market tab clicks + item clicks
+  if (G.phase === 'market'){
+    // Tabs handled by menuButtons loop below
+    const tab = G.marketTab;
+    if (tab === 'skins'){
+      const rects = getMarketItemRects('skins', SHOP_SKINS.length);
+      for (let i = 0; i < rects.length; i++){
+        if (pointInButton(x, y, rects[i])){ beep(880, 0.06, 'triangle', 0.09); marketBuySkin(SHOP_SKINS[i].id); return true; }
+      }
+    } else if (tab === 'dandas'){
+      const rects = getMarketItemRects('dandas', SHOP_DANDAS.length);
+      for (let i = 0; i < rects.length; i++){
+        if (pointInButton(x, y, rects[i])){ beep(880, 0.06, 'triangle', 0.09); marketBuyDanda(SHOP_DANDAS[i].id); return true; }
+      }
+    } else if (tab === 'boosts'){
+      const rects = getMarketItemRects('boosts', SHOP_BOOSTS.length);
+      for (let i = 0; i < rects.length; i++){
+        if (pointInButton(x, y, rects[i])){ beep(880, 0.06, 'triangle', 0.09); marketBuyBoost(SHOP_BOOSTS[i].id); return true; }
+      }
+    } else if (tab === 'lives'){
+      const rects = getMarketItemRects('lives', 1);
+      if (rects[0] && pointInButton(x, y, rects[0])){ beep(880, 0.06, 'triangle', 0.09); marketBuyLife(); return true; }
     }
   }
   for (const b of menuButtons){
@@ -1548,41 +1473,19 @@ function handleMenuClick(x, y){
       if (b.id === 'single'){ setPhase('levelSelect'); return true; }
       if (b.id === 'multi'){ setPhase('playerSelect'); return true; }
       if (b.id === 'online'){ startOnlineMatchmaking(); return true; }
+      if (b.id === 'market'){ setPhase('market'); return true; }
       if (b.id === 'leaderboard'){ LEADERBOARD.data = null; fetchLeaderboard(); setPhase('leaderboard'); return true; }
-      if (b.id === 'doLogin'){
-        loginUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
-        return true;
-      }
-      if (b.id === 'doRegister'){
-        registerUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
-        return true;
-      }
-      if (b.id === 'doGuest'){
-        guestLogin(ACCOUNT.formName);
-        return true;
-      }
-      if (b.id === 'goRegister'){
-        ACCOUNT.formUsername = ''; ACCOUNT.formPassword = '';
-        ACCOUNT.error = ''; usernameSuggestions = []; suggestionsOpen = false;
-        setPhase('register');
-        return true;
-      }
-      if (b.id === 'goLogin' || b.id === 'goLoginFromGuest'){
-        ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.formName = '';
-        ACCOUNT.error = ''; usernameSuggestions = []; suggestionsOpen = false;
-        setPhase('login');
-        return true;
-      }
-      if (b.id === 'pagePrev'){
-        G.levelPage = Math.max(0, (G.levelPage || 0) - 1);
-        rebuildMenuButtons();
-        return true;
-      }
-      if (b.id === 'pageNext'){
-        G.levelPage = (G.levelPage || 0) + 1;
-        rebuildMenuButtons();
-        return true;
-      }
+      if (b.id === 'tab_skins'){ G.marketTab = 'skins'; return true; }
+      if (b.id === 'tab_dandas'){ G.marketTab = 'dandas'; return true; }
+      if (b.id === 'tab_boosts'){ G.marketTab = 'boosts'; return true; }
+      if (b.id === 'tab_lives'){ G.marketTab = 'lives'; return true; }
+      if (b.id === 'doLogin'){ loginUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword); return true; }
+      if (b.id === 'doRegister'){ registerUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword); return true; }
+      if (b.id === 'doGuest'){ guestLogin(ACCOUNT.formName); return true; }
+      if (b.id === 'goRegister'){ ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.error = ''; usernameSuggestions = []; suggestionsOpen = false; setPhase('register'); return true; }
+      if (b.id === 'goLogin' || b.id === 'goLoginFromGuest'){ ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.formName = ''; ACCOUNT.error = ''; usernameSuggestions = []; suggestionsOpen = false; setPhase('login'); return true; }
+      if (b.id === 'pagePrev'){ G.levelPage = Math.max(0, (G.levelPage || 0) - 1); rebuildMenuButtons(); return true; }
+      if (b.id === 'pageNext'){ G.levelPage = (G.levelPage || 0) + 1; rebuildMenuButtons(); return true; }
       if (b.id === 'logout'){ cleanupOnline(); logoutUser(); return true; }
       if (b.id === 'cancelSearch'){ NET.searching = false; cleanupOnline(); setPhase('menu'); return true; }
       if (b.id === 'onlineAgain'){ cleanupOnline(); startOnlineMatchmaking(); return true; }
@@ -1592,128 +1495,52 @@ function handleMenuClick(x, y){
       if (b.id === 'continue'){ advanceFromTurnEnd(); return true; }
       if (b.id === 'nextLevel'){
         const next = G.level + 1;
-        if (next <= ACCOUNT.highestUnlockedLevel){
-          startSinglePlayer(next);
-        } else {
-          G.banner = 'LOCKED — CLEAR LEVEL ' + G.level + ' FIRST';
-          G.bannerTimer = 2;
-          beep(200, 0.2, 'sawtooth', 0.10);
-        }
+        if (next <= ACCOUNT.highestUnlockedLevel){ startSinglePlayer(next); }
+        else { G.banner = 'LOCKED — CLEAR LEVEL ' + G.level + ' FIRST'; G.bannerTimer = 2; beep(200, 0.2, 'sawtooth', 0.10); }
         return true;
       }
       if (b.id === 'retry'){ startSinglePlayer(G.level); return true; }
-      if (b.id === 'playAgain'){
-        if (G.mode === 'single') startSinglePlayer(G.level);
-        else startMultiPlayer(G.players.length);
-        return true;
-      }
-      if (b.id === 'menu'){
-        if (G.mode === 'onlineResults') cleanupOnline();
-        setPhase('menu'); return true;
-      }
+      if (b.id === 'playAgain'){ if (G.mode === 'single') startSinglePlayer(G.level); else startMultiPlayer(G.players.length); return true; }
+      if (b.id === 'menu'){ if (G.mode === 'onlineResults') cleanupOnline(); setPhase('menu'); return true; }
     }
   }
   if (G.phase === 'menu'){
     const pvW = 130, pvH = 52, pvX = W - 18 - pvW, pvY = 18;
     const loW = 110, loH = 52, loX = pvX - 12 - loW, loY = 18;
-    if (pointInButton(x, y, { x: loX, y: loY, w: loW, h: loH })){
-      beep(880, 0.06, 'triangle', 0.09);
-      cleanupOnline(); logoutUser(); return true;
-    }
-    if (pointInButton(x, y, { x: pvX, y: pvY, w: pvW, h: pvH })){
-      beep(880, 0.06, 'triangle', 0.09);
-      setPhase('profileView'); return true;
-    }
+    if (pointInButton(x, y, { x: loX, y: loY, w: loW, h: loH })){ beep(880, 0.06, 'triangle', 0.09); cleanupOnline(); logoutUser(); return true; }
+    if (pointInButton(x, y, { x: pvX, y: pvY, w: pvW, h: pvH })){ beep(880, 0.06, 'triangle', 0.09); setPhase('profileView'); return true; }
     if (Math.abs(y - FOOTER_LINK_Y) < 16){
       for (const lnk of FOOTER_LINKS){
-        if (x >= lnk.x - lnk.w/2 && x <= lnk.x + lnk.w/2){
-          beep(880, 0.05, 'triangle', 0.08);
-          trackEvent('external_link_click', { link: lnk.id });
-          window.open(lnk.id + '.html', '_blank');
-          return true;
-        }
+        if (x >= lnk.x - lnk.w/2 && x <= lnk.x + lnk.w/2){ beep(880, 0.05, 'triangle', 0.08); trackEvent('external_link_click', { link: lnk.id }); window.open(lnk.id + '.html', '_blank'); return true; }
       }
     }
   }
   if (G.phase === 'login'){
     const gbW = 360, gbH = 46, gbX = W/2 - gbW/2, gbY = 398;
-    if (pointInButton(x,y,{x:gbX, y:gbY, w:gbW, h:gbH})){
-      beep(880, 0.06, 'triangle', 0.09);
-      ACCOUNT.error = '';
-      ACCOUNT.formName = '';
-      ACCOUNT.formFocus = 'guestName';
-      setPhase('guest');
-      return true;
-    }
-    if (pointInButton(x,y,AUTH_BOXES.login.username)){
-      ACCOUNT.formFocus = 'username';
-      suggestionsOpen = true;
-      if (ACCOUNT.formUsername && ACCOUNT.formUsername.length >= 2) onUsernameChange();
-      openMobileKeyboard();
-      return true;
-    }
-    if (pointInButton(x,y,AUTH_BOXES.login.password)){
-      ACCOUNT.formFocus = 'password';
-      suggestionsOpen = false;
-      openMobileKeyboard();
-      return true;
-    }
+    if (pointInButton(x,y,{x:gbX, y:gbY, w:gbW, h:gbH})){ beep(880, 0.06, 'triangle', 0.09); ACCOUNT.error = ''; ACCOUNT.formName = ''; ACCOUNT.formFocus = 'guestName'; setPhase('guest'); return true; }
+    if (pointInButton(x,y,AUTH_BOXES.login.username)){ ACCOUNT.formFocus = 'username'; suggestionsOpen = true; if (ACCOUNT.formUsername && ACCOUNT.formUsername.length >= 2) onUsernameChange(); openMobileKeyboard(); return true; }
+    if (pointInButton(x,y,AUTH_BOXES.login.password)){ ACCOUNT.formFocus = 'password'; suggestionsOpen = false; openMobileKeyboard(); return true; }
     if (suggestionsOpen && usernameSuggestions.length > 0){
-      const box = AUTH_BOXES.login.username;
-      const sugX = box.x + box.w + 8;
-      const sugW = 200;
-      const sugStartY = box.y;
+      const box = AUTH_BOXES.login.username; const sugX = box.x + box.w + 8, sugW = 200, sugStartY = box.y;
       for (let i = 0; i < usernameSuggestions.length; i++){
         const ry = sugStartY + i * 36;
-        if (pointInButton(x,y,{x:sugX, y:ry, w:sugW, h:32})){
-          ACCOUNT.formUsername = usernameSuggestions[i];
-          ACCOUNT.formFocus = 'password';
-          suggestionsOpen = false;
-          usernameSuggestions = [];
-          beep(880, 0.05, 'triangle', 0.08);
-          return true;
-        }
+        if (pointInButton(x,y,{x:sugX, y:ry, w:sugW, h:32})){ ACCOUNT.formUsername = usernameSuggestions[i]; ACCOUNT.formFocus = 'password'; suggestionsOpen = false; usernameSuggestions = []; beep(880, 0.05, 'triangle', 0.08); return true; }
       }
     }
   }
   if (G.phase === 'register'){
-    if (pointInButton(x,y,AUTH_BOXES.register.username)){
-      ACCOUNT.formFocus = 'username';
-      suggestionsOpen = true;
-      if (ACCOUNT.formUsername && ACCOUNT.formUsername.length >= 2) onUsernameChange();
-      openMobileKeyboard();
-      return true;
-    }
-    if (pointInButton(x,y,AUTH_BOXES.register.password)){
-      ACCOUNT.formFocus = 'password';
-      suggestionsOpen = false;
-      openMobileKeyboard();
-      return true;
-    }
+    if (pointInButton(x,y,AUTH_BOXES.register.username)){ ACCOUNT.formFocus = 'username'; suggestionsOpen = true; if (ACCOUNT.formUsername && ACCOUNT.formUsername.length >= 2) onUsernameChange(); openMobileKeyboard(); return true; }
+    if (pointInButton(x,y,AUTH_BOXES.register.password)){ ACCOUNT.formFocus = 'password'; suggestionsOpen = false; openMobileKeyboard(); return true; }
     if (suggestionsOpen && usernameSuggestions.length > 0){
-      const box = AUTH_BOXES.register.username;
-      const sugX = box.x + box.w + 8;
-      const sugW = 200;
-      const sugStartY = box.y;
+      const box = AUTH_BOXES.register.username; const sugX = box.x + box.w + 8, sugW = 200, sugStartY = box.y;
       for (let i = 0; i < usernameSuggestions.length; i++){
         const ry = sugStartY + i * 36;
-        if (pointInButton(x,y,{x:sugX, y:ry, w:sugW, h:32})){
-          ACCOUNT.formUsername = usernameSuggestions[i];
-          ACCOUNT.formFocus = 'password';
-          suggestionsOpen = false;
-          usernameSuggestions = [];
-          beep(880, 0.05, 'triangle', 0.08);
-          return true;
-        }
+        if (pointInButton(x,y,{x:sugX, y:ry, w:sugW, h:32})){ ACCOUNT.formUsername = usernameSuggestions[i]; ACCOUNT.formFocus = 'password'; suggestionsOpen = false; usernameSuggestions = []; beep(880, 0.05, 'triangle', 0.08); return true; }
       }
     }
   }
   if (G.phase === 'guest'){
-    if (pointInButton(x,y,AUTH_BOXES.guest.name)){
-      ACCOUNT.formFocus = 'guestName';
-      openMobileKeyboard();
-      return true;
-    }
+    if (pointInButton(x,y,AUTH_BOXES.guest.name)){ ACCOUNT.formFocus = 'guestName'; openMobileKeyboard(); return true; }
   }
   return false;
 }
@@ -1724,7 +1551,7 @@ function onInput(e){
   if (G.phase==='menu' || G.phase==='levelSelect' || G.phase==='playerSelect'
       || G.phase==='turnIntro' || G.phase==='turnEnd' || G.phase==='gameOver'
       || G.phase==='login' || G.phase==='register' || G.phase==='guest' || G.phase==='leaderboard'
-      || G.phase==='profileView' || G.phase==='searching'){
+      || G.phase==='profileView' || G.phase==='searching' || G.phase==='market'){
     if (e){ const {x,y} = canvasCoordsFromEvent(e); handleMenuClick(x, y); }
     return;
   }
@@ -1733,9 +1560,7 @@ function onInput(e){
   const canPickShot = (G.phase==='power' || G.phase==='air');
   if (canPickShot && e){
     const {x,y} = canvasCoordsFromEvent(e);
-    for (const b of shotButtons){
-      if (pointInButton(x,y,b)){ setShot(b.id); return; }
-    }
+    for (const b of shotButtons){ if (pointInButton(x,y,b)){ setShot(b.id); return; } }
   }
   switch (G.phase){
     case 'power': lockPower(); break;
@@ -1747,92 +1572,62 @@ function handleNameEntryKey(e){
   if (e.key === 'Enter'){ commitName(); e.preventDefault(); return; }
   if (e.key === 'Backspace'){ G.nameEntry.currentText = G.nameEntry.currentText.slice(0, -1); e.preventDefault(); return; }
   if (e.key === 'Escape'){ setPhase('menu'); e.preventDefault(); return; }
-  if (e.key.length === 1 && /[A-Za-z0-9 _-]/.test(e.key) && G.nameEntry.currentText.length < 10){
-    G.nameEntry.currentText += e.key.toUpperCase(); e.preventDefault();
-  }
+  if (e.key.length === 1 && /[A-Za-z0-9 _-]/.test(e.key) && G.nameEntry.currentText.length < 10){ G.nameEntry.currentText += e.key.toUpperCase(); e.preventDefault(); }
 }
 function handleAuthKey(e){
   const focus = ACCOUNT.formFocus;
   if (e.key === 'Escape'){ setPhase('menu'); e.preventDefault(); return; }
   if (e.key === 'Tab'){
-    if (G.phase === 'register'){
-      if (focus === 'username'){ ACCOUNT.formFocus = 'password'; suggestionsOpen = false; }
-      else if (focus === 'password'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = true; if (ACCOUNT.formUsername.length >= 2) onUsernameChange(); }
-    } else if (G.phase === 'login'){
-      ACCOUNT.formFocus = focus === 'username' ? 'password' : 'username';
-      suggestionsOpen = (ACCOUNT.formFocus === 'username');
-      if (suggestionsOpen && ACCOUNT.formUsername.length >= 2) onUsernameChange();
-    }
+    if (G.phase === 'register'){ if (focus === 'username'){ ACCOUNT.formFocus = 'password'; suggestionsOpen = false; } else if (focus === 'password'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = true; if (ACCOUNT.formUsername.length >= 2) onUsernameChange(); } }
+    else if (G.phase === 'login'){ ACCOUNT.formFocus = focus === 'username' ? 'password' : 'username'; suggestionsOpen = (ACCOUNT.formFocus === 'username'); if (suggestionsOpen && ACCOUNT.formUsername.length >= 2) onUsernameChange(); }
     openMobileKeyboard(); e.preventDefault(); return;
   }
   if (e.key === 'Enter'){
-    if (G.phase === 'login'){
-      loginUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
-    } else if (G.phase === 'register'){
-      registerUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
-    } else if (G.phase === 'guest'){
-      guestLogin(ACCOUNT.formName);
-    }
+    if (G.phase === 'login'){ loginUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword); }
+    else if (G.phase === 'register'){ registerUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword); }
+    else if (G.phase === 'guest'){ guestLogin(ACCOUNT.formName); }
     e.preventDefault(); return;
   }
   if (e.key === 'Backspace'){
-    if (focus === 'username'){
-      ACCOUNT.formUsername = ACCOUNT.formUsername.slice(0, -1);
-      onUsernameChange();
-    } else if (focus === 'password'){
-      ACCOUNT.formPassword = ACCOUNT.formPassword.slice(0, -1);
-    } else if (focus === 'guestName'){
-      ACCOUNT.formName = ACCOUNT.formName.slice(0, -1);
-    }
+    if (focus === 'username'){ ACCOUNT.formUsername = ACCOUNT.formUsername.slice(0, -1); onUsernameChange(); }
+    else if (focus === 'password'){ ACCOUNT.formPassword = ACCOUNT.formPassword.slice(0, -1); }
+    else if (focus === 'guestName'){ ACCOUNT.formName = ACCOUNT.formName.slice(0, -1); }
     e.preventDefault(); return;
   }
   if (e.key.length === 1){
-    if (focus === 'username' && /[A-Za-z0-9_]/.test(e.key) && ACCOUNT.formUsername.length < 15){
-      ACCOUNT.formUsername += e.key.toUpperCase();
-      onUsernameChange();
-      e.preventDefault();
-    } else if (focus === 'password' && ACCOUNT.formPassword.length < 20){
-      ACCOUNT.formPassword += e.key;
-      e.preventDefault();
-    } else if (focus === 'guestName' && /[A-Za-z0-9 _-]/.test(e.key) && ACCOUNT.formName.length < 12){
-      ACCOUNT.formName += e.key.toUpperCase();
-      e.preventDefault();
-    }
+    if (focus === 'username' && /[A-Za-z0-9_]/.test(e.key) && ACCOUNT.formUsername.length < 15){ ACCOUNT.formUsername += e.key.toUpperCase(); onUsernameChange(); e.preventDefault(); }
+    else if (focus === 'password' && ACCOUNT.formPassword.length < 20){ ACCOUNT.formPassword += e.key; e.preventDefault(); }
+    else if (focus === 'guestName' && /[A-Za-z0-9 _-]/.test(e.key) && ACCOUNT.formName.length < 12){ ACCOUNT.formName += e.key.toUpperCase(); e.preventDefault(); }
   }
 }
-
 window.addEventListener('keydown', e=>{
-  if (G.phase === 'splash'){
-    if (e.code==='Space'||e.code==='Enter'||e.key===' '){ onInput(null); e.preventDefault(); }
-    return;
-  }
+  if (G.phase === 'splash'){ if (e.code==='Space'||e.code==='Enter'||e.key===' '){ onInput(null); e.preventDefault(); } return; }
   if (G.phase === 'login' || G.phase === 'register' || G.phase === 'guest'){ handleAuthKey(e); return; }
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
-  if (G.phase === 'searching'){
-    if (e.key==='Escape'){ NET.searching = false; cleanupOnline(); setPhase('menu'); e.preventDefault(); }
-    return;
-  }
+  if (G.phase === 'searching'){ if (e.key==='Escape'){ NET.searching = false; cleanupOnline(); setPhase('menu'); e.preventDefault(); } return; }
   if (G.phase === 'waitingOpp'){ return; }
   if (G.phase === 'nameEntry'){ handleNameEntryKey(e); return; }
   if (G.phase === 'menu'){
     if (e.key==='1'){ setPhase('levelSelect'); e.preventDefault(); return; }
     if (e.key==='2'){ setPhase('playerSelect'); e.preventDefault(); return; }
     if (e.key==='3'){ startOnlineMatchmaking(); e.preventDefault(); return; }
-    if (e.key==='4'){ LEADERBOARD.data = null; fetchLeaderboard(); setPhase('leaderboard'); e.preventDefault(); return; }
+    if (e.key==='4'){ setPhase('market'); e.preventDefault(); return; }
+    if (e.key==='5'){ LEADERBOARD.data = null; fetchLeaderboard(); setPhase('leaderboard'); e.preventDefault(); return; }
     if (e.key==='p' || e.key==='P'){ setPhase('profileView'); e.preventDefault(); return; }
     if (e.key==='l' || e.key==='L'){ cleanupOnline(); logoutUser(); e.preventDefault(); return; }
+  }
+  if (G.phase === 'market'){
+    if (e.key==='Escape'){ setPhase('menu'); e.preventDefault(); return; }
+    if (e.key==='1'){ G.marketTab = 'skins'; e.preventDefault(); return; }
+    if (e.key==='2'){ G.marketTab = 'dandas'; e.preventDefault(); return; }
+    if (e.key==='3'){ G.marketTab = 'boosts'; e.preventDefault(); return; }
+    if (e.key==='4'){ G.marketTab = 'lives'; e.preventDefault(); return; }
   }
   if (G.phase === 'levelSelect'){
     if (e.key>='1' && e.key<='5'){
       const lvlNum = (G.levelPage || 0) * 5 + parseInt(e.key, 10);
-      if (lvlNum > ACCOUNT.highestUnlockedLevel){
-        G.banner = 'LOCKED — CLEAR LEVEL ' + (lvlNum-1) + ' FIRST';
-        G.bannerTimer = 2.2;
-        beep(200, 0.2, 'sawtooth', 0.10);
-        e.preventDefault(); return;
-      }
-      startSinglePlayer(lvlNum);
-      e.preventDefault(); return;
+      if (lvlNum > ACCOUNT.highestUnlockedLevel){ G.banner = 'LOCKED — CLEAR LEVEL ' + (lvlNum-1) + ' FIRST'; G.bannerTimer = 2.2; beep(200, 0.2, 'sawtooth', 0.10); e.preventDefault(); return; }
+      startSinglePlayer(lvlNum); e.preventDefault(); return;
     }
     if (e.key==='ArrowLeft'){ G.levelPage = Math.max(0, (G.levelPage||0) - 1); rebuildMenuButtons(); e.preventDefault(); return; }
     if (e.key==='ArrowRight'){ G.levelPage = (G.levelPage||0) + 1; rebuildMenuButtons(); e.preventDefault(); return; }
@@ -1842,20 +1637,13 @@ window.addEventListener('keydown', e=>{
     if (e.key>='2' && e.key<='5'){ startMultiPlayer(parseInt(e.key,10)); e.preventDefault(); return; }
     if (e.key==='Escape'){ setPhase('menu'); e.preventDefault(); return; }
   }
-  if (G.phase === 'leaderboard' || G.phase === 'profileView'){
-    if (e.key==='Escape'){ setPhase('menu'); e.preventDefault(); return; }
-  }
-  if (e.code==='Space' || e.code==='Enter'){
-    if (G.phase==='turnIntro'){ beginBatting(); e.preventDefault(); return; }
-    if (G.phase==='turnEnd'){ advanceFromTurnEnd(); e.preventDefault(); return; }
-  }
+  if (G.phase === 'leaderboard' || G.phase === 'profileView'){ if (e.key==='Escape'){ setPhase('menu'); e.preventDefault(); return; } }
+  if (e.code==='Space' || e.code==='Enter'){ if (G.phase==='turnIntro'){ beginBatting(); e.preventDefault(); return; } if (G.phase==='turnEnd'){ advanceFromTurnEnd(); e.preventDefault(); return; } }
   if (G.phase==='gameOver' && (e.code==='Space'||e.code==='Enter')){
     if (G.mode==='onlineResults'){ cleanupOnline(); startOnlineMatchmaking(); e.preventDefault(); return; }
     if (G.mode==='single'){
-      if (G.levelCleared){
-        const next = G.level + 1;
-        if (next <= ACCOUNT.highestUnlockedLevel) startSinglePlayer(next);
-      } else startSinglePlayer(G.level);
+      if (G.levelCleared){ const next = G.level + 1; if (next <= ACCOUNT.highestUnlockedLevel) startSinglePlayer(next); }
+      else startSinglePlayer(G.level);
     } else { startMultiPlayer(G.players.length); }
     e.preventDefault(); return;
   }
@@ -1868,91 +1656,48 @@ window.addEventListener('keydown', e=>{
     i = e.key==='ArrowLeft' ? (i+order.length-1)%order.length : (i+1)%order.length;
     setShot(order[i]); e.preventDefault(); return;
   }
-  if (e.code==='Space'||e.code==='ArrowUp'||e.code==='Enter'||e.key===' '){
-    e.preventDefault(); onInput(null);
-  }
+  if (e.code==='Space'||e.code==='ArrowUp'||e.code==='Enter'||e.key===' '){ e.preventDefault(); onInput(null); }
 });
 
 const mobileInput = document.getElementById('mobileNameInput');
-function isTypingPhase(){
-  return G.phase === 'nameEntry' || G.phase === 'login' || G.phase === 'register' || G.phase === 'guest';
-}
+function isTypingPhase(){ return G.phase === 'nameEntry' || G.phase === 'login' || G.phase === 'register' || G.phase === 'guest'; }
 function openMobileKeyboard(){
-  mobileInput.style.pointerEvents = 'auto';
-  mobileInput.style.zIndex = '999';
+  mobileInput.style.pointerEvents = 'auto'; mobileInput.style.zIndex = '999';
   const focus = ACCOUNT.formFocus;
-  if (G.phase === 'login'){
-    if (focus === 'username'){ mobileInput.value = ACCOUNT.formUsername; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'characters'); }
-    else if (focus === 'password'){ mobileInput.value = ACCOUNT.formPassword; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'none'); }
-  } else if (G.phase === 'register'){
-    if (focus === 'username'){ mobileInput.value = ACCOUNT.formUsername; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'characters'); }
-    else if (focus === 'password'){ mobileInput.value = ACCOUNT.formPassword; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'none'); }
-  } else if (G.phase === 'guest'){
-    mobileInput.value = ACCOUNT.formName;
-    mobileInput.setAttribute('inputmode', 'text');
-  } else if (G.phase === 'nameEntry'){
-    mobileInput.value = G.nameEntry.currentText || '';
-    mobileInput.setAttribute('inputmode', 'text');
-  }
+  if (G.phase === 'login'){ if (focus === 'username'){ mobileInput.value = ACCOUNT.formUsername; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'characters'); } else if (focus === 'password'){ mobileInput.value = ACCOUNT.formPassword; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'none'); } }
+  else if (G.phase === 'register'){ if (focus === 'username'){ mobileInput.value = ACCOUNT.formUsername; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'characters'); } else if (focus === 'password'){ mobileInput.value = ACCOUNT.formPassword; mobileInput.setAttribute('inputmode', 'text'); mobileInput.setAttribute('autocapitalize', 'none'); } }
+  else if (G.phase === 'guest'){ mobileInput.value = ACCOUNT.formName; mobileInput.setAttribute('inputmode', 'text'); }
+  else if (G.phase === 'nameEntry'){ mobileInput.value = G.nameEntry.currentText || ''; mobileInput.setAttribute('inputmode', 'text'); }
   try { mobileInput.focus({ preventScroll: true }); } catch(err){ mobileInput.focus(); }
   setTimeout(()=>{ try{ mobileInput.focus(); }catch(e){} }, 50);
 }
-
-canvas.addEventListener('pointerdown', e=>{
-  e.preventDefault();
-  onInput(e);
-});
-
+canvas.addEventListener('pointerdown', e=>{ e.preventDefault(); onInput(e); });
 mobileInput.addEventListener('input', ()=>{
   const raw = mobileInput.value || '';
   const focus = ACCOUNT.formFocus;
   if (G.phase === 'login'){
-    if (focus === 'username'){
-      ACCOUNT.formUsername = raw.toUpperCase().replace(/[^A-Z0-9_]/g,'').slice(0,15);
-      mobileInput.value = ACCOUNT.formUsername;
-      onUsernameChange();
-    } else if (focus === 'password'){
-      ACCOUNT.formPassword = raw.slice(0,20);
-      mobileInput.value = ACCOUNT.formPassword;
-    }
+    if (focus === 'username'){ ACCOUNT.formUsername = raw.toUpperCase().replace(/[^A-Z0-9_]/g,'').slice(0,15); mobileInput.value = ACCOUNT.formUsername; onUsernameChange(); }
+    else if (focus === 'password'){ ACCOUNT.formPassword = raw.slice(0,20); mobileInput.value = ACCOUNT.formPassword; }
   } else if (G.phase === 'register'){
-    if (focus === 'username'){
-      ACCOUNT.formUsername = raw.toUpperCase().replace(/[^A-Z0-9_]/g,'').slice(0,15);
-      mobileInput.value = ACCOUNT.formUsername;
-      onUsernameChange();
-    } else if (focus === 'password'){
-      ACCOUNT.formPassword = raw.slice(0,20);
-      mobileInput.value = ACCOUNT.formPassword;
-    }
-  } else if (G.phase === 'guest'){
-    ACCOUNT.formName = raw.toUpperCase().replace(/[^A-Z0-9 _-]/g,'').slice(0,12);
-    mobileInput.value = ACCOUNT.formName;
-  } else if (G.phase === 'nameEntry'){
-    G.nameEntry.currentText = raw.toUpperCase().slice(0,10);
-    mobileInput.value = G.nameEntry.currentText;
-  }
+    if (focus === 'username'){ ACCOUNT.formUsername = raw.toUpperCase().replace(/[^A-Z0-9_]/g,'').slice(0,15); mobileInput.value = ACCOUNT.formUsername; onUsernameChange(); }
+    else if (focus === 'password'){ ACCOUNT.formPassword = raw.slice(0,20); mobileInput.value = ACCOUNT.formPassword; }
+  } else if (G.phase === 'guest'){ ACCOUNT.formName = raw.toUpperCase().replace(/[^A-Z0-9 _-]/g,'').slice(0,12); mobileInput.value = ACCOUNT.formName; }
+  else if (G.phase === 'nameEntry'){ G.nameEntry.currentText = raw.toUpperCase().slice(0,10); mobileInput.value = G.nameEntry.currentText; }
 });
-
 mobileInput.addEventListener('keydown', e=>{
   if (e.key === 'Enter'){
-    mobileInput.blur();
-    mobileInput.style.pointerEvents = 'none';
-    mobileInput.style.zIndex = '-1';
-    if (G.phase === 'login'){
-      loginUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
-    } else if (G.phase === 'register'){
-      registerUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword);
-    } else if (G.phase === 'guest'){
-      guestLogin(ACCOUNT.formName);
-    } else if (G.phase === 'nameEntry'){ commitName(); }
+    mobileInput.blur(); mobileInput.style.pointerEvents = 'none'; mobileInput.style.zIndex = '-1';
+    if (G.phase === 'login'){ loginUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword); }
+    else if (G.phase === 'register'){ registerUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword); }
+    else if (G.phase === 'guest'){ guestLogin(ACCOUNT.formName); }
+    else if (G.phase === 'nameEntry'){ commitName(); }
     e.preventDefault();
   }
 });
 
+/* ==================== DRAWING ==================== */
 const clouds = [
-  { x:140, y:58, s:0.9 }, { x:470, y:98, s:0.65 },
-  { x:780, y:50, s:0.85 }, { x:1120, y:105, s:0.55 },
-  { x:1420, y:72, s:0.8 }, { x:1850, y:90, s:0.7 }
+  { x:140, y:58, s:0.9 }, { x:470, y:98, s:0.65 }, { x:780, y:50, s:0.85 }, { x:1120, y:105, s:0.55 }, { x:1420, y:72, s:0.8 }, { x:1850, y:90, s:0.7 }
 ];
 function drawSky(){
   const g = ctx.createLinearGradient(0,0,0,SKY_BOTTOM);
@@ -1964,26 +1709,14 @@ function drawSky(){
   ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sx,sy,100,0,Math.PI*2); ctx.fill();
   ctx.fillStyle = '#fff6c8'; ctx.beginPath(); ctx.arc(sx,sy,30,0,Math.PI*2); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  for (const c of clouds){
-    let x = c.x - camX*0.12;
-    x = ((x % 2200)+2200)%2200 - 300;
-    drawCloud(x, c.y, c.s);
-  }
+  for (const c of clouds){ let x = c.x - camX*0.12; x = ((x % 2200)+2200)%2200 - 300; drawCloud(x, c.y, c.s); }
 }
-function drawCloud(x,y,s){
-  ctx.beginPath();
-  ctx.arc(x, y, 24*s, 0, Math.PI*2);
-  ctx.arc(x+28*s, y-11*s, 32*s, 0, Math.PI*2);
-  ctx.arc(x+66*s, y, 22*s, 0, Math.PI*2);
-  ctx.arc(x+34*s, y+11*s, 24*s, 0, Math.PI*2);
-  ctx.fill();
-}
+function drawCloud(x,y,s){ ctx.beginPath(); ctx.arc(x, y, 24*s, 0, Math.PI*2); ctx.arc(x+28*s, y-11*s, 32*s, 0, Math.PI*2); ctx.arc(x+66*s, y, 22*s, 0, Math.PI*2); ctx.arc(x+34*s, y+11*s, 24*s, 0, Math.PI*2); ctx.fill(); }
 function drawStadium(){
   const t = performance.now() / 1000;
   const wallGrd = ctx.createLinearGradient(0, STADIUM_TOP - 16, 0, STADIUM_BOTTOM);
   wallGrd.addColorStop(0, '#28304a'); wallGrd.addColorStop(0.45,'#161d2e'); wallGrd.addColorStop(1, '#080d16');
-  ctx.fillStyle = wallGrd;
-  ctx.fillRect(0, STADIUM_TOP - 16, W, STADIUM_BOTTOM - STADIUM_TOP + 16);
+  ctx.fillStyle = wallGrd; ctx.fillRect(0, STADIUM_TOP - 16, W, STADIUM_BOTTOM - STADIUM_TOP + 16);
   for (const sec of crowdSections){
     const g = ctx.createLinearGradient(0, STADIUM_TOP, 0, STADIUM_BOTTOM);
     g.addColorStop(0, hexA(sec.color, 0.04)); g.addColorStop(1, hexA(sec.color, 0.28));
@@ -1998,8 +1731,7 @@ function drawStadium(){
     ctx.save(); ctx.translate(0, bob); drawCrowdPerson(ctx, p, raise); ctx.restore();
   }
   for (const f of flashes){
-    const a = f.life / f.max;
-    const r = 10 + (1 - a) * 16;
+    const a = f.life / f.max; const r = 10 + (1 - a) * 16;
     const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
     g.addColorStop(0, 'rgba(255,255,255,' + (a * 0.95) + ')');
     g.addColorStop(0.4, 'rgba(210,235,255,' + (a * 0.45) + ')');
@@ -2020,24 +1752,19 @@ function drawStadium(){
   ctx.fillStyle = '#0d1220'; ctx.fillRect(0, STADIUM_TOP - 16, W, 18);
   ctx.fillStyle = '#1e2736'; ctx.fillRect(0, STADIUM_TOP - 2, W, 3);
   for (let lx = 60; lx < W; lx += 180){
-    ctx.fillStyle = 'rgba(255,240,180,0.18)';
-    ctx.beginPath(); ctx.arc(lx, STADIUM_TOP - 6, 15, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,248,215,0.95)';
-    ctx.beginPath(); ctx.arc(lx, STADIUM_TOP - 6, 3.2, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,240,180,0.18)'; ctx.beginPath(); ctx.arc(lx, STADIUM_TOP - 6, 15, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,248,215,0.95)'; ctx.beginPath(); ctx.arc(lx, STADIUM_TOP - 6, 3.2, 0, Math.PI*2); ctx.fill();
   }
 }
 function drawField(){
   const g = ctx.createLinearGradient(0, HORIZON, 0, H);
   g.addColorStop(0, '#7cb85c'); g.addColorStop(0.35, '#8fcb6e'); g.addColorStop(1, '#4a8f3c');
   ctx.fillStyle = g; ctx.fillRect(0, HORIZON, W, H - HORIZON);
-  ctx.beginPath();
-  ctx.moveTo(0, HORIZON); ctx.quadraticCurveTo(W/2, HORIZON - 6, W, HORIZON);
+  ctx.beginPath(); ctx.moveTo(0, HORIZON); ctx.quadraticCurveTo(W/2, HORIZON - 6, W, HORIZON);
   ctx.lineTo(W, HORIZON + 2); ctx.lineTo(0, HORIZON + 2); ctx.closePath();
   ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.055)'; ctx.lineWidth = 1;
-  for (let y = HORIZON + 20; y < H; y += 22){
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-  }
+  for (let y = HORIZON + 20; y < H; y += 22){ ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
   const ropeY = GROUND_Y - 55;
   ctx.save();
   ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 2.5;
@@ -2061,12 +1788,10 @@ function drawField(){
   }
 }
 function drawDistanceMarkers(){
-  const step = 100;
-  const first = Math.floor(camX/step)*step;
+  const step = 100; const first = Math.floor(camX/step)*step;
   ctx.textAlign='center';
   for (let wx=first; wx<camX+W+step; wx+=step){
-    const sx = wx-camX;
-    const m = Math.round(wx/PPM);
+    const sx = wx-camX; const m = Math.round(wx/PPM);
     if (m<=0) continue;
     ctx.strokeStyle='rgba(255,255,255,0.38)'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(sx, GROUND_Y+6); ctx.lineTo(sx, GROUND_Y+26); ctx.stroke();
@@ -2078,13 +1803,14 @@ function drawDistanceMarkers(){
 }
 function drawDandaOnGround(){
   const x = DANDA_X - camX, y = GROUND_Y + 2;
+  const danda = getActiveDanda();
   ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle='#3f2a18';
   ctx.beginPath(); ctx.ellipse(x,y+3,26,7,0,0,Math.PI*2); ctx.fill(); ctx.restore();
   ctx.save(); ctx.translate(x,y); ctx.rotate(-0.10);
   ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle='#000';
   rr(ctx,-30,1,62,9,4); ctx.fill(); ctx.restore();
-  ctx.fillStyle='#b07c42'; rr(ctx,-32,-5,64,10,5); ctx.fill();
-  ctx.fillStyle='#8a5a2b'; rr(ctx,-32,-5,12,10,5); ctx.fill();
+  ctx.fillStyle=danda.color; rr(ctx,-32,-5,64,10,5); ctx.fill();
+  ctx.fillStyle=danda.accent; rr(ctx,-32,-5,12,10,5); ctx.fill();
   rr(ctx, 20,-5,12,10,5); ctx.fill();
   ctx.fillStyle='rgba(255,255,255,0.30)'; rr(ctx,-22,-3,44,3,1.5); ctx.fill();
   ctx.restore();
@@ -2101,15 +1827,12 @@ function drawDandaOnGround(){
   }
 }
 function dandaAngle(){
-  if (G.swingTimer>0){
-    const t = 1 - G.swingTimer/G.swingDur;
-    const e = 1 - Math.pow(1-t,3);
-    return lerp(-1.5, 1.15, e);
-  }
+  if (G.swingTimer>0){ const t = 1 - G.swingTimer/G.swingDur; const e = 1 - Math.pow(1-t,3); return lerp(-1.5, 1.15, e); }
   return 0.72;
 }
 function drawPlayer(){
   const x = PLAYER_X - camX, y = GROUND_Y;
+  const danda = getActiveDanda();
   ctx.save(); ctx.globalAlpha=0.20; ctx.fillStyle='#000';
   ctx.beginPath(); ctx.ellipse(x,y+3,36,9,0,0,Math.PI*2); ctx.fill(); ctx.restore();
   const hipY=y-72, shoulderY=y-128, headY=y-150;
@@ -2143,16 +1866,16 @@ function drawPlayer(){
     ctx.restore();
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   }
-  if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='waitingOpp' && G.phase!=='toss' && G.phase!=='tossResult' && G.phase!=='login' && G.phase!=='register' && G.phase!=='guest' && G.phase!=='leaderboard' && G.phase!=='profileView'){
+  if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='waitingOpp' && G.phase!=='toss' && G.phase!=='tossResult' && G.phase!=='login' && G.phase!=='register' && G.phase!=='guest' && G.phase!=='leaderboard' && G.phase!=='profileView' && G.phase!=='market'){
     const ang = dandaAngle();
     const handX = x+6, handY = shoulderY+6;
     ctx.save(); ctx.translate(handX, handY); ctx.rotate(ang);
     ctx.strokeStyle='#2d3142'; ctx.lineWidth=8;
     ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(24,7); ctx.stroke();
     ctx.lineCap='round';
-    ctx.strokeStyle='#b07c42'; ctx.lineWidth=11;
+    ctx.strokeStyle=danda.color; ctx.lineWidth=11;
     ctx.beginPath(); ctx.moveTo(18,7); ctx.lineTo(122,7); ctx.stroke();
-    ctx.strokeStyle='#8a5a2b';
+    ctx.strokeStyle=danda.accent;
     ctx.beginPath(); ctx.moveTo(106,7); ctx.lineTo(122,7); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(18,7);  ctx.lineTo(26,7);  ctx.stroke();
     ctx.restore();
@@ -2170,9 +1893,7 @@ function drawFielder(f){
   const dir = f.facing || 1;
   const speedFactor = clamp(f.speed / (f.topSpeed||1), 0, 1);
   if (f.moving && speedFactor > 0.7 && Math.random() < 0.35){
-    G.particles.push({ x: f.x - dir*14, y: y - 4,
-      vx: -dir*(40+Math.random()*60), vy: -30-Math.random()*60,
-      life: 0.35, max: 0.35, size: 2+Math.random()*3, c: '#d4c096' });
+    G.particles.push({ x: f.x - dir*14, y: y - 4, vx: -dir*(40+Math.random()*60), vy: -30-Math.random()*60, life: 0.35, max: 0.35, size: 2+Math.random()*3, c: '#d4c096' });
   }
   ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle='#000';
   ctx.beginPath(); ctx.ellipse(x, y+3, 22, 7, 0, 0, Math.PI*2); ctx.fill(); ctx.restore();
@@ -2187,10 +1908,7 @@ function drawFielder(f){
     const sw = Math.sin(f.runPhase) * (8 + speedFactor*10);
     ctx.moveTo(x, hipY); ctx.lineTo(x - 12 + sw, y - 2);
     ctx.moveTo(x, hipY); ctx.lineTo(x + 12 - sw, y - 2);
-  } else {
-    ctx.moveTo(x, hipY); ctx.lineTo(x - 12, y - 2);
-    ctx.moveTo(x, hipY); ctx.lineTo(x + 12, y - 2);
-  }
+  } else { ctx.moveTo(x, hipY); ctx.lineTo(x - 12, y - 2); ctx.moveTo(x, hipY); ctx.lineTo(x + 12, y - 2); }
   ctx.stroke();
   ctx.fillStyle = '#1a1a1a';
   const shoeL = f.moving ? Math.sin(f.runPhase)*(8+speedFactor*10) : 0;
@@ -2214,10 +1932,7 @@ function drawFielder(f){
     const sw = Math.sin(f.runPhase + 1.2) * (10 + speedFactor*10);
     ctx.moveTo(x, shoulderY + 4); ctx.lineTo(x - 15 + sw, shoulderY + 24);
     ctx.moveTo(x, shoulderY + 4); ctx.lineTo(x + 15 - sw, shoulderY + 24);
-  } else {
-    ctx.moveTo(x, shoulderY + 4); ctx.lineTo(x - 15, shoulderY + 24);
-    ctx.moveTo(x, shoulderY + 4); ctx.lineTo(x + 15, shoulderY + 24);
-  }
+  } else { ctx.moveTo(x, shoulderY + 4); ctx.lineTo(x - 15, shoulderY + 24); ctx.moveTo(x, shoulderY + 4); ctx.lineTo(x + 15, shoulderY + 24); }
   ctx.stroke();
   ctx.strokeStyle=f.skin; ctx.lineWidth=6;
   ctx.beginPath(); ctx.moveTo(x, shoulderY + 2); ctx.lineTo(x, headY + headR - 3); ctx.stroke();
@@ -2234,35 +1949,9 @@ function drawFielder(f){
   ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.ellipse(x - 4.5 + fdx*0.4, eyeY, 2.4, 2.1, 0, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.ellipse(x + 4.5 + fdx*0.4, eyeY, 2.4, 2.1, 0, 0, Math.PI*2); ctx.fill();
-  ctx.strokeStyle = 'rgba(40,25,15,0.7)'; ctx.lineWidth=0.9;
-  ctx.beginPath(); ctx.ellipse(x - 4.5 + fdx*0.4, eyeY, 2.4, 2.1, 0, 0, Math.PI*2); ctx.stroke();
-  ctx.beginPath(); ctx.ellipse(x + 4.5 + fdx*0.4, eyeY, 2.4, 2.1, 0, 0, Math.PI*2); ctx.stroke();
   ctx.fillStyle = '#1a1a1a';
   ctx.beginPath(); ctx.arc(x - 4.5 + fdx*0.4 + dir*0.7, eyeY, 1.15, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(x + 4.5 + fdx*0.4 + dir*0.7, eyeY, 1.15, 0, Math.PI*2); ctx.fill();
-  ctx.strokeStyle = f.hair; ctx.lineWidth=1.6; ctx.lineCap='round';
-  ctx.beginPath();
-  ctx.moveTo(x - 6.8 + fdx*0.4, eyeY - 3.6); ctx.lineTo(x - 2.3 + fdx*0.4, eyeY - 3.8);
-  ctx.moveTo(x + 2.3 + fdx*0.4, eyeY - 3.8); ctx.lineTo(x + 6.8 + fdx*0.4, eyeY - 3.6);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(120,75,50,0.6)'; ctx.lineWidth=1;
-  ctx.beginPath();
-  ctx.moveTo(x + fdx, eyeY + 1.5);
-  ctx.lineTo(x + fdx + dir*1.4, eyeY + 3.5);
-  ctx.lineTo(x + fdx + dir*0.4, eyeY + 4);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(140,60,55,0.85)'; ctx.lineWidth=1.2;
-  ctx.beginPath();
-  if (G.phase==='throw' && f===activeFielder){
-    ctx.arc(x + fdx*0.5, eyeY + 6, 2.4, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(140,60,55,0.9)'; ctx.fill();
-  } else {
-    ctx.arc(x + fdx*0.5, eyeY + 4.5, 3.2, 0.25, Math.PI - 0.25); ctx.stroke();
-  }
-  ctx.save(); ctx.globalAlpha=0.18; ctx.fillStyle='#e07a7a';
-  ctx.beginPath(); ctx.arc(x - 7 + fdx*0.4, eyeY + 3, 2.2, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + 7 + fdx*0.4, eyeY + 3, 2.2, 0, Math.PI*2); ctx.fill();
-  ctx.restore();
   ctx.fillStyle=f.color;
   ctx.beginPath(); ctx.arc(x, headY - 3, headR * 0.95, Math.PI*1.05, Math.PI*1.95); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.18)';
@@ -2282,12 +1971,6 @@ function drawFielder(f){
     ctx.lineTo(x-7, headY - headR - 46);
     ctx.lineTo(x+7, headY - headR - 46);
     ctx.closePath(); ctx.fill();
-  }
-  if (G.phase==='fly' && !gulli.grounded){
-    ctx.save(); ctx.globalAlpha=0.18; ctx.strokeStyle=f.color; ctx.lineWidth=2;
-    ctx.setLineDash([5,5]);
-    ctx.beginPath(); ctx.arc(x, y-140, 46, 0, Math.PI*2); ctx.stroke();
-    ctx.setLineDash([]); ctx.restore();
   }
 }
 function drawGulli(){
@@ -2329,9 +2012,7 @@ function drawEffects(){
     ctx.globalAlpha=a;
     if (p.confetti){
       ctx.save(); ctx.translate(p.x-camX, p.y); ctx.rotate(p.rot || 0);
-      ctx.fillStyle = p.c;
-      ctx.fillRect(-p.size/2, -p.size/4, p.size, p.size/2);
-      ctx.restore();
+      ctx.fillStyle = p.c; ctx.fillRect(-p.size/2, -p.size/4, p.size, p.size/2); ctx.restore();
     } else if (p.spark){
       ctx.fillStyle = p.c;
       const s = p.size * (0.4 + a * 0.6);
@@ -2362,8 +2043,7 @@ function drawEffects(){
 }
 function drawPowerMeter(){
   if (G.phase!=='power') return;
-  const bw=430, bh=26;
-  const bx=W/2-bw/2, by=H-158;
+  const bw=430, bh=26; const bx=W/2-bw/2, by=H-158;
   ctx.save();
   rr(ctx,bx,by,bw,bh,13); ctx.fillStyle='rgba(10,14,24,0.55)'; ctx.fill();
   const z1 = bx + bw*(SWEET_LO/100);
@@ -2457,9 +2137,7 @@ function drawMenuButton(b, highlightColor){
     ctx.font='700 12px system-ui,sans-serif';
     ctx.fillStyle = highlightColor || 'rgba(255,255,255,0.75)';
     ctx.fillText(b.sub, b.x + b.w/2, b.y + b.h/2 + 12);
-  } else {
-    ctx.fillText(b.label, b.x + b.w/2, b.y + b.h/2);
-  }
+  } else { ctx.fillText(b.label, b.x + b.w/2, b.y + b.h/2); }
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
@@ -2478,11 +2156,10 @@ function drawCoinIcon(x, y, r, alpha){
   ctx.restore();
 }
 function drawCurrentPlayerBadge(){
-  if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView') return;
+  if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView'||G.phase==='market') return;
   const p = G.players[G.currentPlayer];
   if (!p) return;
-  const bw = 280, bh = 42;
-  const bx = W/2 - bw/2, by = 14;
+  const bw = 280, bh = 42; const bx = W/2 - bw/2, by = 14;
   ctx.save();
   rr(ctx, bx, by, bw, bh, 12);
   ctx.fillStyle = 'rgba(20,25,40,0.75)'; ctx.fill();
@@ -2493,9 +2170,7 @@ function drawCurrentPlayerBadge(){
   ctx.font='900 15px system-ui,sans-serif';
   ctx.textAlign='left'; ctx.textBaseline='middle';
   ctx.fillStyle = '#ffffff';
-  const label = (G.mode==='multi')
-    ? 'BATTING: ' + p.name + '  (' + (G.currentPlayer+1) + '/' + G.players.length + ')'
-    : (G.mode==='online') ? 'BATTING ONLINE' : ('BATTING · LV' + G.level);
+  const label = (G.mode==='multi') ? 'BATTING: ' + p.name + '  (' + (G.currentPlayer+1) + '/' + G.players.length + ')' : (G.mode==='online') ? 'BATTING ONLINE' : ('BATTING · LV' + G.level);
   ctx.fillText(label, bx + 44, by + bh/2 - 6);
   ctx.font='700 11px system-ui,sans-serif';
   ctx.fillStyle='rgba(255,255,255,0.65)';
@@ -2512,7 +2187,7 @@ function drawOverlays(){
       ||G.phase==='turnIntro'||G.phase==='turnEnd'||G.phase==='gameOver'
       ||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'
       ||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'
-      ||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView') return;
+      ||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView'||G.phase==='market') return;
   if (G.bannerTimer>0 && G.banner){
     const a = clamp(G.bannerTimer/0.4, 0, 1);
     ctx.globalAlpha = a;
@@ -2521,6 +2196,7 @@ function drawOverlays(){
     else if (G.banner==='PERFECT!') c='#ffd166';
     else if (G.banner==='SAFE!') c='#8affa0';
     else if (G.banner.indexOf('LOCKED') >= 0 || G.banner.indexOf('REGISTER') >= 0) c='#ff8a8a';
+    else if (G.banner.indexOf('LIFE') >= 0) c='#ff6b8a';
     centerText(G.banner, 380, 54, c);
     ctx.globalAlpha=1;
   }
@@ -2558,10 +2234,18 @@ function drawOverlays(){
   if (G.phase==='result'){
     const d = Math.round(G.hitDistance);
     if (G.outcome==='out'){
-      const reason = G.outReason==='caught' ? 'CAUGHT — OUT!'
-                   : G.outReason==='danda'  ? 'DANDA HIT — OUT!'
-                   : 'MISSED THE GULLI — OUT!';
+      const reason = G.outReason==='caught' ? 'CAUGHT — OUT!' : G.outReason==='danda' ? 'DANDA HIT — OUT!' : 'MISSED THE GULLI — OUT!';
       centerText(reason, 380, 44, '#ff8a8a');
+      if (ACCOUNT.lives > 0 && G.mode === 'single'){
+        ctx.save();
+        const pulse = 0.6 + 0.4*Math.sin(performance.now()/200);
+        ctx.globalAlpha = pulse;
+        ctx.font = '900 16px system-ui,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ff6b8a';
+        ctx.fillText('❤️ ' + ACCOUNT.lives + ' LIVES LEFT — will auto-revive!', W/2, 425);
+        ctx.restore(); ctx.textAlign='left';
+      }
     } else {
       centerText('+ '+d+' m', 380, 52, '#ffd166');
     }
@@ -2584,16 +2268,14 @@ function drawSplash(){
   drawEffects();
   ctx.save();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const titleY = 165;
-  const titlePulse = 1 + Math.sin(t * 3) * 0.02;
+  const titleY = 165; const titlePulse = 1 + Math.sin(t * 3) * 0.02;
   ctx.translate(W/2, titleY); ctx.scale(titlePulse, titlePulse);
   ctx.font = '900 88px system-ui, -apple-system, sans-serif';
   ctx.lineJoin = 'round'; ctx.lineWidth = 16;
   ctx.strokeStyle = 'rgba(10, 14, 24, 0.85)';
   ctx.strokeText('GULLI  DANDA', 0, 0);
   const tg = ctx.createLinearGradient(0, -50, 0, 40);
-  tg.addColorStop(0, '#fff4c2'); tg.addColorStop(0.4, '#ffd166');
-  tg.addColorStop(0.7, '#e6a53d'); tg.addColorStop(1, '#a06b12');
+  tg.addColorStop(0, '#fff4c2'); tg.addColorStop(0.4, '#ffd166'); tg.addColorStop(0.7, '#e6a53d'); tg.addColorStop(1, '#a06b12');
   ctx.fillStyle = tg;
   ctx.shadowColor = 'rgba(255, 209, 102, 0.85)';
   ctx.shadowBlur = 22 + Math.sin(t * 4) * 8;
@@ -2613,8 +2295,7 @@ function drawSplash(){
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(255,255,255,0.72)';
   ctx.fillText('— POWERED BY —', W/2, divY);
-  const nameY = 320;
-  const namePulse = 1 + Math.sin(t * 2.4 + 0.8) * 0.025;
+  const nameY = 320; const namePulse = 1 + Math.sin(t * 2.4 + 0.8) * 0.025;
   ctx.save();
   ctx.translate(W/2, nameY); ctx.scale(namePulse, namePulse);
   ctx.font = '900 58px system-ui, -apple-system, sans-serif';
@@ -2638,8 +2319,7 @@ function drawSplash(){
   ctx.fill();
   ctx.strokeStyle = 'rgba(140, 90, 20, 0.7)'; ctx.lineWidth = 1.5; ctx.stroke();
   ctx.restore();
-  const pbW = 380, pbH = 4;
-  const pbX = W/2 - pbW/2, pbY = H - 48;
+  const pbW = 380, pbH = 4; const pbX = W/2 - pbW/2, pbY = H - 48;
   ctx.fillStyle = 'rgba(255,255,255,0.15)';
   rr(ctx, pbX, pbY, pbW, pbH, 2); ctx.fill();
   const progress = clamp(t / SPLASH_DURATION, 0, 1);
@@ -2655,12 +2335,20 @@ function drawSplash(){
   }
   ctx.restore();
 }
-
+function drawStar(cx, cy, outer, inner, points){
+  ctx.beginPath();
+  for (let i=0; i<points*2; i++){
+    const r = i % 2 === 0 ? outer : inner;
+    const a = (Math.PI / points) * i - Math.PI/2;
+    const x = cx + Math.cos(a) * r; const y = cy + Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath(); ctx.fill();
+}
 function drawSuggestionDropdown(box){
   if (!suggestionsOpen || usernameSuggestions.length === 0) return;
-  const sugX = box.x + box.w + 8;
-  const sugW = 200;
-  const sugStartY = box.y;
+  const sugX = box.x + box.w + 8, sugW = 200, sugStartY = box.y;
   ctx.save();
   for (let i = 0; i < usernameSuggestions.length; i++){
     const ry = sugStartY + i * 36;
@@ -2675,19 +2363,16 @@ function drawSuggestionDropdown(box){
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
-
 function drawInputBox(box, label, value, isFocused, isPassword){
   ctx.save();
   rr(ctx, box.x, box.y, box.w, box.h, 12);
   ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
   ctx.strokeStyle = isFocused ? '#ffd166' : 'rgba(255,255,255,0.35)';
   ctx.lineWidth = isFocused ? 3 : 2; ctx.stroke();
-
   ctx.font = '600 12px system-ui,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(255,209,102,0.85)';
   ctx.fillText(label, box.x + 18, box.y - 20);
-
   ctx.font = '900 22px system-ui,sans-serif';
   ctx.textBaseline = 'middle';
   const showVal = isPassword ? '•'.repeat((value || '').length) : (value || '');
@@ -2705,22 +2390,17 @@ function drawInputBox(box, label, value, isFocused, isPassword){
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
-
 function drawLoginScreen(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
   centerText('🔓  LOGIN', 70, 38, '#ffd166');
   centerText('Enter username & password to continue', 110, 15, 'rgba(255,255,255,0.7)');
-
   drawInputBox(AUTH_BOXES.login.username, '👤 USERNAME', ACCOUNT.formUsername, ACCOUNT.formFocus === 'username', false);
   drawSuggestionDropdown(AUTH_BOXES.login.username);
   drawInputBox(AUTH_BOXES.login.password, '🔒 PASSWORD', ACCOUNT.formPassword, ACCOUNT.formFocus === 'password', true);
-
   centerText('Suggestion: tap username box to see existing', W/2, 320, 11, 'rgba(255,209,102,0.6)');
-
   if (ACCOUNT.loading) centerText('Logging in...', 315, 14, 'rgba(255,209,102,0.9)');
   else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 315, 14, '#ff8a8a');
-
   const gbW = 360, gbH = 46, gbX = W/2 - gbW/2, gbY = 398;
   ctx.save();
   rr(ctx, gbX, gbY, gbW, gbH, 12);
@@ -2735,7 +2415,6 @@ function drawLoginScreen(){
   ctx.fillText('👤  CONTINUE AS GUEST  →', W/2, gbY + gbH/2);
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-
   for (const b of menuButtons) drawMenuButton(b, b.id === 'doLogin' ? '#ffd166' : '#ffffff');
 }
 function drawRegisterScreen(){
@@ -2743,16 +2422,12 @@ function drawRegisterScreen(){
   ctx.fillRect(0,0,W,H);
   centerText('✍  CREATE ACCOUNT', 55, 34, '#ffd166');
   centerText('Pick a username & password — one-time setup', 90, 14, 'rgba(255,255,255,0.7)');
-
   drawInputBox(AUTH_BOXES.register.username, '👤 USERNAME (3-15, A-Z 0-9 _)', ACCOUNT.formUsername, ACCOUNT.formFocus === 'username', false);
   drawSuggestionDropdown(AUTH_BOXES.register.username);
   drawInputBox(AUTH_BOXES.register.password, '🔒 PASSWORD (4-20 chars)', ACCOUNT.formPassword, ACCOUNT.formFocus === 'password', true);
-
   centerText('Suggestion: existing usernames shown as you type', W/2, 295, 11, 'rgba(255,209,102,0.6)');
-
   if (ACCOUNT.loading) centerText('Creating account...', 350, 14, 'rgba(255,209,102,0.9)');
   else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 350, 14, '#ff8a8a');
-
   for (const b of menuButtons) drawMenuButton(b, b.id === 'doRegister' ? '#ffd166' : '#ffffff');
 }
 function drawGuestScreen(){
@@ -2761,26 +2436,19 @@ function drawGuestScreen(){
   centerText('🎮  GUEST MODE', 90, 38, '#ffd166');
   centerText('Play without account — stats are NOT saved', 130, 15, 'rgba(255,255,255,0.75)');
   centerText('No online matches as guest', 158, 13, 'rgba(255,138,138,0.85)');
-
   drawInputBox(AUTH_BOXES.guest.name, '👤 YOUR NAME', ACCOUNT.formName, ACCOUNT.formFocus === 'guestName', false);
-
   centerText('Type any name to play  •  Register later to save', W/2, 270, 12, 'rgba(255,209,102,0.7)');
-
   if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 335, 14, '#ff8a8a');
-
   for (const b of menuButtons) drawMenuButton(b, b.id === 'doGuest' ? '#ffd166' : '#ffffff');
 }
-
 function drawLeaderboard(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
   centerText('🏆  GLOBAL LEADERBOARD', 55, 32, '#ffd166');
   centerText('Top online scores worldwide', 92, 14, 'rgba(255,255,255,0.65)');
-  if (!LEADERBOARD.data){
-    centerText('Loading...', 260, 24, 'rgba(255,255,255,0.7)');
-  } else if (LEADERBOARD.data.length === 0){
-    centerText('No scores yet. Be the first!', 260, 20, 'rgba(255,255,255,0.7)');
-  } else {
+  if (!LEADERBOARD.data){ centerText('Loading...', 260, 24, 'rgba(255,255,255,0.7)'); }
+  else if (LEADERBOARD.data.length === 0){ centerText('No scores yet. Be the first!', 260, 20, 'rgba(255,255,255,0.7)'); }
+  else {
     const bw = 620, bh = 30, gap = 6;
     const startY = 125, startX = W/2 - bw/2;
     for (let i=0; i<LEADERBOARD.data.length; i++){
@@ -2812,38 +2480,39 @@ function drawLeaderboard(){
 function drawProfileView(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
-  centerText('👤  YOUR PROFILE', 45, 26, '#ffd166');
-  const cx = W/2, cy = 118, r = 38;
+  centerText('👤  YOUR PROFILE', 40, 26, '#ffd166');
+  const cx = W/2, cy = 108, r = 34;
   ctx.save();
   const grd = ctx.createRadialGradient(cx - 15, cy - 15, 5, cx, cy, r);
-  grd.addColorStop(0, ACCOUNT.isGuest ? '#8a8a8a' : '#ffd166');
-  grd.addColorStop(1, ACCOUNT.isGuest ? '#5a5a5a' : '#c99a2e');
+  grd.addColorStop(0, ACCOUNT.isGuest ? '#8a8a8a' : getActiveSkin().color);
+  grd.addColorStop(1, ACCOUNT.isGuest ? '#5a5a5a' : shade(getActiveSkin().color, -50));
   ctx.fillStyle = grd;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 3; ctx.stroke();
-  ctx.font = '900 36px system-ui,sans-serif';
+  ctx.font = '900 32px system-ui,sans-serif';
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillStyle = '#1a1a1a';
   ctx.fillText((ACCOUNT.name || 'P').charAt(0), cx, cy + 2);
   ctx.restore();
-  centerText(ACCOUNT.name, 178, 24, '#ffffff');
-  if (ACCOUNT.isGuest){
-    centerText('🎮 GUEST — stats not saved', 200, 12, 'rgba(255,138,138,0.9)');
-  } else {
-    centerText('👤 ' + ACCOUNT.username, 200, 14, 'rgba(255,255,255,0.6)');
-  }
+  centerText(ACCOUNT.name, 162, 22, '#ffffff');
+  if (ACCOUNT.isGuest){ centerText('🎮 GUEST — stats not saved', 184, 11, 'rgba(255,138,138,0.9)'); }
+  else { centerText('👤 ' + ACCOUNT.username, 184, 13, 'rgba(255,255,255,0.6)'); }
 
-  // Coin display
-  drawCoinIcon(W/2 - 110, 226, 14);
-  ctx.font = '900 20px system-ui,sans-serif';
+  // Coins + Lives display
+  drawCoinIcon(W/2 - 130, 212, 12);
+  ctx.font = '900 18px system-ui,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffd166';
-  ctx.fillText('COINS: ' + ACCOUNT.coins, W/2 - 88, 226);
+  ctx.fillText('COINS: ' + ACCOUNT.coins, W/2 - 110, 212);
+
+  ctx.font = '900 18px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ff6b8a';
+  ctx.fillText('❤️ LIVES: ' + ACCOUNT.lives, W/2 + 70, 212);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 
-  // Level unlock banner
   const lv = getLevel(ACCOUNT.highestUnlockedLevel);
-  centerText('🏆 HIGHEST: LEVEL ' + ACCOUNT.highestUnlockedLevel + ' (' + lv.name + ')', 256, 13, '#ffd166');
+  centerText('🏆 HIGHEST: LEVEL ' + ACCOUNT.highestUnlockedLevel + ' (' + lv.name + ')', 238, 12, '#ffd166');
 
   const stats = [
     { label:'Best Single', value: ACCOUNT.bestSingle + 'm', color:'#ffd166' },
@@ -2855,7 +2524,7 @@ function drawProfileView(){
   ];
   const cols = 3, bw = 170, bh = 54, gap = 12;
   const totalW = cols*bw + (cols-1)*gap;
-  const startX = W/2 - totalW/2, startY = 285;
+  const startX = W/2 - totalW/2, startY = 262;
   for (let i=0; i<stats.length; i++){
     const col = i % cols, row = Math.floor(i / cols);
     const x = startX + col*(bw+gap);
@@ -2875,6 +2544,258 @@ function drawProfileView(){
   }
   for (const b of menuButtons) drawMenuButton(b, b.id === 'logout' ? '#ff8a8a' : '#ffffff');
 }
+
+/* ==================== MARKET SCREEN ==================== */
+function drawMarketItem(rect, item, opts){
+  const { x, y, w, h } = rect;
+  const owned = opts.owned;
+  const active = opts.active;
+  const affordable = ACCOUNT.coins >= item.price;
+  const canInteract = owned || affordable;
+
+  ctx.save();
+  // Card background
+  rr(ctx, x, y, w, h, 14);
+  const grd = ctx.createLinearGradient(x, y, x, y+h);
+  if (active){
+    grd.addColorStop(0, 'rgba(138,255,160,0.25)');
+    grd.addColorStop(1, 'rgba(138,255,160,0.06)');
+  } else if (owned){
+    grd.addColorStop(0, 'rgba(255,209,102,0.20)');
+    grd.addColorStop(1, 'rgba(255,209,102,0.05)');
+  } else if (affordable){
+    grd.addColorStop(0, 'rgba(92,158,224,0.18)');
+    grd.addColorStop(1, 'rgba(92,158,224,0.05)');
+  } else {
+    grd.addColorStop(0, 'rgba(20,25,40,0.75)');
+    grd.addColorStop(1, 'rgba(20,25,40,0.55)');
+  }
+  ctx.fillStyle = grd; ctx.fill();
+  ctx.strokeStyle = active ? '#8affa0' : owned ? '#ffd166' : affordable ? '#5c9ee0' : 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = active ? 3 : 2; ctx.stroke();
+
+  // Preview area
+  if (opts.previewKind === 'skin'){
+    const pcx = x + w/2, pcy = y + 45;
+    // Draw mini player with skin color
+    ctx.fillStyle = opts.color;
+    rr(ctx, pcx - 9, pcy - 10, 18, 30, 5); ctx.fill();
+    ctx.fillStyle = '#f0c49a';
+    ctx.beginPath(); ctx.arc(pcx, pcy - 18, 10, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#2d3142';
+    ctx.beginPath(); ctx.arc(pcx, pcy - 20, 10, Math.PI*1.05, Math.PI*2.05); ctx.fill();
+    // Danda next to it
+    const d = getActiveDanda();
+    ctx.strokeStyle = d.color; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(pcx + 18, pcy - 8); ctx.lineTo(pcx + 40, pcy + 6); ctx.stroke();
+  } else if (opts.previewKind === 'danda'){
+    const dcx = x + w/2, dcy = y + 45;
+    ctx.save(); ctx.translate(dcx, dcy); ctx.rotate(-0.3);
+    ctx.fillStyle = opts.color;
+    rr(ctx, -45, -5, 90, 10, 5); ctx.fill();
+    ctx.fillStyle = opts.accent;
+    rr(ctx, -45, -5, 16, 10, 5); ctx.fill();
+    rr(ctx, 30, -5, 15, 10, 5); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    rr(ctx, -30, -3, 55, 3, 1.5); ctx.fill();
+    ctx.restore();
+  } else if (opts.previewKind === 'boost'){
+    const bcx = x + w/2, bcy = y + 45;
+    // Draw gulli with motion lines
+    ctx.fillStyle = '#c08544';
+    rr(ctx, bcx - 20, bcy - 5, 40, 10, 5); ctx.fill();
+    ctx.fillStyle = '#8a5a2b';
+    rr(ctx, bcx - 20, bcy - 5, 10, 10, 4); ctx.fill();
+    ctx.fillStyle = opts.color;
+    ctx.font = '900 22px system-ui,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(opts.speedIcon, bcx, bcy);
+    // Speed lines
+    ctx.strokeStyle = opts.color; ctx.lineWidth = 2; ctx.globalAlpha = 0.6;
+    for (let i = 0; i < 3; i++){
+      ctx.beginPath();
+      ctx.moveTo(bcx - 28 - i*6, bcy - 8 + i*8);
+      ctx.lineTo(bcx - 12 - i*6, bcy - 8 + i*8);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  } else if (opts.previewKind === 'life'){
+    const lcx = x + w/2, lcy = y + 40;
+    ctx.font = '900 40px system-ui,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const pulse = 0.9 + 0.1*Math.sin(performance.now()/300);
+    ctx.save();
+    ctx.translate(lcx, lcy); ctx.scale(pulse, pulse);
+    ctx.fillStyle = '#ff6b8a';
+    ctx.shadowColor = 'rgba(255,107,138,0.7)'; ctx.shadowBlur = 18;
+    ctx.fillText('❤️', 0, 0);
+    ctx.restore();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
+
+  // Title
+  ctx.font = '900 14px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(item.name, x + w/2, y + 88);
+
+  // Description / Detail line
+  ctx.font = '700 11px system-ui,sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillText(opts.desc || '', x + w/2, y + 106);
+
+  // Price / Status
+  ctx.font = '900 15px system-ui,sans-serif';
+  if (active){
+    ctx.fillStyle = '#8affa0';
+    ctx.fillText('✓ EQUIPPED', x + w/2, y + 135);
+  } else if (owned){
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText('OWNED · TAP TO EQUIP', x + w/2, y + 135);
+  } else if (affordable){
+    // Coin icon + price
+    drawCoinIcon(x + w/2 - 32, y + 133, 9);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText(item.price, x + w/2 + 8, y + 135);
+  } else {
+    ctx.fillStyle = 'rgba(255,120,120,0.85)';
+    drawCoinIcon(x + w/2 - 32, y + 133, 9, 0.5);
+    ctx.fillText(item.price, x + w/2 + 8, y + 135);
+  }
+
+  // Coin potential (only for skins/dandas/boosts that show "value")
+  if (opts.coinHint){
+    ctx.font = '700 10px system-ui,sans-serif';
+    ctx.fillStyle = 'rgba(255,209,102,0.75)';
+    ctx.fillText(opts.coinHint, x + w/2, y + 155);
+  }
+
+  ctx.restore();
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+}
+
+function drawMarket(){
+  ctx.fillStyle = 'rgba(12,16,28,0.95)';
+  ctx.fillRect(0,0,W,H);
+
+  centerText('🏪  MARKET', 45, 32, '#ffd166');
+  centerText('Spend your coins wisely', 72, 13, 'rgba(255,255,255,0.65)');
+
+  // Coin balance top-right
+  drawCoinIcon(W - 140, 45, 15);
+  ctx.font = '900 20px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffd166';
+  ctx.fillText(ACCOUNT.coins + '', W - 118, 45);
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+
+  // Tabs drawn as menu buttons (via rebuildMenuButtons). Highlight active tab.
+  for (const b of menuButtons){
+    if (b.id.startsWith('tab_')){
+      const tabId = b.id.slice(4);
+      const isActive = (G.marketTab === tabId);
+      const col = isActive ? '#ffd166' : 'rgba(255,255,255,0.7)';
+      ctx.save();
+      rr(ctx, b.x, b.y, b.w, b.h, 10);
+      ctx.fillStyle = isActive ? 'rgba(255,209,102,0.28)' : 'rgba(20,25,40,0.65)';
+      ctx.fill();
+      ctx.strokeStyle = col; ctx.lineWidth = isActive ? 3 : 1.5; ctx.stroke();
+      ctx.font='900 16px system-ui,sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(b.label, b.x + b.w/2, b.y + b.h/2);
+      ctx.restore();
+      ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    }
+  }
+
+  // Items
+  const tab = G.marketTab;
+  if (tab === 'skins'){
+    const rects = getMarketItemRects('skins', SHOP_SKINS.length);
+    for (let i = 0; i < SHOP_SKINS.length; i++){
+      const item = SHOP_SKINS[i];
+      const owned = ACCOUNT.ownedSkins.indexOf(item.id) >= 0;
+      const active = ACCOUNT.activeSkin === item.id;
+      let desc = 'Player skin';
+      if (item.price === 0) desc = 'Default';
+      drawMarketItem(rects[i], item, {
+        owned, active, color: item.color, previewKind: 'skin', desc,
+        coinHint: ''
+      });
+    }
+  }
+  else if (tab === 'dandas'){
+    const rects = getMarketItemRects('dandas', SHOP_DANDAS.length);
+    for (let i = 0; i < SHOP_DANDAS.length; i++){
+      const item = SHOP_DANDAS[i];
+      const owned = ACCOUNT.ownedDandas.indexOf(item.id) >= 0;
+      const active = ACCOUNT.activeDanda === item.id;
+      let desc = 'Classic wood';
+      if (item.id === 'gold') desc = 'Shiny golden';
+      if (item.id === 'diamond') desc = 'Crystal clear';
+      drawMarketItem(rects[i], item, {
+        owned, active, color: item.color, accent: item.accent,
+        previewKind: 'danda', desc
+      });
+    }
+  }
+  else if (tab === 'boosts'){
+    const rects = getMarketItemRects('boosts', SHOP_BOOSTS.length);
+    for (let i = 0; i < SHOP_BOOSTS.length; i++){
+      const item = SHOP_BOOSTS[i];
+      const owned = ACCOUNT.ownedBoosts.indexOf(item.id) >= 0;
+      const active = ACCOUNT.activeBoost === item.id;
+      const speedIcon = item.bonus === 0 ? '—' : (item.bonus < 0.2 ? '⚡' : '🚀');
+      drawMarketItem(rects[i], item, {
+        owned, active, color: item.bonus === 0 ? '#9aa0a6' : item.bonus < 0.2 ? '#ffbe0b' : '#ff6bcb',
+        previewKind: 'boost', desc: item.desc || 'Default', speedIcon
+      });
+    }
+  }
+  else if (tab === 'lives'){
+    const rects = getMarketItemRects('lives', 1);
+    const item = { id: 'life', name: 'Extra Life', price: LIFE_PRICE };
+    drawMarketItem(rects[0], item, {
+      owned: false, active: false, color: '#ff6b8a',
+      previewKind: 'life',
+      desc: 'Survive one OUT and keep playing!',
+      coinHint: 'Current: ' + ACCOUNT.lives + ' lives'
+    });
+
+    // Info text
+    centerText('Buy multiple lives — they stack!', W/2, 350, 14, 'rgba(255,255,255,0.75)');
+    centerText('Each life lets you survive one OUT.', W/2, 375, 13, 'rgba(255,255,255,0.6)');
+    centerText('Lives work in Single Player mode.', W/2, 397, 13, 'rgba(255,209,102,0.7)');
+  }
+
+  // Message toast
+  if (G.marketMsgTimer > 0 && G.marketMsg){
+    ctx.save();
+    const alpha = Math.min(1, G.marketMsgTimer / 0.4);
+    ctx.globalAlpha = alpha;
+    const tw = ctx.measureText(G.marketMsg).width;
+    ctx.font = '900 15px system-ui,sans-serif';
+    const boxW = Math.max(280, tw + 50);
+    const boxX = W/2 - boxW/2, boxY = H - 130;
+    rr(ctx, boxX, boxY, boxW, 40, 10);
+    ctx.fillStyle = 'rgba(30,40,60,0.95)'; ctx.fill();
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(G.marketMsg, W/2, boxY + 20);
+    ctx.restore();
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  }
+
+  // Only draw the BACK button (menuButtons that aren't tabs)
+  for (const b of menuButtons){
+    if (b.id === 'back') drawMenuButton(b, '#ffd166');
+  }
+}
+
+/* ==================== TOSS / WAITING / GAMEOVER (unchanged) ==================== */
 function drawToss(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
@@ -2886,9 +2807,8 @@ function drawToss(){
   const scaleY = Math.abs(Math.cos(t * Math.PI * 7));
   const radius = 70;
   ctx.save(); ctx.globalAlpha = 0.4; ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + radius + 20, radius * 0.7 * scaleY, 12 * scaleY, 0, 0, Math.PI*2);
-  ctx.fill(); ctx.restore();
+  ctx.beginPath(); ctx.ellipse(cx, cy + radius + 20, radius * 0.7 * scaleY, 12 * scaleY, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
   ctx.save();
   ctx.translate(cx, cy); ctx.scale(1, scaleY + 0.08);
   const grd = ctx.createRadialGradient(-20, -20, 5, 0, 0, radius);
@@ -2975,12 +2895,8 @@ function drawWaitingOpp(){
     rr(ctx, miniX, miniY, miniW, miniH, 8); ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1.5; ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(miniX, miniY + miniH - 20);
-    ctx.lineTo(miniX + miniW, miniY + miniH - 20);
-    ctx.stroke();
-    ctx.fillStyle = '#b07c42';
-    ctx.fillRect(miniX + 18, miniY + miniH - 30, 8, 12);
+    ctx.beginPath(); ctx.moveTo(miniX, miniY + miniH - 20); ctx.lineTo(miniX + miniW, miniY + miniH - 20); ctx.stroke();
+    ctx.fillStyle = '#b07c42'; ctx.fillRect(miniX + 18, miniY + miniH - 30, 8, 12);
     const scaleX = (miniW - 40) / 1600;
     const scaleY = (miniH - 40) / 500;
     const gx = Math.max(0, Math.min(1600, opp.gulliX || 0));
@@ -2989,10 +2905,7 @@ function drawWaitingOpp(){
     const dotY = miniY + miniH - 30 - (500 - gy) * scaleY;
     ctx.strokeStyle = 'rgba(255,209,102,0.35)'; ctx.lineWidth = 1.5;
     ctx.setLineDash([4,4]);
-    ctx.beginPath();
-    ctx.moveTo(miniX + 22, miniY + miniH - 24);
-    ctx.lineTo(dotX, dotY);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(miniX + 22, miniY + miniH - 24); ctx.lineTo(dotX, dotY); ctx.stroke();
     ctx.setLineDash([]);
     ctx.save();
     ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 12;
@@ -3020,8 +2933,8 @@ function drawWaitingOpp(){
 function drawMenuScreen(){
   ctx.fillStyle = 'rgba(12,16,28,0.55)';
   ctx.fillRect(0,0,W,H);
-  centerText('GULLI  DANDA', 90, 58, '#ffd166');
-  centerText('CHAMPIONSHIP', 128, 22, 'rgba(255,255,255,0.85)');
+  centerText('GULLI  DANDA', 78, 52, '#ffd166');
+  centerText('CHAMPIONSHIP', 112, 20, 'rgba(255,255,255,0.85)');
 
   const bw = 260, bh = 52, bx = 18, by = 18;
   ctx.save();
@@ -3036,8 +2949,8 @@ function drawMenuScreen(){
   ctx.font='700 10px system-ui,sans-serif';
   ctx.fillStyle='rgba(255,255,255,0.65)';
   const sub = ACCOUNT.isGuest
-    ? ('GUEST · Lv' + ACCOUNT.highestUnlockedLevel + ' · 🪙 ' + ACCOUNT.coins)
-    : ('@' + ACCOUNT.username + ' · Lv' + ACCOUNT.highestUnlockedLevel + ' · 🪙 ' + ACCOUNT.coins);
+    ? ('GUEST · Lv' + ACCOUNT.highestUnlockedLevel + ' · 🪙 ' + ACCOUNT.coins + ' · ❤️ ' + ACCOUNT.lives)
+    : ('@' + ACCOUNT.username + ' · Lv' + ACCOUNT.highestUnlockedLevel + ' · 🪙 ' + ACCOUNT.coins + ' · ❤️ ' + ACCOUNT.lives);
   ctx.fillText(sub, bx + 14, by + 36);
   ctx.restore();
 
@@ -3064,7 +2977,7 @@ function drawMenuScreen(){
 
   const pulse = 0.6 + 0.4*Math.sin(performance.now()/320);
   ctx.globalAlpha = pulse;
-  centerText('CHOOSE A MODE', 220, 16, 'rgba(255,255,255,0.7)');
+  centerText('CHOOSE A MODE', 202, 15, 'rgba(255,255,255,0.7)');
   ctx.globalAlpha = 1;
   for (const b of menuButtons) drawMenuButton(b);
 
@@ -3074,21 +2987,14 @@ function drawMenuScreen(){
   ctx.fillText('Powered by PRADEEP SINGH', W/2, H - 22);
   ctx.font = '700 12px system-ui,sans-serif';
   const linkBaseY = H - 46;
-  const privacyX = W/2 - 160;
-  const aboutX = W/2 - 30;
-  const contactX = W/2 + 60;
+  const privacyX = W/2 - 160, aboutX = W/2 - 30, contactX = W/2 + 60;
   const linkColor = 'rgba(140,180,230,0.9)';
   ctx.textAlign = 'center';
-  ctx.fillStyle = linkColor;
-  ctx.fillText('Privacy Policy', privacyX, linkBaseY);
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.fillText('·', W/2 - 80, linkBaseY);
-  ctx.fillStyle = linkColor;
-  ctx.fillText('About', aboutX, linkBaseY);
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.fillText('·', W/2 + 15, linkBaseY);
-  ctx.fillStyle = linkColor;
-  ctx.fillText('Contact', contactX, linkBaseY);
+  ctx.fillStyle = linkColor; ctx.fillText('Privacy Policy', privacyX, linkBaseY);
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillText('·', W/2 - 80, linkBaseY);
+  ctx.fillStyle = linkColor; ctx.fillText('About', aboutX, linkBaseY);
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillText('·', W/2 + 15, linkBaseY);
+  ctx.fillStyle = linkColor; ctx.fillText('Contact', contactX, linkBaseY);
   ctx.strokeStyle = 'rgba(140,180,230,0.5)'; ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(privacyX - 42, linkBaseY + 9); ctx.lineTo(privacyX + 42, linkBaseY + 9);
@@ -3104,7 +3010,6 @@ function drawLevelSelect(){
   const page = G.levelPage || 0;
   centerText('Page ' + (page+1) + '  ·  Levels ' + (page*5+1) + ' - ' + (page*5+5), 136, 15, 'rgba(255,255,255,0.75)');
   centerText('Clear each level to unlock the next', 160, 13, 'rgba(255,209,102,0.85)');
-
   for (let i=0; i<5; i++){
     const lvlNum = page*5 + i + 1;
     const lvl = getLevel(lvlNum);
@@ -3113,14 +3018,11 @@ function drawLevelSelect(){
     const rect = getLevelButtonRect(i);
     const {x, y, w, h} = rect;
     const coinsPossible = Math.floor(lvl.target * 2 / COIN_DIVISOR);
-
     ctx.save();
     rr(ctx, x, y, w, h, 12);
     if (isLocked){
-      ctx.fillStyle = 'rgba(15,18,28,0.78)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(100,100,100,0.5)';
-      ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = 'rgba(15,18,28,0.78)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(100,100,100,0.5)'; ctx.lineWidth = 2; ctx.stroke();
     } else {
       const grd = ctx.createLinearGradient(x, y, x, y+h);
       grd.addColorStop(0, 'rgba(255,209,102,0.18)');
@@ -3129,9 +3031,7 @@ function drawLevelSelect(){
       ctx.strokeStyle = isCurrent ? '#8affa0' : '#ffd166';
       ctx.lineWidth = isCurrent ? 3 : 2.5; ctx.stroke();
     }
-
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-
     if (isLocked){
       ctx.font = '900 28px system-ui,sans-serif';
       ctx.fillStyle = 'rgba(160,160,160,0.7)';
@@ -3151,11 +3051,10 @@ function drawLevelSelect(){
       ctx.fillText(lvl.target + ' pts', x + w/2, y + 40);
       ctx.font = '700 10px system-ui,sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      ctx.fillText(lvl.name, x + w/2, y + 60);
-      // Coin potential
+      ctx.fillText(lvl.name, x + w/2, y + 58);
       ctx.font = '700 10px system-ui,sans-serif';
       ctx.fillStyle = '#ffd166';
-      ctx.fillText('🪙 up to ' + coinsPossible, x + w/2, y + 76);
+      ctx.fillText('🪙 up to ' + coinsPossible, x + w/2, y + 74);
       if (isCurrent){
         ctx.font = '900 9px system-ui,sans-serif';
         ctx.fillStyle = '#8affa0';
@@ -3165,7 +3064,6 @@ function drawLevelSelect(){
     ctx.restore();
   }
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-
   for (const b of menuButtons){
     let col = '#ffffff';
     if (b.id === 'pagePrev' || b.id === 'pageNext') col = '#8affa0';
@@ -3186,16 +3084,14 @@ function drawNameEntry(){
   const idx = G.nameEntry.playerIndex;
   const p = G.players[idx];
   if (!p) return;
-  ctx.fillStyle = p.color;
-  ctx.globalAlpha = 0.18; ctx.fillRect(0, 0, W, 90); ctx.globalAlpha = 1;
+  ctx.fillStyle = p.color; ctx.globalAlpha = 0.18; ctx.fillRect(0, 0, W, 90); ctx.globalAlpha = 1;
   centerText('ENTER PLAYER NAME', 60, 24, 'rgba(255,255,255,0.75)');
   centerText(`PLAYER ${idx+1} of ${G.players.length}`, 92, 18, 'rgba(255,255,255,0.6)');
   centerText('Tap anywhere to open keyboard', 116, 13, 'rgba(255,209,102,0.7)');
   ctx.save();
   const glow = ctx.createRadialGradient(W/2, 200, 5, W/2, 200, 110);
   glow.addColorStop(0, p.color); glow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.globalAlpha = 0.5;
-  ctx.fillStyle = glow;
+  ctx.globalAlpha = 0.5; ctx.fillStyle = glow;
   ctx.beginPath(); ctx.arc(W/2, 200, 110, 0, Math.PI*2); ctx.fill();
   ctx.restore();
   ctx.fillStyle = p.color;
@@ -3205,8 +3101,7 @@ function drawNameEntry(){
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';
   ctx.fillText(String(idx + 1), W/2, 205);
-  const boxW = 440, boxH = 68;
-  const boxX = W/2 - boxW/2, boxY = 275;
+  const boxW = 440, boxH = 68; const boxX = W/2 - boxW/2, boxY = 275;
   ctx.fillStyle = 'rgba(20,25,40,0.9)';
   rr(ctx, boxX, boxY, boxW, boxH, 12); ctx.fill();
   ctx.strokeStyle = p.color; ctx.lineWidth = 3; ctx.stroke();
@@ -3264,24 +3159,16 @@ function drawTurnIntro(){
   ctx.fillRect(0,0,W,H);
   const p = G.players[G.currentPlayer];
   if (!p) return;
-  ctx.fillStyle = p.color;
-  ctx.globalAlpha = 0.15; ctx.fillRect(0, 0, W, 110); ctx.globalAlpha = 1;
+  ctx.fillStyle = p.color; ctx.globalAlpha = 0.15; ctx.fillRect(0, 0, W, 110); ctx.globalAlpha = 1;
   centerText('NOW BATTING', 130, 22, 'rgba(255,255,255,0.75)');
   if (G.mode === 'multi') centerText('PLAYER ' + (G.currentPlayer+1) + ' of ' + G.players.length, 190, 32, 'rgba(255,255,255,0.85)');
   else if (G.mode === 'online') centerText('ONLINE MATCH', 190, 32, 'rgba(255,255,255,0.85)');
-  else {
-    const lv = getLevel(G.level);
-    centerText('LEVEL ' + G.level + ' — ' + lv.name, 190, 32, 'rgba(255,255,255,0.85)');
-  }
+  else { const lv = getLevel(G.level); centerText('LEVEL ' + G.level + ' — ' + lv.name, 190, 32, 'rgba(255,255,255,0.85)'); }
   centerText(p.name, 262, 78, p.color);
   let infoText;
   if (G.mode === 'multi') infoText = 'Unlimited gullis · 1 out ends your turn · ' + fielders.length + ' fielder' + (fielders.length>1?'s':'') + ' ready';
   else if (G.mode === 'online') infoText = 'You vs ' + (NET.oppName || 'OPPONENT') + ' · 1 out ends your innings';
-  else {
-    const lv = getLevel(G.level);
-    const coinBase = Math.floor(lv.target / COIN_DIVISOR);
-    infoText = '🎯 Target: ' + lv.target + ' pts  ·  🪙 ' + (coinBase*2) + ' bonus coins for 2x score!';
-  }
+  else { const lv = getLevel(G.level); infoText = '🎯 Target: ' + lv.target + ' pts  ·  🪙 ' + Math.floor(lv.target*2/COIN_DIVISOR) + ' bonus coins for 2x score!'; }
   centerText(infoText, 315, 18, 'rgba(255,255,255,0.7)');
   for (const b of menuButtons) drawMenuButton(b, p.color);
 }
@@ -3366,18 +3253,6 @@ function drawTrophy(cx, cy, scale, t){
   drawStar(0, -10, 12, 5, 5);
   ctx.restore();
 }
-function drawStar(cx, cy, outer, inner, points){
-  ctx.beginPath();
-  for (let i=0; i<points*2; i++){
-    const r = i % 2 === 0 ? outer : inner;
-    const a = (Math.PI / points) * i - Math.PI/2;
-    const x = cx + Math.cos(a) * r;
-    const y = cy + Math.sin(a) * r;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath(); ctx.fill();
-}
 function drawGameOver(){
   ctx.fillStyle = 'rgba(12,16,28,0.72)';
   ctx.fillRect(0,0,W,H);
@@ -3388,8 +3263,7 @@ function drawGameOver(){
     const winnerColor = isDraw ? '#ffd166' : (w ? w.color : '#ffd166');
     if (!isDraw){
       const glowPulse = 0.55 + 0.45 * Math.sin(t * 2.5);
-      ctx.save();
-      ctx.globalAlpha = glowPulse * 0.45;
+      ctx.save(); ctx.globalAlpha = glowPulse * 0.45;
       const glow = ctx.createRadialGradient(W/2, 105, 5, W/2, 105, 260);
       glow.addColorStop(0, winnerColor); glow.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glow; ctx.fillRect(0, 0, W, 280);
@@ -3398,8 +3272,7 @@ function drawGameOver(){
     }
     centerText('🌐  ONLINE MATCH', 130, 24, 'rgba(255,255,255,0.7)');
     const pulse = 0.88 + 0.12*Math.sin(t*5);
-    ctx.save();
-    ctx.globalAlpha = pulse;
+    ctx.save(); ctx.globalAlpha = pulse;
     centerText(isDraw ? '✨  DRAW!  ✨' : ('✨  ' + G.gameOverMsg + '  ✨'), 200, 42, '#ffd166');
     ctx.restore();
     const bw = 260, bh = 58, gap = 22;
@@ -3407,8 +3280,7 @@ function drawGameOver(){
     const startX = W/2 - total/2;
     for (let i=0; i<2; i++){
       const p = G.players[i];
-      const x = startX + i*(bw+gap);
-      const y = 260;
+      const x = startX + i*(bw+gap); const y = 260;
       const isWinner = (!isDraw && i === G.gameOverWinner);
       ctx.save();
       rr(ctx, x, y, bw, bh, 12);
@@ -3439,8 +3311,6 @@ function drawGameOver(){
       ctx.restore();
       centerText('Level ' + G.level + ': ' + G.score + ' pts (target ' + lv.target + ')', 232, 15, 'rgba(255,255,255,0.85)');
       centerText('🔓 UNLOCKED: Level ' + (G.level + 1) + ' — ' + getLevel(G.level+1).name, 256, 14, '#8affa0');
-
-      // COIN REWARD DISPLAY
       const c = calcCoins(G.score, lv.target);
       const cx = W/2, cy = 305;
       drawCoinIcon(cx - 90, cy, 22, 1);
@@ -3449,11 +3319,11 @@ function drawGameOver(){
       ctx.fillStyle = '#ffd166';
       ctx.fillText('+ ' + c.total + ' COINS', cx - 60, cy - 8);
       ctx.font = '700 13px system-ui,sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
       if (c.bonus){
         ctx.fillStyle = '#8affa0';
         ctx.fillText('🎉 BONUS! 2x coins for 2x target!', cx - 60, cy + 14);
       } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.fillText('Get ' + (lv.target*2) + ' pts for 2x coins!', cx - 60, cy + 14);
       }
       ctx.textAlign='left'; ctx.textBaseline='alphabetic';
@@ -3461,7 +3331,6 @@ function drawGameOver(){
       centerText('LEVEL ' + G.level + ' FAILED', 130, 38, '#ff8a8a');
       centerText('You scored ' + G.score + ' pts — needed ' + lv.target + ' pts', 178, 18, 'rgba(255,255,255,0.85)');
       centerText('Try again to unlock next level!', 208, 15, 'rgba(255,255,255,0.6)');
-      // Show coins earned even on fail
       if (G.coinsEarned > 0){
         const cx = W/2, cy = 260;
         drawCoinIcon(cx - 80, cy, 18, 0.85);
@@ -3475,8 +3344,7 @@ function drawGameOver(){
   } else {
     const w = G.players[G.gameOverWinner];
     const glowPulse = 0.55 + 0.45 * Math.sin(t * 2.5);
-    ctx.save();
-    ctx.globalAlpha = glowPulse * 0.45;
+    ctx.save(); ctx.globalAlpha = glowPulse * 0.45;
     const glow = ctx.createRadialGradient(W/2, 105, 5, W/2, 105, 260);
     glow.addColorStop(0, w.color); glow.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = glow; ctx.fillRect(0, 0, W, 280);
@@ -3542,6 +3410,7 @@ function drawSearching(){
   for (const b of menuButtons) drawMenuButton(b);
 }
 
+/* ==================== MAIN RENDER ==================== */
 function draw(){
   ctx.clearRect(0,0,W,H);
   if (G.phase === 'splash'){ drawSplash(); return; }
@@ -3550,17 +3419,12 @@ function draw(){
   if (G.phase === 'guest'){ drawGuestScreen(); return; }
   if (G.phase === 'leaderboard'){ drawLeaderboard(); return; }
   if (G.phase === 'profileView'){ drawProfileView(); return; }
+  if (G.phase === 'market'){ drawMarket(); return; }
   ctx.save();
-  if (shake > 0.002){
-    const m = shake * shake * 9;
-    ctx.translate((Math.random()-0.5)*m, (Math.random()-0.5)*m);
-  }
+  if (shake > 0.002){ const m = shake * shake * 9; ctx.translate((Math.random()-0.5)*m, (Math.random()-0.5)*m); }
   drawSky();
   if (G.players.length > 0){ drawStadium(); }
-  else {
-    ctx.fillStyle = '#2a3142';
-    ctx.fillRect(0, STADIUM_TOP, W, STADIUM_BOTTOM - STADIUM_TOP);
-  }
+  else { ctx.fillStyle = '#2a3142'; ctx.fillRect(0, STADIUM_TOP, W, STADIUM_BOTTOM - STADIUM_TOP); }
   drawField();
   if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'){
     if (G.phase === 'menu') drawMenuScreen();
@@ -3571,26 +3435,10 @@ function draw(){
   else if (G.phase === 'toss'){ drawToss(); }
   else if (G.phase === 'tossResult'){ drawTossResult(); }
   else if (G.phase === 'waitingOpp'){ drawWaitingOpp(); }
-  else if (G.phase === 'nameEntry'){
-    if (fielders.length === 0) buildFielders();
-    for (const f of fielders) drawFielder(f);
-    drawPlayer(); drawNameEntry();
-  }
-  else if (G.phase === 'turnIntro'){
-    drawDistanceMarkers();
-    for (const f of fielders) drawFielder(f);
-    drawPlayer(); drawEffects(); drawTurnIntro();
-  }
-  else if (G.phase === 'turnEnd'){
-    drawDistanceMarkers();
-    for (const f of fielders) drawFielder(f);
-    drawPlayer(); drawEffects(); drawTurnEnd();
-  }
-  else if (G.phase === 'gameOver'){
-    drawDistanceMarkers();
-    for (const f of fielders) drawFielder(f);
-    drawPlayer(); drawEffects(); drawGameOver();
-  }
+  else if (G.phase === 'nameEntry'){ if (fielders.length === 0) buildFielders(); for (const f of fielders) drawFielder(f); drawPlayer(); drawNameEntry(); }
+  else if (G.phase === 'turnIntro'){ drawDistanceMarkers(); for (const f of fielders) drawFielder(f); drawPlayer(); drawEffects(); drawTurnIntro(); }
+  else if (G.phase === 'turnEnd'){ drawDistanceMarkers(); for (const f of fielders) drawFielder(f); drawPlayer(); drawEffects(); drawTurnEnd(); }
+  else if (G.phase === 'gameOver'){ drawDistanceMarkers(); for (const f of fielders) drawFielder(f); drawPlayer(); drawEffects(); drawGameOver(); }
   else {
     drawDistanceMarkers();
     if (G.phase==='fielding'||G.phase==='throw'||G.phase==='result') drawDandaOnGround();
@@ -3607,18 +3455,20 @@ function draw(){
   ctx.fillRect(0,0,W,H);
 }
 
+/* ==================== HUD ==================== */
 const uiScore = document.getElementById('uiScore');
 const uiBest = document.getElementById('uiBest');
 const uiOuts = document.getElementById('uiOuts');
 const uiTurn = document.getElementById('uiTurn');
 const uiCoins = document.getElementById('uiCoins');
+const uiLives = document.getElementById('uiLives');
 function updateHUD(){
   const hud = document.getElementById('hud');
   if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'
       || G.phase === 'nameEntry' || G.phase === 'splash' || G.phase === 'login'
       || G.phase === 'register' || G.phase === 'guest' || G.phase === 'searching'
       || G.phase === 'toss' || G.phase === 'tossResult' || G.phase === 'leaderboard'
-      || G.phase === 'profileView'
+      || G.phase === 'profileView' || G.phase === 'market'
       || (G.phase === 'waitingOpp' && !NET.myDone)){
     hud.style.display = 'none'; return;
   }
@@ -3628,8 +3478,10 @@ function updateHUD(){
   uiOuts.textContent = G.outs + '/1';
   uiTurn.textContent = (G.currentPlayer + 1) + '/' + G.players.length;
   if (uiCoins) uiCoins.textContent = ACCOUNT.coins;
+  if (uiLives) uiLives.textContent = ACCOUNT.lives;
 }
 
+/* ==================== LOOP ==================== */
 let last = performance.now();
 function loop(now){
   let dt = (now-last)/1000;
