@@ -98,6 +98,8 @@ const STADIUM_BOTTOM = 300;
 const HORIZON = 300;
 
 const SPLASH_DURATION = 2.6;
+const TOSS_DURATION = 2500;
+const TOSS_RESULT_DURATION = 2400;
 
 const SHOTS = {
   PUSH:  { vxBase:  560, vyBase: -260, label:'PUSH',  sub:'SAFE',  color:'#3fa35a' },
@@ -168,7 +170,14 @@ const NET = {
   statusMsg: 'Searching...',
   oppLive: null,
   liveRef: null,
-  lastSync: 0
+  lastSync: 0,
+  // Toss + turn state
+  tossWinner: null,
+  currentBatsman: null,
+  tossStartTime: 0,
+  tossResultStart: 0,
+  tossDecided: false,
+  turnHandedOver: false
 };
 
 function initFirebase(){
@@ -187,6 +196,8 @@ function startOnlineMatchmaking(name){
   NET.myName = (name || 'PLAYER').toUpperCase().slice(0,10);
   NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppName = '';
   NET.oppLive = null;
+  NET.tossWinner = null; NET.currentBatsman = null;
+  NET.tossDecided = false; NET.turnHandedOver = false;
   if (!NET.ready && !initFirebase()){
     G.banner = 'NETWORK ERROR'; G.bannerTimer = 2.5;
     setPhase('menu'); return;
@@ -241,7 +252,7 @@ function joinRoom(id, room){
   NET.roomRef.update({
     status: 'playing',
     p2: { name: NET.myName, score: 0, done: false }
-  }).then(()=>{ watchRoom(); beginOnlineTurn(); });
+  }).then(()=>{ watchRoom(); });
 }
 
 function watchRoom(){
@@ -255,15 +266,43 @@ function watchRoom(){
       NET.oppScore = typeof opp.score === 'number' ? opp.score : null;
       NET.oppDone = !!opp.done;
     }
-    if (NET.role === 'p1' && data.p2 && (G.phase === 'searching' || G.phase === 'waitingOpp')){
-      beginOnlineTurn();
+
+    /* ---- P1 decides toss when P2 joins ---- */
+    if (NET.role === 'p1' && data.p2 && !data.tossWinner && !NET.tossDecided){
+      NET.tossDecided = true;
+      NET.searching = false;
+      const winner = Math.random() < 0.5 ? 'p1' : 'p2';
+      NET.roomRef.update({
+        tossWinner: winner,
+        currentBatsman: winner
+      }).catch(()=>{});
     }
+
+    /* ---- Detect toss result ---- */
+    if (data.tossWinner && !NET.tossWinner){
+      NET.tossWinner = data.tossWinner;
+      NET.currentBatsman = data.currentBatsman || data.tossWinner;
+      NET.searching = false;
+      if (G.phase !== 'toss' && G.phase !== 'tossResult'){
+        NET.tossStartTime = performance.now();
+        setPhase('toss');
+      }
+    }
+
+    /* ---- Detect turn handover (opponent finished, my turn) ---- */
+    if (data.currentBatsman && data.currentBatsman !== NET.currentBatsman){
+      NET.currentBatsman = data.currentBatsman;
+      if (NET.currentBatsman === NET.role && !NET.myDone && G.phase === 'waitingOpp'){
+        beginOnlineTurn();
+      }
+    }
+
+    /* ---- Match complete ---- */
     if (data.p1 && data.p2 && data.p1.done && data.p2.done){
       showOnlineResults(data);
     }
   });
 
-  // Opponent ki live game state suno
   const oppRole = NET.role === 'p1' ? 'p2' : 'p1';
   if (NET.liveRef) NET.liveRef.off();
   NET.liveRef = NET.roomRef.child('live/' + oppRole);
@@ -286,7 +325,12 @@ function reportOnlineScore(score){
   NET.myDone = true;
   const update = {};
   update[NET.role + '/score'] = score;
-  update[NET.role + '/done']  = true;
+  update[NET.role + '/done'] = true;
+  // Hand over turn to the other player (if it was my turn)
+  if (NET.currentBatsman === NET.role && !NET.turnHandedOver){
+    NET.turnHandedOver = true;
+    update['currentBatsman'] = (NET.role === 'p1') ? 'p2' : 'p1';
+  }
   NET.roomRef.update(update).then(()=>{
     NET.statusMsg = 'Waiting for ' + (NET.oppName || 'opponent') + '...';
     setPhase('waitingOpp');
@@ -333,6 +377,8 @@ function cleanupOnline(){
   NET.roomId = null; NET.role = null; NET.oppName = '';
   NET.oppScore = null; NET.oppDone = false; NET.myDone = false;
   NET.roomRef = null;
+  NET.tossWinner = null; NET.currentBatsman = null;
+  NET.tossDecided = false; NET.turnHandedOver = false;
 }
 
 const shotButtons = [];
@@ -913,7 +959,7 @@ function updateParticles(dt){
 
 /* ==================== UPDATE ==================== */
 function update(dt){
-  // Live state Firebase me push karo (agar online match chal raha hai)
+  // Live state sync for online mode
   NET.lastSync = (NET.lastSync || 0) + dt;
   if (NET.lastSync > 0.15 && NET.roomRef && NET.role && G.mode === 'online'){
     NET.lastSync = 0;
@@ -963,6 +1009,28 @@ function update(dt){
   }
   if (G.phase === 'searching'){ return; }
   if (G.phase === 'waitingOpp'){ return; }
+
+  /* ---- TOSS phase ---- */
+  if (G.phase === 'toss'){
+    if (performance.now() - NET.tossStartTime > TOSS_DURATION){
+      NET.tossResultStart = performance.now();
+      setPhase('tossResult');
+    }
+    return;
+  }
+  /* ---- TOSS RESULT phase ---- */
+  if (G.phase === 'tossResult'){
+    if (performance.now() - NET.tossResultStart > TOSS_RESULT_DURATION){
+      if (NET.tossWinner === NET.role){
+        // I won the toss — I bat first
+        beginOnlineTurn();
+      } else {
+        // Opponent bats first — I watch
+        setPhase('waitingOpp');
+      }
+    }
+    return;
+  }
 
   if (G.phase==='turnEnd' || G.phase==='gameOver' || G.phase==='turnIntro'
       || G.phase==='menu' || G.phase==='levelSelect' || G.phase==='playerSelect'
@@ -1190,6 +1258,7 @@ function onInput(e){
     if (G.splashTimer > 0.7){ G.splashTimer = SPLASH_DURATION; }
     return;
   }
+  if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
   if (G.phase==='menu' || G.phase==='levelSelect' || G.phase==='playerSelect'
       || G.phase==='turnIntro' || G.phase==='turnEnd' || G.phase==='gameOver'
       || G.phase==='onlineName' || G.phase==='searching'){
@@ -1235,6 +1304,7 @@ window.addEventListener('keydown', e=>{
     if (e.code==='Space'||e.code==='Enter'||e.key===' '){ onInput(null); e.preventDefault(); }
     return;
   }
+  if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
   if (G.phase === 'onlineName'){ handleOnlineNameKey(e); return; }
   if (G.phase === 'searching'){
     if (e.key==='Escape'){ NET.searching = false; cleanupOnline(); setPhase('menu'); e.preventDefault(); }
@@ -1292,12 +1362,10 @@ function isTypingPhase(){
 canvas.addEventListener('pointerdown', e=>{
   e.preventDefault();
   if (isTypingPhase()){
-    // Canvas pe tap karte hi mobile keyboard kholo
     mobileInput.style.pointerEvents = 'auto';
     mobileInput.style.zIndex = '999';
     mobileInput.value = G.nameEntry.currentText || '';
     try { mobileInput.focus({ preventScroll: true }); } catch(err){ mobileInput.focus(); }
-    // iOS ke liye thoda hack — click event trigger
     setTimeout(()=>{ try{ mobileInput.focus(); }catch(e){} }, 50);
   }
   onInput(e);
@@ -1319,11 +1387,6 @@ mobileInput.addEventListener('keydown', e=>{
     }
     e.preventDefault();
   }
-});
-
-// Agar user input ke bahar tap kare toh keyboard band
-canvas.addEventListener('pointerup', ()=>{
-  // Don't blur immediately — wait a moment
 });
 
 /* ==================== DRAW ==================== */
@@ -1522,7 +1585,7 @@ function drawPlayer(){
     ctx.restore();
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   }
-  if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='onlineName' && G.phase!=='searching' && G.phase!=='waitingOpp'){
+  if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='onlineName' && G.phase!=='searching' && G.phase!=='waitingOpp' && G.phase!=='toss' && G.phase!=='tossResult'){
     const ang = dandaAngle();
     const handX = x+6, handY = shoulderY+6;
     ctx.save(); ctx.translate(handX, handY); ctx.rotate(ang);
@@ -1844,7 +1907,7 @@ function drawMenuButton(b, highlightColor){
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
 function drawCurrentPlayerBadge(){
-  if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='onlineName'||G.phase==='searching'||G.phase==='waitingOpp') return;
+  if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='onlineName'||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult') return;
   const p = G.players[G.currentPlayer];
   if (!p) return;
   const bw = 280, bh = 42;
@@ -1877,7 +1940,7 @@ function drawOverlays(){
   if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'
       ||G.phase==='turnIntro'||G.phase==='turnEnd'||G.phase==='gameOver'
       ||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='onlineName'
-      ||G.phase==='searching'||G.phase==='waitingOpp') return;
+      ||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult') return;
   if (G.bannerTimer>0 && G.banner){
     const a = clamp(G.bannerTimer/0.4, 0, 1);
     ctx.globalAlpha = a;
@@ -2170,7 +2233,7 @@ function drawTurnEnd(){
     centerText('INNINGS OVER', 110, 44, '#ffd166');
     centerText('Your Final Score', 168, 22, 'rgba(255,255,255,0.75)');
     centerText(G.score + ' m', 240, 76, '#ffd166');
-    centerText('Sending to server…', 296, 22, 'rgba(255,209,102,0.9)');
+    centerText('Handing over to ' + (NET.oppName || 'opponent') + '…', 296, 22, 'rgba(255,209,102,0.9)');
   } else {
     centerText(p.name + ' — TURN OVER', 110, 42, p.color);
     centerText('Final Score', 172, 22, 'rgba(255,255,255,0.75)');
@@ -2392,8 +2455,8 @@ function drawOnlineNameEntry(){
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
   ctx.fillText('Type a name  •  Enter to search', W/2, 278);
   centerText('How it works:', 320, 15, 'rgba(255,255,255,0.55)');
-  centerText('• A random opponent will be matched automatically', 348, 13, 'rgba(255,255,255,0.55)');
-  centerText('• Both players bat for 1 out — highest score wins', 370, 13, 'rgba(255,255,255,0.55)');
+  centerText('• Toss decides who bats first', 348, 13, 'rgba(255,255,255,0.55)');
+  centerText('• Other player watches live, then bats', 370, 13, 'rgba(255,255,255,0.55)');
   for (const b of menuButtons) drawMenuButton(b, '#ffd166');
 }
 function drawSearching(){
@@ -2415,108 +2478,205 @@ function drawSearching(){
   for (const b of menuButtons) drawMenuButton(b);
 }
 
+function drawToss(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+
+  centerText('🪙  TOSS', 100, 46, '#ffd166');
+  centerText('Deciding who bats first...', 155, 18, 'rgba(255,255,255,0.7)');
+
+  const elapsed = performance.now() - NET.tossStartTime;
+  const t = clamp(elapsed / TOSS_DURATION, 0, 1);
+
+  // Spinning coin
+  const cx = W/2, cy = 330;
+  const scaleY = Math.abs(Math.cos(t * Math.PI * 7));
+  const radius = 70;
+
+  // Shadow
+  ctx.save();
+  ctx.globalAlpha = 0.4;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + radius + 20, radius * 0.7 * scaleY, 12 * scaleY, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  // Coin
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, scaleY + 0.08);
+  const grd = ctx.createRadialGradient(-20, -20, 5, 0, 0, radius);
+  grd.addColorStop(0, '#fff4c2');
+  grd.addColorStop(0.55, '#ffd166');
+  grd.addColorStop(1, '#a06b12');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(120, 80, 20, 0.8)';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // Star on coin
+  ctx.fillStyle = 'rgba(140, 90, 20, 0.7)';
+  drawStar(0, 0, radius * 0.55, radius * 0.22, 5);
+
+  ctx.restore();
+
+  // Progress bar
+  const pbW = 320, pbH = 4;
+  const pbX = W/2 - pbW/2, pbY = 480;
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  rr(ctx, pbX, pbY, pbW, pbH, 2); ctx.fill();
+  ctx.fillStyle = '#ffd166';
+  rr(ctx, pbX, pbY, pbW * t, pbH, 2); ctx.fill();
+}
+
+function drawTossResult(){
+  ctx.fillStyle = 'rgba(12,16,28,0.94)';
+  ctx.fillRect(0,0,W,H);
+
+  const iWon = NET.tossWinner === NET.role;
+
+  centerText('🪙  TOSS RESULT', 100, 38, '#ffd166');
+
+  // Winning coin at top
+  const cx = W/2, cy = 210;
+  const radius = 55;
+  ctx.save();
+  ctx.translate(cx, cy);
+  const grd = ctx.createRadialGradient(-15, -15, 5, 0, 0, radius);
+  grd.addColorStop(0, '#fff4c2');
+  grd.addColorStop(0.55, '#ffd166');
+  grd.addColorStop(1, '#a06b12');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(120, 80, 20, 0.8)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(140, 90, 20, 0.7)';
+  drawStar(0, 0, radius * 0.55, radius * 0.22, 5);
+  ctx.restore();
+
+  if (iWon){
+    const pulse = 0.85 + 0.15 * Math.sin(performance.now()/280);
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    centerText('✨  YOU WON THE TOSS!  ✨', 310, 36, '#8affa0');
+    ctx.restore();
+    centerText('You will bat FIRST', 360, 24, '#ffffff');
+    centerText('Get ready to smash some gullis!', 395, 17, 'rgba(255,255,255,0.7)');
+  } else {
+    centerText((NET.oppName || 'OPPONENT') + ' WON THE TOSS', 310, 30, '#ff8a8a');
+    centerText('They will bat FIRST', 360, 24, '#ffffff');
+    centerText('You field first — watch their innings!', 395, 17, 'rgba(255,255,255,0.7)');
+  }
+
+  // Countdown
+  const elapsed = performance.now() - NET.tossResultStart;
+  const remaining = Math.max(0, Math.ceil((TOSS_RESULT_DURATION - elapsed) / 1000));
+  centerText('Starting in ' + remaining + '...', 460, 22, 'rgba(255,209,102,0.9)');
+}
+
 function drawWaitingOpp(){
   ctx.fillStyle = 'rgba(12,16,28,0.88)';
   ctx.fillRect(0,0,W,H);
 
-  if (!NET.myDone){
-    // Main pehle se nahi khela — jab tak mera turn na aaye
-    centerText('OPPONENT FOUND!', 130, 38, '#8affa0');
-    centerText('Opponent: ' + (NET.oppName || '...'), 185, 22, 'rgba(255,255,255,0.85)');
-    const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
-    centerText('Match starting' + dots, 240, 20, 'rgba(255,209,102,0.9)');
-    const t = performance.now()/1000;
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,209,102,' + (0.4 + 0.6*Math.abs(Math.sin(t*2))) + ')';
-    ctx.beginPath(); ctx.arc(W/2, 320, 14, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
+  const opp = NET.oppLive;
+  const iAmWaitingForMyTurn = !NET.myDone;
+  const headerColor = iAmWaitingForMyTurn ? PLAYER_COLORS[1] : '#ffd166';
+
+  if (iAmWaitingForMyTurn){
+    centerText((NET.oppName || 'OPPONENT') + ' IS BATTING FIRST', 55, 26, headerColor);
+    centerText('Watch their innings below — you bat next!', 90, 15, 'rgba(255,255,255,0.7)');
   } else {
-    // Main innings done — opponent ko live dekho
-    centerText('🏏  YOU ARE DONE', 55, 24, '#ffd166');
-    centerText('Your Score: ' + G.score + ' m', 90, 22, '#8affa0');
-
-    const opp = NET.oppLive;
-    const px = 100, py = 125, pw = W - 200, ph = 340;
-    ctx.save();
-    rr(ctx, px, py, pw, ph, 16);
-    ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
-    ctx.strokeStyle = PLAYER_COLORS[1]; ctx.lineWidth = 3; ctx.stroke();
-
-    ctx.font = '900 18px system-ui,sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.fillStyle = PLAYER_COLORS[1];
-    ctx.fillText('OPPONENT: ' + (NET.oppName || 'PLAYER'), px + pw/2, py + 12);
-
-    if (opp){
-      const oppScore = opp.score || 0;
-      const phaseLabel = opp.phase || 'BATTING';
-
-      ctx.font = '900 38px system-ui,sans-serif';
-      ctx.fillStyle = '#ffd166';
-      ctx.fillText(oppScore + ' m', px + pw/2, py + 40);
-
-      ctx.font = '700 15px system-ui,sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.fillText('Status: ' + phaseLabel, px + pw/2, py + 88);
-
-      // Mini pitch
-      const miniX = px + 40, miniY = py + 125;
-      const miniW = pw - 80, miniH = 130;
-
-      ctx.fillStyle = 'rgba(90,140,70,0.35)';
-      rr(ctx, miniX, miniY, miniW, miniH, 8); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1.5; ctx.stroke();
-
-      // Ground line
-      ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(miniX, miniY + miniH - 20);
-      ctx.lineTo(miniX + miniW, miniY + miniH - 20);
-      ctx.stroke();
-
-      // Danda marker
-      ctx.fillStyle = '#b07c42';
-      ctx.fillRect(miniX + 18, miniY + miniH - 30, 8, 12);
-
-      // Scale from game coords 0..1600 => mini 0..miniW
-      const scaleX = (miniW - 40) / 1600;
-      const scaleY = (miniH - 40) / 500;
-      const gx = Math.max(0, Math.min(1600, opp.gulliX || 0));
-      const gy = Math.max(0, Math.min(500, opp.gulliY || 400));
-      const dotX = miniX + 20 + gx * scaleX;
-      const dotY = miniY + miniH - 30 - (500 - gy) * scaleY;
-
-      // Trail
-      ctx.strokeStyle = 'rgba(255,209,102,0.35)'; ctx.lineWidth = 1.5;
-      ctx.setLineDash([4,4]);
-      ctx.beginPath();
-      ctx.moveTo(miniX + 22, miniY + miniH - 24);
-      ctx.lineTo(dotX, dotY);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Live dot
-      ctx.save();
-      ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 12;
-      ctx.fillStyle = '#ffd166';
-      ctx.beginPath(); ctx.arc(dotX, dotY, 6, 0, Math.PI*2); ctx.fill();
-      ctx.restore();
-
-      ctx.font = '600 10px system-ui,sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.fillText('LIVE VIEW', miniX + miniW/2, miniY + 4);
-
-      if (NET.oppDone){
-        centerText('OPPONENT DONE!', py + ph + 20, 22, '#8affa0');
-      } else {
-        const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
-        centerText('Waiting for opponent to finish' + dots, py + ph + 20, 15, 'rgba(255,255,255,0.7)');
-      }
-    } else {
-      centerText('Connecting to opponent stream...', py + ph/2, 20, 'rgba(255,255,255,0.7)');
-    }
-    ctx.restore();
+    centerText('🏏  YOUR INNINGS DONE', 50, 22, '#ffd166');
+    centerText('Your Score: ' + G.score + ' m', 82, 22, '#8affa0');
+    centerText('Watching ' + (NET.oppName || 'opponent') + ' bat', 112, 14, 'rgba(255,255,255,0.7)');
   }
+
+  const px = 100, py = 135, pw = W - 200, ph = 330;
+  ctx.save();
+  rr(ctx, px, py, pw, ph, 16);
+  ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
+  ctx.strokeStyle = PLAYER_COLORS[1]; ctx.lineWidth = 3; ctx.stroke();
+
+  ctx.font = '900 18px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = PLAYER_COLORS[1];
+  ctx.fillText('LIVE: ' + (NET.oppName || 'OPPONENT'), px + pw/2, py + 12);
+
+  if (opp){
+    const oppScore = opp.score || 0;
+    const phaseLabel = opp.phase || 'BATTING';
+
+    ctx.font = '900 36px system-ui,sans-serif';
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText(oppScore + ' m', px + pw/2, py + 38);
+
+    ctx.font = '700 14px system-ui,sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText('Status: ' + phaseLabel, px + pw/2, py + 82);
+
+    // Mini pitch
+    const miniX = px + 40, miniY = py + 115;
+    const miniW = pw - 80, miniH = 130;
+
+    ctx.fillStyle = 'rgba(90,140,70,0.35)';
+    rr(ctx, miniX, miniY, miniW, miniH, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(miniX, miniY + miniH - 20);
+    ctx.lineTo(miniX + miniW, miniY + miniH - 20);
+    ctx.stroke();
+
+    ctx.fillStyle = '#b07c42';
+    ctx.fillRect(miniX + 18, miniY + miniH - 30, 8, 12);
+
+    const scaleX = (miniW - 40) / 1600;
+    const scaleY = (miniH - 40) / 500;
+    const gx = Math.max(0, Math.min(1600, opp.gulliX || 0));
+    const gy = Math.max(0, Math.min(500, opp.gulliY || 400));
+    const dotX = miniX + 20 + gx * scaleX;
+    const dotY = miniY + miniH - 30 - (500 - gy) * scaleY;
+
+    ctx.strokeStyle = 'rgba(255,209,102,0.35)'; ctx.lineWidth = 1.5;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath();
+    ctx.moveTo(miniX + 22, miniY + miniH - 24);
+    ctx.lineTo(dotX, dotY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.save();
+    ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 12;
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath(); ctx.arc(dotX, dotY, 6, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    ctx.font = '600 10px system-ui,sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText('LIVE VIEW', miniX + miniW/2, miniY + 4);
+
+    if (NET.oppDone){
+      centerText('OPPONENT DONE!', py + ph + 20, 22, '#8affa0');
+    } else if (iAmWaitingForMyTurn){
+      const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
+      centerText('Opponent batting' + dots + ' you bat next!', py + ph + 20, 15, 'rgba(255,255,255,0.7)');
+    } else {
+      const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
+      centerText('Waiting for opponent to finish' + dots, py + ph + 20, 15, 'rgba(255,255,255,0.7)');
+    }
+  } else {
+    centerText('Connecting to opponent stream...', py + ph/2, 20, 'rgba(255,255,255,0.7)');
+  }
+  ctx.restore();
+
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
 
@@ -2543,6 +2703,8 @@ function draw(){
   }
   else if (G.phase === 'onlineName'){ drawOnlineNameEntry(); }
   else if (G.phase === 'searching'){ drawSearching(); }
+  else if (G.phase === 'toss'){ drawToss(); }
+  else if (G.phase === 'tossResult'){ drawTossResult(); }
   else if (G.phase === 'waitingOpp'){ drawWaitingOpp(); }
   else if (G.phase === 'nameEntry'){
     if (fielders.length === 0) buildFielders();
@@ -2590,6 +2752,7 @@ function updateHUD(){
   if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'
       || G.phase === 'nameEntry' || G.phase === 'splash'
       || G.phase === 'onlineName' || G.phase === 'searching'
+      || G.phase === 'toss' || G.phase === 'tossResult'
       || (G.phase === 'waitingOpp' && !NET.myDone)){
     hud.style.display = 'none'; return;
   }
