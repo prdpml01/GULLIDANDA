@@ -126,7 +126,6 @@ function loadSession(){
 }
 function normalizePhone(p){ return String(p || '').replace(/\D/g, '').slice(0, 10); }
 
-// Analytics helper
 function trackEvent(name, params){
   try {
     if (window.firebaseAnalytics){
@@ -284,7 +283,6 @@ function initFirebase(){
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     NET.db = firebase.database();
     NET.ready = true;
-    // Firebase Analytics initialize + page_view
     try {
       if (firebase.analytics){
         window.firebaseAnalytics = firebase.analytics();
@@ -548,7 +546,6 @@ function setPhase(p){
   if (p==='menu'||p==='levelSelect'||p==='playerSelect'||p==='turnIntro'||p==='turnEnd'||p==='gameOver'||p==='leaderboard'||p==='login'||p==='register'||p==='profileView'){
     rebuildMenuButtons();
   }
-  // Track phase change for major phases
   if (p === 'menu' || p === 'login' || p === 'register'){
     trackEvent('screen_view', { screen_name: p });
   }
@@ -1290,6 +1287,15 @@ function canvasCoordsFromEvent(e){
 function setShot(id){
   if (G.shotType !== id){ G.shotType = id; beep(720, 0.05, 'sine', 0.06); }
 }
+
+// ===== Footer link coordinates (menu screen) =====
+const FOOTER_LINK_Y = H - 46;
+const FOOTER_LINKS = [
+  { id: 'privacy', label: 'Privacy Policy', x: W/2 - 160, w: 110 },
+  { id: 'about',   label: 'About',          x: W/2 - 30,  w: 60  },
+  { id: 'contact', label: 'Contact',        x: W/2 + 60,  w: 80  }
+];
+
 function handleMenuClick(x, y){
   for (const b of menuButtons){
     if (pointInButton(x, y, b)){
@@ -1344,6 +1350,17 @@ function handleMenuClick(x, y){
     if (pointInButton(x, y, { x: pvX, y: pvY, w: pvW, h: pvH })){
       beep(880, 0.06, 'triangle', 0.09);
       setPhase('profileView'); return true;
+    }
+    // Footer links
+    if (Math.abs(y - FOOTER_LINK_Y) < 16){
+      for (const lnk of FOOTER_LINKS){
+        if (x >= lnk.x - lnk.w/2 && x <= lnk.x + lnk.w/2){
+          beep(880, 0.05, 'triangle', 0.08);
+          trackEvent('external_link_click', { link: lnk.id });
+          window.open(lnk.id + '.html', '_blank');
+          return true;
+        }
+      }
     }
   }
   // Login/register field taps
@@ -2616,10 +2633,41 @@ function drawMenuScreen(){
   ctx.globalAlpha = 1;
   for (const b of menuButtons) drawMenuButton(b);
 
+  // Powered by + Footer links
   ctx.font = '700 11px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255,209,102,0.85)';
+  ctx.fillText('Powered by PRADEEP SINGH', W/2, H - 22);
+  // Footer links row
+  ctx.font = '700 12px system-ui,sans-serif';
+  const linkBaseY = H - 46;
+  const privacyX = W/2 - 160;
+  const aboutX = W/2 - 30;
+  const contactX = W/2 + 60;
+  const linkColor = 'rgba(140,180,230,0.9)';
+  // Privacy Policy
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(255,209,102,0.75)';
-  ctx.fillText('Powered by PRADEEP SINGH', W/2, H - 18);
+  ctx.fillStyle = linkColor;
+  ctx.fillText('Privacy Policy', privacyX, linkBaseY);
+  // Dot separator
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText('·', W/2 - 80, linkBaseY);
+  // About
+  ctx.fillStyle = linkColor;
+  ctx.fillText('About', aboutX, linkBaseY);
+  // Dot separator
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText('·', W/2 + 15, linkBaseY);
+  // Contact
+  ctx.fillStyle = linkColor;
+  ctx.fillText('Contact', contactX, linkBaseY);
+  // Underline effect
+  ctx.strokeStyle = 'rgba(140,180,230,0.5)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(privacyX - 42, linkBaseY + 9); ctx.lineTo(privacyX + 42, linkBaseY + 9);
+  ctx.moveTo(aboutX - 18, linkBaseY + 9);   ctx.lineTo(aboutX + 18, linkBaseY + 9);
+  ctx.moveTo(contactX - 26, linkBaseY + 9); ctx.lineTo(contactX + 26, linkBaseY + 9);
+  ctx.stroke();
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
 function drawLevelSelect(){
