@@ -6,6 +6,7 @@
 <title>Gulli Danda — Powered by Pradeep Singh</title>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics-compat.js"></script>
 <style>
   html,body{margin:0;width:100%;height:100%;height:100dvh;
     background:radial-gradient(circle at 50% 0%, #2b3350 0%, #141824 70%);
@@ -125,6 +126,15 @@ function loadSession(){
 }
 function normalizePhone(p){ return String(p || '').replace(/\D/g, '').slice(0, 10); }
 
+// Analytics helper
+function trackEvent(name, params){
+  try {
+    if (window.firebaseAnalytics){
+      window.firebaseAnalytics.logEvent(name, params || {});
+    }
+  } catch(e){}
+}
+
 function registerUser(name, phone){
   if (!NET.ready){ ACCOUNT.error = 'Network not ready'; return; }
   ACCOUNT.error = ''; ACCOUNT.loading = true;
@@ -144,6 +154,7 @@ function registerUser(name, phone){
       saveSession(); setPhase('menu');
       beep(880, 0.1, 'triangle', 0.11);
       setTimeout(()=>beep(1200, 0.15, 'triangle', 0.11), 120);
+      trackEvent('sign_up', { method: 'phone' });
     });
   }).catch(() => { ACCOUNT.error = 'Connection error. Try again.'; ACCOUNT.loading = false; });
 }
@@ -159,10 +170,12 @@ function loginUser(phone){
     ACCOUNT.loggedIn = true; ACCOUNT.loading = false;
     saveSession(); setPhase('menu');
     beep(880, 0.1, 'triangle', 0.11);
+    trackEvent('login', { method: 'phone' });
   }).catch(() => { ACCOUNT.error = 'Connection error. Try again.'; ACCOUNT.loading = false; });
 }
 
 function logoutUser(){
+  trackEvent('logout', {});
   ACCOUNT.loggedIn = false;
   ACCOUNT.name = ''; ACCOUNT.phone = '';
   ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
@@ -189,12 +202,14 @@ function updateStatsSingle(score){
   ACCOUNT.matchesPlayed++; ACCOUNT.totalRuns += score;
   if (score > ACCOUNT.bestSingle) ACCOUNT.bestSingle = score;
   syncAccountStats();
+  trackEvent('single_match_end', { score: score });
 }
 function updateStatsOnline(myScore, won){
   ACCOUNT.matchesPlayed++; ACCOUNT.onlineMatches++; ACCOUNT.totalRuns += myScore;
   if (myScore > ACCOUNT.bestOnline) ACCOUNT.bestOnline = myScore;
   if (won) ACCOUNT.wins++; else ACCOUNT.losses++;
   syncAccountStats();
+  trackEvent('online_match_end', { score: myScore, won: won ? 1 : 0 });
 }
 
 /* ==================== LEADERBOARD ==================== */
@@ -269,6 +284,17 @@ function initFirebase(){
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     NET.db = firebase.database();
     NET.ready = true;
+    // Firebase Analytics initialize + page_view
+    try {
+      if (firebase.analytics){
+        window.firebaseAnalytics = firebase.analytics();
+        window.firebaseAnalytics.logEvent('page_view', {
+          page_title: 'Gulli Danda Game',
+          page_location: window.location.href,
+          timestamp: Date.now()
+        });
+      }
+    } catch(e){ console.warn('Analytics init failed', e); }
     return true;
   } catch(e){ console.error(e); return false; }
 }
@@ -286,6 +312,7 @@ function startOnlineMatchmaking(){
   NET.searching = true;
   NET.searchStart = performance.now();
   NET.statusMsg = 'Searching for players...';
+  trackEvent('matchmaking_start', {});
   tryFindRoom();
 }
 
@@ -328,7 +355,7 @@ function joinRoom(id, room){
   NET.roomRef.update({
     status: 'playing',
     p2: { name: NET.myName, score: 0, done: false }
-  }).then(()=>{ watchRoom(); });
+  }).then(()=>{ watchRoom(); trackEvent('matchmaking_success', {}); });
 }
 
 function watchRoom(){
@@ -520,6 +547,10 @@ function setPhase(p){
   G.phase = p;
   if (p==='menu'||p==='levelSelect'||p==='playerSelect'||p==='turnIntro'||p==='turnEnd'||p==='gameOver'||p==='leaderboard'||p==='login'||p==='register'||p==='profileView'){
     rebuildMenuButtons();
+  }
+  // Track phase change for major phases
+  if (p === 'menu' || p === 'login' || p === 'register'){
+    trackEvent('screen_view', { screen_name: p });
   }
 }
 function rebuildMenuButtons(){
@@ -773,6 +804,7 @@ function startSinglePlayer(level){
   G.gameOverWinner = null; G.gameOverMsg = ''; G.levelCleared = false;
   G.celebrationTimer = 0; G.confettiTimer = 0;
   initCrowd(); prepareTurn();
+  trackEvent('single_game_start', { level: level });
 }
 function startMultiPlayer(count){
   G.mode = 'multi'; G.level = 1;
@@ -786,6 +818,7 @@ function startMultiPlayer(count){
   G.celebrationTimer = 0; G.confettiTimer = 0;
   G.nameEntry = { playerIndex: 1, currentText: '', online: false };
   initCrowd(); setPhase('nameEntry');
+  trackEvent('local_multi_start', { players: count });
 }
 function prepareTurn(){
   G.score = 0; G.outs = 0;
@@ -1298,6 +1331,19 @@ function handleMenuClick(x, y){
         if (G.mode === 'onlineResults') cleanupOnline();
         setPhase('menu'); return true;
       }
+    }
+  }
+  // Menu screen: MY PROFILE + LOGOUT buttons (custom coords)
+  if (G.phase === 'menu'){
+    const pvW = 130, pvH = 52, pvX = W - 18 - pvW, pvY = 18;
+    const loW = 110, loH = 52, loX = pvX - 12 - loW, loY = 18;
+    if (pointInButton(x, y, { x: loX, y: loY, w: loW, h: loH })){
+      beep(880, 0.06, 'triangle', 0.09);
+      cleanupOnline(); logoutUser(); return true;
+    }
+    if (pointInButton(x, y, { x: pvX, y: pvY, w: pvW, h: pvH })){
+      beep(880, 0.06, 'triangle', 0.09);
+      setPhase('profileView'); return true;
     }
   }
   // Login/register field taps
@@ -2202,7 +2248,6 @@ function drawLoginScreen(){
   ctx.fillRect(0,0,W,H);
   centerText('🔓  LOGIN', 90, 42, '#ffd166');
   centerText('Enter your mobile number to continue', 132, 16, 'rgba(255,255,255,0.7)');
-
   const boxW = 440, boxH = 60;
   const boxX = W/2 - boxW/2, boxY = 210;
   const isFocusPhone = ACCOUNT.formFocus === 'phone';
@@ -2230,7 +2275,6 @@ function drawLoginScreen(){
   }
   ctx.restore();
   centerText('Tap box to type  •  Enter to login', W/2, 300, 13, 'rgba(255,255,255,0.55)');
-
   if (ACCOUNT.loading) centerText('Logging in...', 350, 18, 'rgba(255,209,102,0.9)');
   else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 350, 16, '#ff8a8a');
   for (const b of menuButtons) drawMenuButton(b, b.id === 'doLogin' ? '#ffd166' : '#ffffff');
@@ -2240,7 +2284,6 @@ function drawRegisterScreen(){
   ctx.fillRect(0,0,W,H);
   centerText('✍  REGISTER', 60, 36, '#ffd166');
   centerText('Create your account — one-time setup', 100, 14, 'rgba(255,255,255,0.7)');
-
   const nameBox = { x: W/2 - 220, y: 150, w: 440, h: 56 };
   const isFocusName = ACCOUNT.formFocus === 'name';
   ctx.save();
@@ -2266,7 +2309,6 @@ function drawRegisterScreen(){
     }
   }
   ctx.restore();
-
   const phoneBox = { x: W/2 - 220, y: 250, w: 440, h: 56 };
   const isFocusPhone = ACCOUNT.formFocus === 'phone';
   ctx.save();
@@ -2302,7 +2344,6 @@ function drawLeaderboard(){
   ctx.fillRect(0,0,W,H);
   centerText('🏆  GLOBAL LEADERBOARD', 55, 32, '#ffd166');
   centerText('Top online scores worldwide', 92, 14, 'rgba(255,255,255,0.65)');
-
   if (!LEADERBOARD.data){
     centerText('Loading...', 260, 24, 'rgba(255,255,255,0.7)');
   } else if (LEADERBOARD.data.length === 0){
@@ -2340,7 +2381,6 @@ function drawProfileView(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
   centerText('👤  YOUR PROFILE', 55, 30, '#ffd166');
-
   const cx = W/2, cy = 145, r = 46;
   ctx.save();
   const grd = ctx.createRadialGradient(cx - 15, cy - 15, 5, cx, cy, r);
@@ -2353,10 +2393,8 @@ function drawProfileView(){
   ctx.fillStyle = '#1a1a1a';
   ctx.fillText((ACCOUNT.name || 'P').charAt(0), cx, cy + 2);
   ctx.restore();
-
   centerText(ACCOUNT.name, 220, 30, '#ffffff');
   centerText('📱 ' + ACCOUNT.phone, 252, 16, 'rgba(255,255,255,0.6)');
-
   const stats = [
     { label:'Best Single', value: ACCOUNT.bestSingle + 'm', color:'#ffd166' },
     { label:'Best Online', value: ACCOUNT.bestOnline + 'm', color:'#8affa0' },
@@ -2553,7 +2591,6 @@ function drawMenuScreen(){
   // MY PROFILE + LOGOUT buttons top-right
   const pvW = 130, pvH = 52, pvX = W - 18 - pvW, pvY = 18;
   const loW = 110, loH = 52, loX = pvX - 12 - loW, loY = 18;
-  // MY PROFILE
   ctx.save();
   rr(ctx, pvX, pvY, pvW, pvH, 12);
   ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
@@ -2563,7 +2600,6 @@ function drawMenuScreen(){
   ctx.fillStyle='#ffd166';
   ctx.fillText('👤 PROFILE', pvX + pvW/2, pvY + pvH/2);
   ctx.restore();
-  // LOGOUT
   ctx.save();
   rr(ctx, loX, loY, loW, loH, 12);
   ctx.fillStyle = 'rgba(20,25,40,0.78)'; ctx.fill();
