@@ -15,7 +15,9 @@
     border-radius:10px;padding:4px 12px;display:flex;flex-direction:column;align-items:center;min-width:78px;}
   .stat .lbl{font-size:9px;letter-spacing:1.4px;color:rgba(255,255,255,0.55);font-weight:700;}
   .stat b{font-size:18px;font-weight:900;color:#ffd166;line-height:1.1;}
-  #hiddenInput{position:fixed;left:-9999px;top:0;width:10px;height:10px;opacity:0.01;border:0;outline:0;}
+  #hiddenInput{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:2px;height:2px;padding:0;border:0;outline:0;opacity:0.01;
+    font-size:16px;background:transparent;color:transparent;caret-color:transparent;z-index:-1;}
 </style>
 </head>
 <body>
@@ -30,7 +32,7 @@
     <div class="stat"><span class="lbl">LIVES</span><b id="uiLives">0</b></div>
   </div>
 </div>
-<input id="hiddenInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+<input id="hiddenInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text">
 
 <script>
 (function(){
@@ -95,10 +97,10 @@ const STADIUM_BOTTOM = 540;
 const HORIZON      = 540;
 const GROUND_Y     = 640;
 
-const PPM          = 20;      // pixels per metre
-const PLAYER_X     = -40;     // world x of the batter
-const DANDA_X      = 40;      // world x of the danda on the ground
-const GULLI_START_X= 0;       // world x where the gulli is flicked
+const PPM          = 20;
+const PLAYER_X     = -40;
+const DANDA_X      = 40;
+const GULLI_START_X= 0;
 const ZONE_X       = 0;
 const ZONE_Y       = GROUND_Y - 200;
 const ZONE_R       = 70;
@@ -699,9 +701,11 @@ function rebuildMenuButtons(){
 /* ==================== INPUT ==================== */
 function pointerPos(e){
   const r = canvas.getBoundingClientRect();
+  const cx = (e.clientX !== undefined) ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+  const cy = (e.clientY !== undefined) ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
   return {
-    x: (e.clientX - r.left) * (W / (r.width || 1)),
-    y: (e.clientY - r.top)  * (H / (r.height || 1))
+    x: (cx - r.left) * (W / (r.width || 1)),
+    y: (cy - r.top)  * (H / (r.height || 1))
   };
 }
 
@@ -718,11 +722,11 @@ function hitButton(p){
 }
 
 function onPointerDown(e){
-  e.preventDefault();
   const p = pointerPos(e);
 
   // ---- splash skip ----
   if (G.phase === 'splash'){
+    if (e.cancelable) e.preventDefault();
     G.splashTimer = SPLASH_DURATION;
     return;
   }
@@ -730,18 +734,30 @@ function onPointerDown(e){
   // ---- name entry is tap-anywhere ----
   if (G.phase === 'nameEntry'){
     const btnX = W/2 - 150, btnY = 415, btnW = 300, btnH = 56;
-    if (p.x >= btnX && p.x <= btnX+btnW && p.y >= btnY && p.y <= btnY+btnH){
+    const isBtn = (p.x >= btnX && p.x <= btnX+btnW && p.y >= btnY && p.y <= btnY+btnH);
+    if (isBtn){
+      if (e.cancelable) e.preventDefault();
       commitNameEntry();
     } else {
+      // DO NOT preventDefault — keyboard needs default focus behavior
+      G.nameEntry.currentText = G.nameEntry.currentText || '';
       hiddenInput.value = G.nameEntry.currentText;
-      hiddenInput.focus();
       hiddenInput.maxLength = 10;
+      hiddenInput.setAttribute('inputmode','text');
+      try{ hiddenInput.focus({ preventScroll:true }); }catch(err){ hiddenInput.focus(); }
     }
     return;
   }
 
   // ---- buttons ----
   const b = hitButton(p);
+
+  // Agar auth screen pe input field pe tap hua, toh default mat roko (keyboard ke liye)
+  const isAuthFocus = b && b.id && b.id.indexOf('focus_') === 0 &&
+    (G.phase === 'login' || G.phase === 'register' || G.phase === 'guest');
+
+  if (!isAuthFocus && e.cancelable) e.preventDefault();
+
   if (b){ handleButton(b.id); return; }
 
   // ---- gameplay taps ----
@@ -773,9 +789,10 @@ function onKeyDown(e){
 
   if (G.phase === 'nameEntry'){
     if (e.key === 'Enter') commitNameEntry();
-    else if (e.key === 'Backspace'){ G.nameEntry.currentText = G.nameEntry.currentText.slice(0,-1); }
-    else if (e.key.length === 1 && G.nameEntry.currentText.length < 10){
-      G.nameEntry.currentText += e.key.toUpperCase();
+    else if (e.key === 'Backspace'){ G.nameEntry.currentText = (G.nameEntry.currentText||'').slice(0,-1); hiddenInput.value = G.nameEntry.currentText; }
+    else if (e.key.length === 1 && (G.nameEntry.currentText||'').length < 10){
+      G.nameEntry.currentText = (G.nameEntry.currentText||'') + e.key.toUpperCase();
+      hiddenInput.value = G.nameEntry.currentText;
     }
     return;
   }
@@ -798,9 +815,9 @@ function onKeyDown(e){
 
 function syncHiddenInput(){
   hiddenInput.type = (ACCOUNT.formFocus === 'password') ? 'password' : 'text';
-  if (ACCOUNT.formFocus === 'username'){ hiddenInput.value = ACCOUNT.formUsername; hiddenInput.maxLength = 15; }
-  else if (ACCOUNT.formFocus === 'password'){ hiddenInput.value = ACCOUNT.formPassword; hiddenInput.maxLength = 20; }
-  else if (ACCOUNT.formFocus === 'guestName'){ hiddenInput.value = ACCOUNT.formName; hiddenInput.maxLength = 14; }
+  if (ACCOUNT.formFocus === 'username'){ hiddenInput.value = ACCOUNT.formUsername; hiddenInput.maxLength = 15; hiddenInput.setAttribute('inputmode','text'); }
+  else if (ACCOUNT.formFocus === 'password'){ hiddenInput.value = ACCOUNT.formPassword; hiddenInput.maxLength = 20; hiddenInput.setAttribute('inputmode','text'); }
+  else if (ACCOUNT.formFocus === 'guestName'){ hiddenInput.value = ACCOUNT.formName; hiddenInput.maxLength = 14; hiddenInput.setAttribute('inputmode','text'); }
   try{ hiddenInput.focus({ preventScroll:true }); }catch(err){ hiddenInput.focus(); }
 }
 
@@ -809,6 +826,7 @@ hiddenInput.addEventListener('input', function(){
   if (ACCOUNT.formFocus === 'username'){ ACCOUNT.formUsername = v.replace(/[^A-Za-z0-9_]/g,'').slice(0,15); hiddenInput.value = ACCOUNT.formUsername; }
   else if (ACCOUNT.formFocus === 'password'){ ACCOUNT.formPassword = v.slice(0,20); }
   else if (ACCOUNT.formFocus === 'guestName'){ ACCOUNT.formName = v.slice(0,14); }
+  else if (G.phase === 'nameEntry'){ G.nameEntry.currentText = v.slice(0,10).toUpperCase(); }
   updateSuggestions();
 });
 
@@ -922,6 +940,7 @@ function doLogin(){
     applyAccountData(rec);
     ACCOUNT.formPassword = '';
     ACCOUNT.formFocus = null;
+    try{ hiddenInput.blur(); }catch(e){}
     loadLeaderboard();
     setPhase('menu');
   }, 350);
@@ -951,6 +970,7 @@ function doRegister(){
     applyAccountData(all[u]);
     ACCOUNT.formPassword = '';
     ACCOUNT.formFocus = null;
+    try{ hiddenInput.blur(); }catch(e){}
     loadLeaderboard();
     setPhase('menu');
   }, 400);
@@ -1055,7 +1075,6 @@ function commitNameEntry(){
   try{ hiddenInput.blur(); }catch(e){}
 
   if (idx === G.players.length - 1){
-    // all named -> start match
     G.currentPlayer = 0;
     G.score = 0; G.outs = 0;
     for (const p of G.players) p.score = 0;
@@ -1244,7 +1263,6 @@ function advanceAfterTurn(){
     return;
   }
   if (G.mode === 'multi'){
-    // next player
     for (let i=G.currentPlayer+1; i<G.players.length; i++){
       if (!G.players[i].done){
         G.currentPlayer = i;
@@ -1257,7 +1275,6 @@ function advanceAfterTurn(){
         return;
       }
     }
-    // all done -> finish
     let winIdx = 0;
     for (let i=1; i<G.players.length; i++) if (G.players[i].score > G.players[winIdx].score) winIdx = i;
     G.gameOverWinner = winIdx;
@@ -1282,7 +1299,6 @@ function update(dt){
   if (G.swingTimer > 0) G.swingTimer = Math.max(0, G.swingTimer - dt);
   if (shake > 0) shake = Math.max(0, shake - dt * 2.5);
 
-  // ---- particles ----
   for (let i = G.particles.length-1; i >= 0; i--){
     const p = G.particles[i];
     p.life -= dt;
@@ -1295,7 +1311,6 @@ function update(dt){
   }
   if (G.ring){ G.ring.t += dt * 2.4; if (G.ring.t >= 1) G.ring = null; }
 
-  // ---- crowd ----
   let ce = 0.18;
   if (G.phase === 'fly') ce = 0.8;
   else if (G.phase === 'fielding') ce = 0.6;
@@ -1319,7 +1334,6 @@ function update(dt){
     if (flashes[i].life <= 0) flashes.splice(i,1);
   }
 
-  // ---- camera ----
   let camTarget = PLAYER_X - 340;
   if (G.phase === 'fly' || G.phase === 'fielding' || G.phase === 'throw'){
     camTarget = Math.max(PLAYER_X - 340, gulli.x - 820);
@@ -1328,7 +1342,6 @@ function update(dt){
   }
   camX += (camTarget - camX) * Math.min(1, dt * 3.2);
 
-  // ---- phases ----
   switch (G.phase){
 
     case 'splash':
@@ -1419,7 +1432,6 @@ function update(dt){
       gulli.rot += gulli.rotV * dt;
       if (gulli.x > GULLI_START_X) G.hitDistance = (gulli.x - GULLI_START_X) / PPM;
 
-      // catch check
       if (gulli.vy > 0 && gulli.y > GROUND_Y - 200 && G.hitDistance > 4){
         for (const f of fielders){
           if (Math.abs(f.x - gulli.x) < 30){
@@ -1581,7 +1593,6 @@ function update(dt){
 }
 
 /* ==================== DRAWING ==================== */
-/* ==================== DRAWING ==================== */
 const cloudsArr = clouds;
 function drawSky(){
   const g = ctx.createLinearGradient(0,0,0,SKY_BOTTOM);
@@ -1608,16 +1619,13 @@ function drawStadium(){
     ctx.fillStyle = g; ctx.fillRect(sec.x, STADIUM_TOP, sec.w, STADIUM_BOTTOM - STADIUM_TOP);
   }
 
-  /* ---------- NAYA CROWD ANIMATION ---------- */
   const exc = crowdExcitement;
-  // peeche ki rows: har row apni alag taal me uchhalti aur jhoomti hai
   for (let r = 0; r < crowdLayers.length; r++){
     if (!crowdLayers[r]) continue;
     const hop  = Math.abs(Math.sin(t*(2.8 + exc*3.2) + r*0.9)) * exc * (2.5 + r*0.5);
     const sway = Math.sin(t*1.3 + r*1.7) * (0.6 + exc*1.5);
     ctx.drawImage(crowdLayers[r], sway, -hop);
   }
-  // aage ke log: alag-alag uchhalte, taali bajate, hath uthate, wave me shamil
   for (const p of frontRowPeople){
     const idle = Math.sin(t*1.8 + p.phase) * 0.8;
     const hop  = Math.abs(Math.sin(t*(3 + exc*7) + p.phase*1.7)) * exc * 9;
@@ -1631,7 +1639,6 @@ function drawStadium(){
     drawCrowdPerson(ctx, p, raise);
     ctx.restore();
   }
-  /* ------------------------------------------- */
 
   for (const f of flashes){
     const a = f.life / f.max; const r = 10 + (1 - a) * 16;
@@ -3133,7 +3140,7 @@ function drawNameEntry(){
   const pad = 24;
   ctx.font = '900 32px system-ui,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  const text = G.nameEntry.currentText;
+  const text = G.nameEntry.currentText || '';
   const placeholder = PLAYER_NAMES[idx];
   const displayText = text || placeholder;
   ctx.fillStyle = text ? '#ffffff' : 'rgba(255,255,255,0.32)';
@@ -3571,7 +3578,6 @@ function drawChatFeed(){
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
 function drawChatPanel(){
-  // minimal emoji bar shown while spectating
   ctx.save();
   ctx.globalAlpha = 0.9;
   const emojis = ['👍','😂','🔥','😮','❤️'];
@@ -3701,14 +3707,48 @@ function loop(now){
 
 /* ==================== INIT ==================== */
 function initFirebase(){
-  // Offline-first stub — all persistence is local.
   loadLeaderboard();
 }
+
+/* ---- EVENT LISTENERS (attached correctly now) ---- */
+canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
+window.addEventListener('keydown', onKeyDown);
+canvas.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+// Fallback for very old browsers
+canvas.addEventListener('mousedown', function(e){
+  if (!window.PointerEvent) onPointerDown(e);
+});
+canvas.addEventListener('touchstart', function(e){
+  if (!window.PointerEvent && e.touches && e.touches[0]){
+    onPointerDown({
+      clientX: e.touches[0].clientX,
+      clientY: e.touches[0].clientY,
+      preventDefault: function(){ if (e.cancelable) e.preventDefault(); },
+      cancelable: e.cancelable
+    });
+  }
+}, { passive: false });
+
+// Prevent double-tap zoom on iOS
+let _lastTap = 0;
+canvas.addEventListener('touchend', function(e){
+  const now = Date.now();
+  if (now - _lastTap < 300 && e.cancelable) e.preventDefault();
+  _lastTap = now;
+}, { passive: false });
+
+// Unlock audio on first user gesture
+function unlockAudio(){
+  try{ if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); }catch(e){}
+}
+canvas.addEventListener('pointerdown', unlockAudio, { once: true });
+window.addEventListener('keydown', unlockAudio, { once: true });
 
 resetGulli();
 rebuildMenuButtons();
 initFirebase();
-setTimeout(()=>{ try{ playSplashChime(); } catch(e){} }, 120);
+setTimeout(function(){ try{ playSplashChime(); }catch(e){} }, 120);
 requestAnimationFrame(loop);
 
 })();
