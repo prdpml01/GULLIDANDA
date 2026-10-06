@@ -37,6 +37,15 @@
     width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;
     background:transparent;color:transparent;font-size:16px;
     caret-color:transparent;z-index:-1;pointer-events:none;}
+  #chatStickerBar{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+    display:flex;gap:10px;background:rgba(15,20,32,0.85);backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,0.22);border-radius:30px;padding:6px 14px;
+    z-index:25;pointer-events:auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);}
+  .sticker-btn{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
+    border-radius:50%;width:38px;height:38px;font-size:19px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:transform 0.15s ease, background 0.15s ease;}
+  .sticker-btn:hover{transform:scale(1.2);background:rgba(255,209,102,0.25);}
+  .sticker-btn:active{transform:scale(0.92);}
 </style>
 </head>
 <body>
@@ -57,9 +66,19 @@
       <div class="stat out">OUTS <span id="uiOuts">0</span></div>
     </div>
   </div>
+  <div id="chatStickerBar">
+    <button class="sticker-btn" onclick="sendEmojiSticker('🔥')">🔥</button>
+    <button class="sticker-btn" onclick="sendEmojiSticker('👏')">👏</button>
+    <button class="sticker-btn" onclick="sendEmojiSticker('😂')">😂</button>
+    <button class="sticker-btn" onclick="sendEmojiSticker('🏏')">🏏</button>
+    <button class="sticker-btn" onclick="sendEmojiSticker('🎯')">🎯</button>
+    <button class="sticker-btn" onclick="sendEmojiSticker('😱')">😱</button>
+  </div>
 </div>
 
 <script>
+let sendEmojiSticker = () => {};
+
 (() => {
 "use strict";
 
@@ -86,31 +105,67 @@ const SPLASH_DURATION = 2.6, TOSS_DURATION = 2500, TOSS_RESULT_DURATION = 2400;
 
 const COIN_DIVISOR = 10;
 
+/* ==================== VOICE SYNTHESIS ==================== */
+function speakVoice(text, pitch = 1.1, rate = 1.1){
+  try {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'hi-IN';
+    utt.pitch = pitch;
+    utt.rate = rate;
+    window.speechSynthesis.speak(utt);
+  } catch(e){}
+}
+
+/* ==================== EMOJI CHAT SYSTEM ==================== */
+const activeStickers = [];
+sendEmojiSticker = function(emoji){
+  if (!emoji) return;
+  spawnSticker(emoji, true);
+  if (NET.roomRef && NET.role && G.mode === 'online'){
+    NET.roomRef.child('live/' + NET.role + '/sticker').set({
+      emoji: emoji,
+      ts: Date.now()
+    }).catch(()=>{});
+  }
+};
+function spawnSticker(emoji, isMine){
+  activeStickers.push({
+    emoji,
+    x: isMine ? 120 + Math.random()*40 : W - 140 - Math.random()*40,
+    y: H - 120,
+    vy: -130 - Math.random()*40,
+    life: 2.2,
+    max: 2.2,
+    scale: 0.3
+  });
+}
+
 /* ==================== SHOP CATALOG ==================== */
 const SHOP_SKINS = [
   { id:'red',    name:'Classic Red',   color:'#e63946', price:0     },
   { id:'blue',   name:'Ocean Blue',    color:'#3a86ff', price:500   },
-  { id:'green',  name:'Forest Green',  color:'#06d6a0', price:500  },
-  { id:'gold',   name:'Golden Player', color:'#ffbe0b', price:500 },
-  { id:'purple', name:'Royal Purple',  color:'#a06bff', price:500 }
+  { id:'green',  name:'Forest Green',  color:'#06d6a0', price:500   },
+  { id:'gold',   name:'Golden Player', color:'#ffbe0b', price:500   },
+  { id:'purple', name:'Royal Purple',  color:'#a06bff', price:500   }
 ];
 const SHOP_DANDAS = [
-  { id:'brown',   name:'Classic Wood',   color:'#b07c42', accent:'#8a5a2b', price:0      },
-  { id:'gold',    name:'Golden Danda',   color:'#ffd166', accent:'#c99a2e', price:2000   },
-  { id:'diamond', name:'Diamond Danda',  color:'#a8d8ff', accent:'#5c9ee0', price:4000  },
-  { id:'emerald', name:'Emerald Danda',  color:'#06d6a0', accent:'#049e77', price:8000  },
-  { id:'ruby',    name:'Ruby Danda',     color:'#ff4d6d', accent:'#c9184a', price:20000 }
+  { id:'brown',   name:'Classic Wood',   color:'#b07c42', accent:'#8a5a2b', price:0       },
+  { id:'gold',    name:'Golden Danda',   color:'#ffd166', accent:'#c99a2e', price:2000    },
+  { id:'diamond', name:'Diamond Danda',  color:'#a8d8ff', accent:'#5c9ee0', price:4000    },
+  { id:'emerald', name:'Emerald Danda',  color:'#06d6a0', accent:'#049e77', price:8000    },
+  { id:'ruby',    name:'Ruby Danda',     color:'#ff4d6d', accent:'#c9184a', price:20000   }
 ];
 const SHOP_BOOSTS = [
-  { id:'normal',  name:'Normal',       bonus:0,    price:0     },
-  { id:'boost5',  name:'Boost +5%',    bonus:0.05, price:1000,  desc:'+5% speed'  },
-  { id:'boost10', name:'Boost +10%',   bonus:0.10, price:5000, desc:'+10% speed' },
-  { id:'boost15', name:'Boost +15%',   bonus:0.15, price:10000, desc:'+15% speed' },
-  { id:'boost20', name:'Boost +20%',   bonus:0.20, price:20000, desc:'+20% speed' }
+  { id:'normal',  name:'Normal',        bonus:0,    price:0      },
+  { id:'boost5',  name:'Boost +5%',     bonus:0.05, price:1000,  desc:'+5% speed'   },
+  { id:'boost10', name:'Boost +10%',    bonus:0.10, price:5000,  desc:'+10% speed'  },
+  { id:'boost15', name:'Boost +15%',    bonus:0.15, price:10000, desc:'+15% speed'  },
+  { id:'boost20', name:'Boost +20%',    bonus:0.20, price:20000, desc:'+20% speed'  }
 ];
 const LIFE_PRICE = 200;
 
-/* ============ SPECTATOR OVERRIDES (live view) ============ */
 let SPEC_ON = false;
 let SPEC_SKIN = null, SPEC_DANDA = null;
 
@@ -430,7 +485,7 @@ const HAIR_TONES  = ['#141414','#1f1512','#2d1810','#3a2416','#4a2a10','#5c3a1e'
 const SHIRT_TONES = ['#eceef2','#d94f4f','#4f7fd9','#e0b84f','#5fbf7a','#8a6ad9','#e08a4f','#4fc7cf','#c94f8a','#f2c14e'];
 let crowdCanvas = null, crowdRows = [], frontRowPeople = [], flashes = [], crowdFlags = [];
 let shake = 0;
-let frameDt = 0.016;   /* used by the live spectator smoothing */
+let frameDt = 0.016;
 
 const NET = {
   ready: false, db: null, roomId: null, role: null,
@@ -452,7 +507,8 @@ const NET = {
   botResult: false, forfeitWin: false, leaveArmed: false,
   roundStarting: false, hopping: false, autopilotStarting: false,
   autopilotRetryAt: 0, scanTimer: null, myRoomCreatedAt: 0,
-  oppLiveAt: 0, forfeitTimer: 0, series: { me: 0, opp: 0 }
+  oppLiveAt: 0, forfeitTimer: 0, series: { me: 0, opp: 0 },
+  lastStickerTime: 0
 };
 function resetMatchFlags(){
   NET.round = 1; NET.rematchSent = false; NET.oppRematch = false; NET.oppLeft = false;
@@ -462,12 +518,11 @@ function resetMatchFlags(){
   clearTimeout(NET.scanTimer); NET.scanTimer = null;
 }
 
-/* ==================== LIVE SPECTATOR STATE ==================== */
 const SPEC = {
   ready: false,
-  gx: 0, gy: 0, gr: 0, cx: 0,      // smoothed values
-  tgx: 0, tgy: 0, tgr: 0, tcx: 0,  // target values from network
-  fX: []                            // smoothed fielder x positions
+  gx: 0, gy: 0, gr: 0, cx: 0,
+  tgx: 0, tgy: 0, tgr: 0, tcx: 0,
+  fX: []
 };
 function specReset(){ SPEC.ready = false; SPEC.fX = []; }
 
@@ -520,7 +575,6 @@ function listRooms(status){
     return arr;
   }).catch(() => []);
 }
-// waiting rooms (idle host) + autopilot rooms (host is playing vs bot, bot is replaceable)
 function findCandidates(){
   return Promise.all([listRooms('waiting'), listRooms('autopilot')]).then(res => {
     const w = res[0].filter(c => !c.room.p2);
@@ -528,7 +582,6 @@ function findCandidates(){
     return w.concat(a);
   });
 }
-// atomic join: only one joiner can ever win a room
 function claimRoom(id, wantStatus){
   return NET.db.ref('rooms/' + id).transaction(cur => {
     if (cur === null) return cur;
@@ -549,7 +602,6 @@ function detachRoomListeners(){
   NET.listener = null;
   if (NET.liveRef){ try{ NET.liveRef.off(); }catch(e){} NET.liveRef = null; }
 }
-// once a real match is on: do not delete the room on disconnect, just flag that we left
 function armLeaveFlag(){
   try{
     if (NET.roomRef && NET.role){
@@ -581,7 +633,6 @@ function attemptJoin(cands, i){
   return claimRoom(c.id, c.status).then(ok => {
     if (ok){
       if (!NET.searching){
-        // user cancelled while the join was in flight -> free the room again
         try{ NET.db.ref('rooms/' + c.id + '/p2/left').set(true); }catch(e){}
         return false;
       }
@@ -606,7 +657,6 @@ function onJoined(id, room){
   trackEvent('matchmaking_success', {});
   waitForHost(id);
 }
-// if the host never answers (closed tab etc.) go back to searching
 function waitForHost(id){
   const joinStart = performance.now();
   const check = () => {
@@ -640,13 +690,11 @@ function createRoom(){
   }).then(() => {
     if (NET.roomRef !== ref) return;
     NET.statusMsg = 'Room created. Waiting for opponent...';
-    try{ ref.onDisconnect().remove(); }catch(e){}   // never leave a dead waiting room behind
+    try{ ref.onDisconnect().remove(); }catch(e){}
     watchRoom();
     scheduleRoomScan();
   }).catch(() => {});
 }
-// While waiting in our own room keep looking for other rooms, so two players who both
-// created a room at the same moment still find each other (newer room hops into the older one).
 function scheduleRoomScan(){
   clearTimeout(NET.scanTimer);
   NET.scanTimer = setTimeout(scanForRooms, 2000);
@@ -657,7 +705,7 @@ function scanForRooms(){
   findCandidates().then(cands => {
     if (!NET.searching || NET.roomId !== myId) return;
     const elig = cands.filter(c => {
-      if (c.status === 'autopilot') return true;   // that host is already playing, it will not hop
+      if (c.status === 'autopilot') return true;
       const cc = c.room.createdAt || 0;
       return cc < myCreated || (cc === myCreated && c.id < myId);
     });
@@ -668,7 +716,6 @@ function scanForRooms(){
 function hopTo(elig, myId){
   NET.hopping = true;
   const myRef = NET.roomRef;
-  // 1) close our own room so nobody can join it while we move
   myRef.transaction(cur => {
     if (cur === null) return cur;
     if (cur.status !== 'waiting' || cur.p2) return;
@@ -703,7 +750,6 @@ function watchRoom(){
   NET.listener = ref.on('value', snap => {
     const data = snap.val();
     if (!data){
-      // room vanished under us before the match started -> search again
       if (role === 'p2' && !NET.tossWinner && G.phase === 'searching' && NET.roomRef === ref) restartSearch();
       return;
     }
@@ -718,11 +764,9 @@ function watchRoom(){
       if (wasLeft !== NET.oppLeft) refreshResultButtons();
     }
 
-    /* ---------- REMATCH: host bumped the round number ---------- */
     const dr = data.round || 1;
     if (dr > NET.round){ startNextRound(data, dr); return; }
 
-    /* ---------- REMATCH handshake (transaction = only one client bumps) ---------- */
     const rm = data.rematch || {};
     const mineReq = rm[role] === NET.round, oppReq = rm[oppRole] === NET.round;
     if (mineReq !== NET.rematchSent || oppReq !== NET.oppRematch){
@@ -735,8 +779,8 @@ function watchRoom(){
       const myRound = NET.round;
       ref.transaction(cur => {
         if (cur === null) return cur;
-        if ((cur.round || 1) !== myRound) return;       // someone already bumped it
-        if (!cur.p1 || !cur.p2 || cur.p2.isBot) return; // safety
+        if ((cur.round || 1) !== myRound) return;
+        if (!cur.p1 || !cur.p2 || cur.p2.isBot) return;
         const w = Math.random() < 0.5 ? 'p1' : 'p2';
         cur.round = myRound + 1;
         cur.tossWinner = w;
@@ -751,7 +795,6 @@ function watchRoom(){
         .catch(() => { NET.roundStarting = false; });
     }
 
-    /* ---------- toss ---------- */
     if (role === 'p1' && data.p2 && !data.p2.isBot && !data.tossWinner && !NET.tossDecided){
       NET.tossDecided = true; NET.searching = false;
       const winner = Math.random() < 0.5 ? 'p1' : 'p2';
@@ -762,7 +805,6 @@ function watchRoom(){
       NET.currentBatsman = data.currentBatsman || data.tossWinner;
       NET.searching = false;
       if (data.skipToss){
-        // we joined a match that is already running (host was playing vs autopilot): no toss
         if (NET.currentBatsman === NET.role && !NET.myDone){
           G.banner = '🎮 ' + (NET.oppName || 'OPPONENT') + ' IS DONE — YOUR TURN!'; G.bannerTimer = 2.5;
           beginOnlineTurn();
@@ -782,7 +824,16 @@ function watchRoom(){
     checkOppForfeit();
   });
   NET.liveRef = ref.child('live/' + oppRole);
-  NET.liveRef.on('value', snap => { NET.oppLive = snap.val(); NET.oppLiveAt = performance.now(); });
+  NET.liveRef.on('value', snap => {
+    const val = snap.val();
+    NET.oppLive = val;
+    NET.oppLiveAt = performance.now();
+    if (val && val.sticker && (!NET.lastStickerTime || val.sticker.ts > NET.lastStickerTime)){
+      NET.lastStickerTime = val.sticker.ts;
+      spawnSticker(val.sticker.emoji, false);
+      beep(980, 0.08, 'triangle', 0.1);
+    }
+  });
 }
 function startNextRound(data, dr){
   NET.round = dr;
@@ -804,7 +855,6 @@ function requestRematch(){
   NET.rematchSent = true; rebuildMenuButtons();
   NET.roomRef.child('rematch/' + NET.role).set(NET.round).catch(() => { NET.rematchSent = false; rebuildMenuButtons(); });
 }
-// opponent closed the game / pressed FIND NEW before finishing -> remaining player wins
 function checkOppForfeit(){
   if (!NET.roomRef || !NET.oppLeft || NET.oppDone) return;
   if (G.phase !== 'waitingOpp' && G.phase !== 'toss' && G.phase !== 'tossResult') return;
@@ -865,7 +915,7 @@ function reportOnlineScore(score){
   }
   NET.statusMsg = 'Waiting for ' + (NET.oppName || 'opponent') + '...';
   specReset();
-  setPhase('waitingOpp');   // switch right away: no double-submit, and we start watching the opponent live
+  setPhase('waitingOpp');
   NET.roomRef.update(update).then(() => { checkFinish(); }).catch(() => {});
 }
 function checkFinish(){
@@ -908,9 +958,9 @@ function cleanupOnline(){
       const opp = d[role === 'p1' ? 'p2' : 'p1'];
       const oppGone = !opp || opp.isBot || opp.left;
       if (oppGone || (role === 'p1' && (d.status === 'waiting' || d.status === 'autopilot' || d.status === 'closing'))){
-        ref.remove().catch(() => {});                       // nobody left in the room -> delete it
+        ref.remove().catch(() => {});
       } else {
-        ref.child(role + '/left').set(true).catch(() => {}); // tell the opponent we are gone
+        ref.child(role + '/left').set(true).catch(() => {});
       }
     }).catch(() => {});
   }
@@ -925,7 +975,6 @@ function cleanupOnline(){
   specReset();
 }
 
-/* ==================== AUTOPILOT MODE ==================== */
 function startAutopilotMode(){
   if (!NET.searching || NET.autopilotStarting) return;
   if (performance.now() < NET.autopilotRetryAt) return;
@@ -962,7 +1011,7 @@ function startAutopilotMode(){
     const ref = NET.roomRef;
     ref.transaction(cur => {
       if (cur === null) return cur;
-      if (cur.status !== 'waiting' || cur.p2) return;     // a real player just joined -> no autopilot
+      if (cur.status !== 'waiting' || cur.p2) return;
       cur.status = 'autopilot';
       cur.p1 = p1Data; cur.p2 = botData;
       return cur;
@@ -990,7 +1039,6 @@ function watchAutopilotRoom(){
     const data = snap.val();
     if (!data || !data.p2) return;
     const p2 = data.p2;
-    // A real player claimed our autopilot room -> link up with them automatically
     if (!p2.isBot && p2.name && p2.name.indexOf('🤖') === -1 && NET.autopilot){
       if (!NET.joinPopup || NET.joinPopup.name !== p2.name){
         NET.joinPopup = { name: p2.name };
@@ -1026,14 +1074,12 @@ function autoAcceptJoin(name){
   };
 
   if (BATTING_PHASES.indexOf(phase) >= 0){
-    // We are in the middle of our innings: keep batting, the new player just watches us LIVE
     NET.myDone = false; NET.turnHandedOver = false;
     NET.tossWinner = 'p1'; NET.currentBatsman = 'p1';
     upd.tossWinner = 'p1'; upd.currentBatsman = 'p1'; upd.skipToss = true;
     upd['p1/score'] = 0; upd['p1/done'] = false;
     G.banner = '🎮 ' + name + ' JOINED — LIVE MATCH!';
   } else if (phase === 'botBatting'){
-    // our innings is over (bot was "batting"): hand the bat to the real player right now
     NET.myDone = true; NET.turnHandedOver = true;
     NET.tossWinner = 'p1'; NET.currentBatsman = 'p2';
     upd.tossWinner = 'p1'; upd.currentBatsman = 'p2'; upd.skipToss = true;
@@ -1042,7 +1088,6 @@ function autoAcceptJoin(name){
     G.banner = '🎮 ' + name + ' JOINED!';
     setPhase('waitingOpp');
   } else {
-    // still in the toss: do a normal random toss against the real player
     NET.myDone = false; NET.turnHandedOver = false;
     const winner = Math.random() < 0.5 ? 'p1' : 'p2';
     NET.tossWinner = winner; NET.currentBatsman = winner;
@@ -1057,7 +1102,7 @@ function autoAcceptJoin(name){
   if (NET.roomRef){
     NET.leaveArmed = true; armLeaveFlag();
     NET.roomRef.update(upd).catch(() => {});
-    watchRoom();                       // from now on the normal two-player sync handles everything
+    watchRoom();
   }
   crowdExcitement = 1.2;
   playCheer(1.0);
@@ -1084,7 +1129,6 @@ function finishBotMatch(){
   G.gameOverMsg = myScore === oppScore ? 'DRAW!' : (myScore > oppScore ? 'YOU WIN!' : 'YOU LOSE');
   G.mode = 'onlineResults';
   NET.botResult = true;
-  // the bot match is over: close the room so nobody joins a finished game
   if (NET.roomRef){
     const ref = NET.roomRef;
     detachRoomListeners();
@@ -1258,7 +1302,7 @@ function rebuildMenuButtons(){
   }
   else if (G.phase === 'searching'){ menuButtons.push({ id:'cancelSearch', label:'✖  CANCEL', x: W/2 - 100, y: H - 70, w: 200, h: 50 }); }
   else if (G.phase === 'login'){
-    menuButtons.push({ id:'doLogin',    label:'🔓  LOGIN',        x: W/2 - 180, y: 340, w: 360, h: 54 });
+    menuButtons.push({ id:'doLogin',    label:'🔓  LOGIN',         x: W/2 - 180, y: 340, w: 360, h: 54 });
     menuButtons.push({ id:'goRegister', label:'NEW? REGISTER  →', x: W/2 - 180, y: 458, w: 360, h: 40 });
   }
   else if (G.phase === 'register'){
@@ -1281,7 +1325,7 @@ function rebuildMenuButtons(){
     menuButtons.push({ id:'tab_skins',  label:'🎨 SKINS',  x: startX + 0*(tabW+tabGap), y: 88, w: tabW, h: tabH });
     menuButtons.push({ id:'tab_dandas', label:'🏏 DANDAS', x: startX + 1*(tabW+tabGap), y: 88, w: tabW, h: tabH });
     menuButtons.push({ id:'tab_boosts', label:'⚡ BOOSTS', x: startX + 2*(tabW+tabGap), y: 88, w: tabW, h: tabH });
-    menuButtons.push({ id:'tab_lives',  label:'❤️ LIVES',  x: startX + 3*(tabW+tabGap), y: 88, w: tabW, h: tabH });
+    menuButtons.push({ id:'tab_lives',  label:'❤️️ LIVES',  x: startX + 3*(tabW+tabGap), y: 88, w: tabW, h: tabH });
     menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 490, w: 160, h: 40 });
   }
 }
@@ -1498,10 +1542,26 @@ function swing(){
   const cheerLevel = acc * (G.shotType === 'LOFT' ? 1.4 : G.shotType === 'DRIVE' ? 1.1 : 0.7);
   crowdExcitement = Math.max(crowdExcitement, 0.6 + cheerLevel * 1.0);
   playCheer(0.5 + acc * 0.9);
-  if (acc > 0.92) { sweep(900,1800,0.18,'triangle',0.13); G.banner='PERFECT!'; }
-  else if (acc > 0.6) { beep(700,0.12,'triangle',0.11); G.banner='GREAT HIT!'; }
-  else if (acc > 0.25) { beep(500,0.12,'triangle',0.09); G.banner='HIT'; }
-  else { beep(360,0.12,'triangle',0.08); G.banner='WEAK HIT'; }
+  if (acc > 0.92) { 
+    sweep(900,1800,0.18,'triangle',0.13); 
+    G.banner='PERFECT!'; 
+    speakVoice("Kamaal ka shot!");
+  }
+  else if (acc > 0.6) { 
+    beep(700,0.12,'triangle',0.11); 
+    G.banner='GREAT HIT!'; 
+    speakVoice("Dhuandaar hit!");
+  }
+  else if (acc > 0.25) { 
+    beep(500,0.12,'triangle',0.09); 
+    G.banner='HIT'; 
+    speakVoice("Badiya shot!");
+  }
+  else { 
+    beep(360,0.12,'triangle',0.08); 
+    G.banner='WEAK HIT'; 
+    speakVoice("Halka shot!");
+  }
   G.bannerTimer = 0.9;
 }
 function missGulli(){
@@ -1513,6 +1573,7 @@ function missGulli(){
   spawnDust(gulli.x, GROUND_Y);
   beep(180,0.22,'sawtooth',0.09);
   crowdExcitement = 1.0; playCheer(0.6);
+  speakVoice("Chook gaye! Out!");
 }
 function beginFielding(){
   G.hitDistance = Math.max(0, (gulli.x - GULLI_START_X)/PPM);
@@ -1648,7 +1709,6 @@ function updateParticles(dt){
 
 /* ==================== UPDATE ==================== */
 function update(dt){
-  /* ---------- LIVE BROADCAST (full state so the spectator sees the exact same match) ---------- */
   NET.lastSync = (NET.lastSync || 0) + dt;
   if (NET.lastSync > 0.10 && NET.roomRef && NET.role && G.mode === 'online' && !NET.autopilot){
     NET.lastSync = 0;
@@ -1680,8 +1740,8 @@ function update(dt){
 
     const skin = getActiveSkin(), danda = getActiveDanda();
     NET.roomRef.child('live/' + NET.role).update({
-      ph: G.phase,                       // raw phase (spectator renders the identical scene)
-      lb: phaseLabel,                    // display label
+      ph: G.phase,
+      lb: phaseLabel,
       sc: G.score,
       ou: G.outs,
       gx: Math.round(gulli.x),
@@ -1771,7 +1831,6 @@ function update(dt){
     return;
   }
 
-  // ===== AUTOPILOT 30-SEC TIMER =====
   if (G.phase === 'searching' && NET.searching){
     const elapsed = performance.now() - NET.searchStart;
     const remaining = Math.max(0, 30 - Math.floor(elapsed / 1000));
@@ -1784,23 +1843,19 @@ function update(dt){
     }
   }
 
-  // ===== JOIN POPUP COUNTDOWN =====
   if (NET.joinPopupTimer > 0){
     NET.joinPopupTimer -= dt;
     if (NET.joinPopupTimer <= 0){ NET.joinPopup = null; NET.joinPopupTimer = 0; }
   }
 
-  // ===== OPPONENT LEFT? (checked once a second) =====
   NET.forfeitTimer += dt;
   if (NET.forfeitTimer > 1){ NET.forfeitTimer = 0; checkOppForfeit(); }
 
-  // ===== ONLINE: after OUT hand the bat over automatically (no CONTINUE tap needed) =====
   if (G.phase === 'turnEnd' && G.mode === 'online'){
     G.turnEndTimer = (G.turnEndTimer || 0) + dt;
     if (G.turnEndTimer >= 2.2){ G.turnEndTimer = 0; advanceFromTurnEnd(); return; }
   }
 
-  // ===== BOT BATTING PHASE =====
   if (G.phase === 'botBatting'){
     G.botBattingTimer -= dt;
     if (G.botBattingTimer <= 0){ finishBotMatch(); }
@@ -1885,6 +1940,7 @@ function update(dt){
               shake = 0.6; spawnBurst(gulli.x, gulli.y, 1);
               sweep(500,120,0.35,'sawtooth',0.13);
               crowdExcitement = 1.8; playCheer(1.3);
+              speakVoice("Lapak liya! Catch out!");
               finishRound(); return;
             }
           }
@@ -1944,11 +2000,13 @@ function update(dt){
             shake = 0.7; spawnBurst(DANDA_X, GROUND_Y-24, 1);
             sweep(760,140,0.38,'sawtooth',0.14); beep(120,0.4,'sawtooth',0.10);
             crowdExcitement = 1.6; playCheer(1.1);
+            speakVoice("Seedha dande pe! Wicket!");
           } else {
             G.outcome='safe'; G.outReason=''; G.banner='SAFE!';
             spawnDust(gulli.x, GROUND_Y);
             beep(880,0.14,'triangle',0.11); beep(1180,0.14,'triangle',0.08);
             crowdExcitement = 0.5;
+            speakVoice("Bach gaye! Not out!");
           }
           G.bannerTimer = 1.6;
           finishRound();
@@ -2150,7 +2208,6 @@ function handleMenuClick(x, y){
 function onInput(e){
   if (!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(err){} }
   if (G.phase === 'splash'){ if (G.splashTimer > 0.7){ G.splashTimer = SPLASH_DURATION; } return; }
-
 
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
   if (G.phase === 'botBatting') return;
@@ -2433,65 +2490,100 @@ function drawDandaOnGround(){
   }
 }
 function dandaAngle(){
-  if (G.swingTimer>0){ const t = 1 - G.swingTimer/G.swingDur; const e = 1 - Math.pow(1-t,3); return lerp(-1.5, 1.15, e); }
+  if (G.swingTimer>0){ 
+    const t = 1 - G.swingTimer/G.swingDur; 
+    const e = 1 - Math.pow(1-t,3); 
+    return lerp(-1.6, 1.45, e); 
+  }
   return 0.72;
 }
+
+/* ==================== REALISTIC BATTER ANIMATION ==================== */
 function drawPlayer(){
   const x = PLAYER_X - camX, y = GROUND_Y;
   const danda = getActiveDanda();
-  ctx.save(); ctx.globalAlpha=0.20; ctx.fillStyle='#000';
-  ctx.beginPath(); ctx.ellipse(x,y+3,36,9,0,0,Math.PI*2); ctx.fill(); ctx.restore();
-  const hipY=y-72, shoulderY=y-128, headY=y-150;
-  ctx.lineCap='round'; ctx.lineJoin='round';
-  ctx.strokeStyle='#2d3142'; ctx.lineWidth=8;
-  ctx.beginPath();
-  ctx.moveTo(x,hipY); ctx.lineTo(x-19,y-2);
-  ctx.moveTo(x,hipY); ctx.lineTo(x+19,y-2);
-  ctx.stroke();
   const pcolor = G.players[G.currentPlayer] ? G.players[G.currentPlayer].color : '#e63946';
-  ctx.strokeStyle = pcolor; ctx.lineWidth=18;
-  ctx.beginPath(); ctx.moveTo(x,hipY); ctx.lineTo(x,shoulderY); ctx.stroke();
-  ctx.fillStyle='#f0c49a';
-  ctx.beginPath(); ctx.arc(x,headY,19,0,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='#2d3142'; ctx.lineWidth=4; ctx.stroke();
-  ctx.fillStyle='#2d3142';
-  ctx.beginPath(); ctx.arc(x, headY-3, 19, Math.PI*1.05, Math.PI*2.05); ctx.fill();
+
+  let swingProgress = 0;
+  if (G.swingTimer > 0) {
+    swingProgress = 1 - (G.swingTimer / G.swingDur);
+  }
+  
+  const lean = swingProgress > 0 ? Math.sin(swingProgress * Math.PI) * 16 : 0;
+  const hipY = y - 70;
+  const shoulderX = x + lean * 0.9;
+  const shoulderY = y - 126 + Math.abs(lean) * 0.35;
+  const headY = shoulderY - 21;
+
+  ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle='#000';
+  ctx.beginPath(); ctx.ellipse
+ctx.beginPath(); ctx.ellipse(x + lean * 0.5, y + 3, 38 + Math.abs(lean), 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+
+  // Dynamic Legs with Weight Transfer
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#2d3142'; ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.moveTo(x, hipY); ctx.lineTo(x - 22, y - 2);            // Back foot anchor
+  ctx.moveTo(x, hipY); ctx.lineTo(x + 18 + lean, y - 2);     // Front lead foot step
+  ctx.stroke();
+
+  // Torso Rotation with Core Shift
+  ctx.strokeStyle = pcolor; ctx.lineWidth = 19;
+  ctx.beginPath(); ctx.moveTo(x, hipY); ctx.lineTo(shoulderX, shoulderY); ctx.stroke();
+
+  // Head and Cap
+  ctx.fillStyle = '#f0c49a';
+  ctx.beginPath(); ctx.arc(shoulderX, headY, 19, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#2d3142'; ctx.lineWidth = 4; ctx.stroke();
+  ctx.fillStyle = '#2d3142';
+  ctx.beginPath(); ctx.arc(shoulderX, headY - 3, 19, Math.PI * 1.05, Math.PI * 2.05); ctx.fill();
+
+  // Player Name Tag in Multiplayer
   if ((G.mode === 'multi' || G.mode === 'online' || G.mode === 'onlineResults') && G.players[G.currentPlayer]){
     const p = G.players[G.currentPlayer];
     ctx.save();
     ctx.font = '700 11px system-ui,sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline='middle';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const tw = ctx.measureText(p.name).width;
     const pillW = tw + 14, pillH = 17;
     const pillY = headY - 19 - 32;
-    rr(ctx, x - pillW/2, pillY, pillW, pillH, 8);
+    rr(ctx, shoulderX - pillW/2, pillY, pillW, pillH, 8);
     ctx.fillStyle = 'rgba(20,25,40,0.8)'; ctx.fill();
     ctx.strokeStyle = p.color; ctx.lineWidth = 1.5; ctx.stroke();
     ctx.fillStyle = '#fff';
-    ctx.fillText(p.name, x, pillY + pillH/2);
+    ctx.fillText(p.name, shoulderX, pillY + pillH/2);
     ctx.restore();
-    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
+
+  // Batting Arm and Danda Follow-Through
   if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='waitingOpp' && G.phase!=='toss' && G.phase!=='tossResult' && G.phase!=='login' && G.phase!=='register' && G.phase!=='guest' && G.phase!=='leaderboard' && G.phase!=='profileView' && G.phase!=='market' && G.phase!=='botBatting'){
     const ang = dandaAngle();
-    const handX = x+6, handY = shoulderY+6;
+    const handX = shoulderX + 8 + (lean * 0.4);
+    const handY = shoulderY + 7;
     ctx.save(); ctx.translate(handX, handY); ctx.rotate(ang);
-    ctx.strokeStyle='#2d3142'; ctx.lineWidth=8;
-    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(24,7); ctx.stroke();
-    ctx.lineCap='round';
-    ctx.strokeStyle=danda.color; ctx.lineWidth=11;
-    ctx.beginPath(); ctx.moveTo(18,7); ctx.lineTo(122,7); ctx.stroke();
-    ctx.strokeStyle=danda.accent;
-    ctx.beginPath(); ctx.moveTo(106,7); ctx.lineTo(122,7); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(18,7);  ctx.lineTo(26,7);  ctx.stroke();
+
+    // Forearm
+    ctx.strokeStyle = '#2d3142'; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(24, 7); ctx.stroke();
+
+    // Danda Barrel
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = danda.color; ctx.lineWidth = 11;
+    ctx.beginPath(); ctx.moveTo(18, 7); ctx.lineTo(122, 7); ctx.stroke();
+    ctx.strokeStyle = danda.accent;
+    ctx.beginPath(); ctx.moveTo(106, 7); ctx.lineTo(122, 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(18, 7);  ctx.lineTo(26, 7);  ctx.stroke();
     ctx.restore();
   } else {
-    ctx.strokeStyle='#2d3142'; ctx.lineWidth=8;
+    // Resting Stance
+    ctx.strokeStyle = '#2d3142'; ctx.lineWidth = 8;
     ctx.beginPath();
-    ctx.moveTo(x+4, shoulderY+4); ctx.lineTo(x+26, shoulderY+30);
+    ctx.moveTo(shoulderX + 4, shoulderY + 4); ctx.lineTo(shoulderX + 26, shoulderY + 30);
     ctx.stroke();
   }
 }
+
 function drawFielder(f){
   const x = f.x - camX;
   if (x < -80 || x > W+80) return;
@@ -2579,6 +2671,7 @@ function drawFielder(f){
     ctx.closePath(); ctx.fill();
   }
 }
+
 function drawGulli(){
   if (!gulli.grounded){
     const h = clamp((GROUND_Y-gulli.y)/380, 0, 1);
@@ -2594,6 +2687,7 @@ function drawGulli(){
   ctx.fillStyle='rgba(255,255,255,0.35)'; rr(ctx,-8,-3,16,2.5,1.2); ctx.fill();
   ctx.restore();
 }
+
 function drawZone(){
   if (G.phase!=='air' || gulli.vy<=0) return;
   const zx = ZONE_X - camX, zy = ZONE_Y;
@@ -2612,6 +2706,7 @@ function drawZone(){
   ctx.fillStyle='rgba(255,209,102,0.14)'; ctx.fill();
   ctx.restore();
 }
+
 function drawEffects(){
   for (const p of G.particles){
     const a = clamp(p.life/p.max,0,1);
@@ -2647,6 +2742,24 @@ function drawEffects(){
     ctx.restore();
   }
 }
+
+function drawStickers(dt){
+  for (let i = activeStickers.length - 1; i >= 0; i--){
+    const s = activeStickers[i];
+    s.y += s.vy * dt;
+    s.life -= dt;
+    s.scale = Math.min(1.4, s.scale + dt * 3.5);
+    const alpha = clamp(s.life / 0.5, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `${Math.round(44 * s.scale)}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(s.emoji, s.x, s.y);
+    ctx.restore();
+    if (s.life <= 0) activeStickers.splice(i, 1);
+  }
+}
+
 function drawPowerMeter(labelOverride){
   if (G.phase!=='power') return;
   const bw=430, bh=26; const bx=W/2-bw/2, by=H-158;
@@ -2674,6 +2787,7 @@ function drawPowerMeter(labelOverride){
   ctx.fillText(labelOverride || 'CLICK to toss  •  stop in the green', W/2, by-16);
   ctx.shadowBlur=0; ctx.restore(); ctx.textAlign='left';
 }
+
 function drawShotSelector(spectating){
   if (G.phase!=='power' && G.phase!=='air') return;
   ctx.save();
@@ -2714,6 +2828,7 @@ function drawShotSelector(spectating){
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
+
 function centerText(text, y, size, color){
   ctx.save();
   ctx.font=`900 ${size}px system-ui,-apple-system,sans-serif`;
@@ -2726,6 +2841,7 @@ function centerText(text, y, size, color){
   ctx.fillText(text, W/2, y);
   ctx.restore();
 }
+
 function drawMenuButton(b, highlightColor){
   const col = highlightColor || '#ffffff';
   ctx.save();
@@ -2747,6 +2863,7 @@ function drawMenuButton(b, highlightColor){
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
+
 function drawCoinIcon(x, y, r, alpha){
   ctx.save();
   ctx.globalAlpha = alpha || 1;
@@ -2761,6 +2878,7 @@ function drawCoinIcon(x, y, r, alpha){
   ctx.beginPath(); ctx.arc(x, y, r*0.55, 0, Math.PI*2); ctx.fill();
   ctx.restore();
 }
+
 function drawCurrentPlayerBadge(){
   if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'||G.phase==='gameOver'||G.phase==='nameEntry'||G.phase==='splash'||G.phase==='searching'||G.phase==='waitingOpp'||G.phase==='toss'||G.phase==='tossResult'||G.phase==='login'||G.phase==='register'||G.phase==='guest'||G.phase==='leaderboard'||G.phase==='profileView'||G.phase==='market'||G.phase==='botBatting') return;
   const p = G.players[G.currentPlayer];
@@ -2788,6 +2906,7 @@ function drawCurrentPlayerBadge(){
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
+
 function drawOverlays(){
   if (G.phase==='menu'||G.phase==='levelSelect'||G.phase==='playerSelect'
       ||G.phase==='turnIntro'||G.phase==='turnEnd'||G.phase==='gameOver'
@@ -2858,6 +2977,7 @@ function drawOverlays(){
     }
   }
 }
+
 function drawSplash(){
   const t = G.splashTimer;
   let alpha = 1;
@@ -2942,6 +3062,7 @@ function drawSplash(){
   }
   ctx.restore();
 }
+
 function drawStar(cx, cy, outer, inner, points){
   ctx.beginPath();
   for (let i=0; i<points*2; i++){
@@ -2953,6 +3074,7 @@ function drawStar(cx, cy, outer, inner, points){
   }
   ctx.closePath(); ctx.fill();
 }
+
 function drawSuggestionDropdown(box){
   if (!suggestionsOpen || usernameSuggestions.length === 0) return;
   const sugX = box.x + box.w + 8, sugW = 200, sugStartY = box.y;
@@ -2970,6 +3092,7 @@ function drawSuggestionDropdown(box){
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
+
 function drawInputBox(box, label, value, isFocused, isPassword){
   ctx.save();
   rr(ctx, box.x, box.y, box.w, box.h, 12);
@@ -2997,6 +3120,7 @@ function drawInputBox(box, label, value, isFocused, isPassword){
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
+
 function drawLoginScreen(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
@@ -3024,6 +3148,7 @@ function drawLoginScreen(){
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   for (const b of menuButtons) drawMenuButton(b, b.id === 'doLogin' ? '#ffd166' : '#ffffff');
 }
+
 function drawRegisterScreen(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
@@ -3037,6 +3162,7 @@ function drawRegisterScreen(){
   else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 350, 14, '#ff8a8a');
   for (const b of menuButtons) drawMenuButton(b, b.id === 'doRegister' ? '#ffd166' : '#ffffff');
 }
+
 function drawGuestScreen(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
@@ -3048,6 +3174,7 @@ function drawGuestScreen(){
   if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 335, 14, '#ff8a8a');
   for (const b of menuButtons) drawMenuButton(b, b.id === 'doGuest' ? '#ffd166' : '#ffffff');
 }
+
 function drawLeaderboard(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
@@ -3084,6 +3211,7 @@ function drawLeaderboard(){
   }
   for (const b of menuButtons) drawMenuButton(b, '#ffd166');
 }
+
 function drawProfileView(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
@@ -3151,7 +3279,6 @@ function drawProfileView(){
   for (const b of menuButtons) drawMenuButton(b, b.id === 'logout' ? '#ff8a8a' : '#ffffff');
 }
 
-/* ==================== MARKET SCREEN ==================== */
 function drawMarketItem(rect, item, opts){
   const { x, y, w, h } = rect;
   const owned = opts.owned;
@@ -3394,7 +3521,6 @@ function drawMarket(){
   }
 }
 
-/* ==================== TOSS / WAITING / GAMEOVER ==================== */
 function drawToss(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
@@ -3424,6 +3550,7 @@ function drawToss(){
   ctx.fillStyle = '#ffd166';
   rr(ctx, pbX, pbY, pbW * t, pbH, 2); ctx.fill();
 }
+
 function drawTossResult(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
@@ -3457,7 +3584,6 @@ function drawTossResult(){
   centerText('Starting in ' + remaining + '...', 460, 22, 'rgba(255,209,102,0.9)');
 }
 
-/* ==================== LIVE SPECTATOR (same view as the batter) ==================== */
 function drawSpectatorScene(live, dt){
   if (!live || !live.ph){
     ctx.fillStyle = 'rgba(12,16,28,0.92)';
@@ -3467,7 +3593,6 @@ function drawSpectatorScene(live, dt){
     return;
   }
 
-  /* ---- smooth the network values so motion looks identical to the real game ---- */
   if (!SPEC.ready){
     SPEC.gx = SPEC.tgx = live.gx || 0;
     SPEC.gy = SPEC.tgy = live.gy || (GROUND_Y - 7);
@@ -3494,7 +3619,6 @@ function drawSpectatorScene(live, dt){
   }
   SPEC.fX.length = fList.length;
 
-  /* ---- temporarily swap the globals so the real drawing code renders the opponent's match ---- */
   const bakCamX = camX;
   const bakFielders = fielders.slice();
   const bakGulli = { x:gulli.x, y:gulli.y, vx:gulli.vx, vy:gulli.vy, rot:gulli.rot, rotV:gulli.rotV, grounded:gulli.grounded };
@@ -3522,7 +3646,7 @@ function drawSpectatorScene(live, dt){
   gulli.y = SPEC.gy;
   gulli.rot = SPEC.gr;
   gulli.vx = 0;
-  gulli.vy = live.gv ? 120 : 0;          // drawZone() needs vy > 0 to appear
+  gulli.vy = live.gv ? 120 : 0;
   gulli.grounded = live.gg !== 0;
   G.players = [{ name: live.nm || NET.oppName || 'OPPONENT', color: live.sk || '#3a86ff' }];
   G.currentPlayer = 0;
@@ -3550,7 +3674,6 @@ function drawSpectatorScene(live, dt){
     for (const f of fielders) drawFielder(f);
     drawGulli();
     drawPlayer();
-    /* identical meter + shot panel, exactly like the batter sees */
     drawPowerMeter('OPPONENT BATTING');
     drawShotSelector(true);
     if (G.bannerTimer > 0 && G.banner){
@@ -3580,12 +3703,8 @@ function drawSpectatorScene(live, dt){
 function drawWaitingOpp(){
   if (!crowdCanvas) initCrowd();
   const live = NET.oppLive;
-  const iAmWaiting = !NET.myDone;
-
-  /* ---- the actual live match, rendered exactly like the batter's screen ---- */
   drawSpectatorScene(live, frameDt);
 
-  /* ---- thin HUD so we know we're spectating ---- */
   ctx.save();
   const g = ctx.createLinearGradient(0, 0, 0, 86);
   g.addColorStop(0, 'rgba(10,14,24,0.92)');
@@ -3718,6 +3837,7 @@ function drawMenuScreen(){
   ctx.stroke();
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
+
 function drawLevelSelect(){
   ctx.fillStyle = 'rgba(12,16,28,0.55)';
   ctx.fillRect(0,0,W,H);
@@ -3785,6 +3905,7 @@ function drawLevelSelect(){
     drawMenuButton(b, col);
   }
 }
+
 function drawPlayerSelect(){
   ctx.fillStyle = 'rgba(12,16,28,0.55)';
   ctx.fillRect(0,0,W,H);
@@ -3793,13 +3914,14 @@ function drawPlayerSelect(){
   centerText('Highest score wins the match!', 210, 17, 'rgba(255,209,102,0.9)');
   for (const b of menuButtons) drawMenuButton(b);
 }
+
 function drawNameEntry(){
   ctx.fillStyle = 'rgba(12,16,28,0.78)';
   ctx.fillRect(0,0,W,H);
   const idx = G.nameEntry.playerIndex;
   const p = G.players[idx];
   if (!p) return;
-  ctx.fillStyle = p.color; ctx.globalAlpha = 0.18; ctx.fillRect(0, 0, W, 90); ctx.globalAlpha = 1;
+  ctx.fillStyle = p.color; ctx.globalAlpha = 0.15; ctx.fillRect(0, 0, W, 90); ctx.globalAlpha = 1;
   centerText('ENTER PLAYER NAME', 60, 24, 'rgba(255,255,255,0.75)');
   centerText(`PLAYER ${idx+1} of ${G.players.length}`, 92, 18, 'rgba(255,255,255,0.6)');
   centerText('Tap anywhere to open keyboard', 116, 13, 'rgba(255,209,102,0.7)');
@@ -3869,6 +3991,7 @@ function drawNameEntry(){
     } else { ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill(); }
   }
 }
+
 function drawTurnIntro(){
   ctx.fillStyle = 'rgba(12,16,28,0.68)';
   ctx.fillRect(0,0,W,H);
@@ -3887,6 +4010,7 @@ function drawTurnIntro(){
   centerText(infoText, 315, 18, 'rgba(255,255,255,0.7)');
   for (const b of menuButtons) drawMenuButton(b, p.color);
 }
+
 function drawTurnEnd(){
   ctx.fillStyle = 'rgba(12,16,28,0.72)';
   ctx.fillRect(0,0,W,H);
@@ -3938,6 +4062,7 @@ function drawTurnEnd(){
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   for (const b of menuButtons) drawMenuButton(b, '#ffd166');
 }
+
 function drawTrophy(cx, cy, scale, t){
   ctx.save();
   ctx.translate(cx, cy); ctx.scale(scale, scale);
@@ -3968,6 +4093,7 @@ function drawTrophy(cx, cy, scale, t){
   drawStar(0, -10, 12, 5, 5);
   ctx.restore();
 }
+
 function drawGameOver(){
   ctx.fillStyle = 'rgba(12,16,28,0.72)';
   ctx.fillRect(0,0,W,H);
@@ -4117,6 +4243,7 @@ function drawGameOver(){
   }
   for (const b of menuButtons) drawMenuButton(b, '#ffd166');
 }
+
 function drawSearching(){
   ctx.fillStyle = 'rgba(12,16,28,0.88)';
   ctx.fillRect(0,0,W,H);
@@ -4144,7 +4271,6 @@ function drawSearching(){
   for (const b of menuButtons) drawMenuButton(b);
 }
 
-/* ==================== JOIN POPUP + BOT BATTING ==================== */
 function drawJoinPopup(){
   if (!NET.joinPopup || NET.joinPopupTimer <= 0) return;
   const popup = NET.joinPopup;
@@ -4154,7 +4280,6 @@ function drawJoinPopup(){
 
   ctx.save();
   ctx.globalAlpha = Math.min(1, NET.joinPopupTimer / 2);
-
   ctx.shadowColor = 'rgba(138,255,160,' + (pulse * 0.9) + ')';
   ctx.shadowBlur = 26 + pulse * 8;
 
@@ -4250,7 +4375,6 @@ function draw(){
   ctx.save();
   if (shake > 0.002){ const m = shake * shake * 9; ctx.translate((Math.random()-0.5)*m, (Math.random()-0.5)*m); }
   if (G.phase === 'waitingOpp'){
-    /* the live spectator renders its own full scene */
     drawWaitingOpp();
   } else {
     drawSky();
@@ -4279,6 +4403,7 @@ function draw(){
       drawPowerMeter(); drawShotSelector(false); drawCurrentPlayerBadge(); drawOverlays();
     }
   }
+  drawStickers(frameDt);
   ctx.restore();
   const vg = ctx.createRadialGradient(W/2,H/2,H*0.45,W/2,H/2,H*1.0);
   vg.addColorStop(0,'rgba(0,0,0,0)');
@@ -4288,33 +4413,44 @@ function draw(){
   drawJoinPopup();
 }
 
-/* ==================== HUD ==================== */
+/* ==================== HUD & STICKER VISIBILITY ==================== */
 const uiScore = document.getElementById('uiScore');
 const uiBest = document.getElementById('uiBest');
 const uiOuts = document.getElementById('uiOuts');
 const uiTurn = document.getElementById('uiTurn');
 const uiCoins = document.getElementById('uiCoins');
 const uiLives = document.getElementById('uiLives');
+const chatStickerBar = document.getElementById('chatStickerBar');
+
 function updateHUD(){
   const hud = document.getElementById('hud');
-  if (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'
+  const isMenuPhase = (G.phase === 'menu' || G.phase === 'levelSelect' || G.phase === 'playerSelect'
       || G.phase === 'nameEntry' || G.phase === 'splash' || G.phase === 'login'
       || G.phase === 'register' || G.phase === 'guest' || G.phase === 'searching'
       || G.phase === 'toss' || G.phase === 'tossResult' || G.phase === 'leaderboard'
       || G.phase === 'profileView' || G.phase === 'market' || G.phase === 'botBatting'
-      || G.phase === 'waitingOpp'){
-    hud.style.display = 'none'; return;
+      || G.phase === 'waitingOpp');
+
+  if (isMenuPhase){
+    hud.style.display = 'none';
+  } else {
+    hud.style.display = 'flex';
+    uiScore.textContent = G.score;
+    uiBest.textContent = G.best;
+    uiOuts.textContent = G.outs + '/1';
+    uiTurn.textContent = (G.currentPlayer + 1) + '/' + G.players.length;
+    if (uiCoins) uiCoins.textContent = ACCOUNT.coins;
+    if (uiLives) uiLives.textContent = ACCOUNT.lives;
   }
-  hud.style.display = 'flex';
-  uiScore.textContent = G.score;
-  uiBest.textContent = G.best;
-  uiOuts.textContent = G.outs + '/1';
-  uiTurn.textContent = (G.currentPlayer + 1) + '/' + G.players.length;
-  if (uiCoins) uiCoins.textContent = ACCOUNT.coins;
-  if (uiLives) uiLives.textContent = ACCOUNT.lives;
+
+  // Floating Emoji Bar will only appear during Online matches
+  if (chatStickerBar){
+    const showChat = (G.mode === 'online' && (G.phase === 'power' || G.phase === 'air' || G.phase === 'fly' || G.phase === 'fielding' || G.phase === 'throw' || G.phase === 'result' || G.phase === 'waitingOpp'));
+    chatStickerBar.style.display = showChat ? 'flex' : 'none';
+  }
 }
 
-/* ==================== LOOP ==================== */
+/* ==================== ENGINE LOOP ==================== */
 let last = performance.now();
 function loop(now){
   let dt = (now-last)/1000;
