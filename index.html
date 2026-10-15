@@ -57,7 +57,7 @@
   .sticker-btn:hover{transform:scale(1.2);background:rgba(255,209,102,0.25);}
   .sticker-btn:active{transform:scale(0.92);}
 
-  /* ---------- FULLSCREEN GATE ---------- */
+  /* ---------- AUTO FULLSCREEN GATE ---------- */
   #startGate{
     position:fixed; inset:0; z-index:9999;
     display:flex; align-items:center; justify-content:center;
@@ -67,40 +67,73 @@
             env(safe-area-inset-bottom) env(safe-area-inset-left);
     transition:opacity .35s ease;
     -webkit-tap-highlight-color:transparent;
+    cursor:pointer;
   }
   #startGate.hide{ opacity:0; pointer-events:none; }
   .sg-card{ text-align:center; padding:24px; }
-  .sg-logo{ font-size:64px; animation:sgBob 2s ease-in-out infinite; }
+  .sg-logo{ font-size:70px; animation:sgBob 2s ease-in-out infinite; }
   @keyframes sgBob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
   .sg-card h1{
-    margin:8px 0 4px; font-size:clamp(28px,7vw,52px); letter-spacing:2px;
+    margin:8px 0 4px; font-size:clamp(30px,8vw,60px); letter-spacing:3px;
     background:linear-gradient(180deg,#fff4c2,#ffd166 45%,#a06b12);
     -webkit-background-clip:text; background-clip:text; color:transparent;
     font-weight:900;
   }
-  .sg-sub{ color:rgba(255,255,255,.5); font-size:11px; letter-spacing:3px; margin-bottom:28px; }
-  #sgBtn{
-    border:0; border-radius:14px; padding:16px 46px; cursor:pointer;
-    font-size:20px; font-weight:900; color:#1a1206;
-    background:linear-gradient(180deg,#ffe17a,#ffd166 50%,#e0a82e);
-    box-shadow:0 10px 28px rgba(255,209,102,.35);
-    transition:transform .12s ease;
-    -webkit-tap-highlight-color:transparent;
+  .sg-sub{ color:rgba(255,255,255,.5); font-size:11px; letter-spacing:3px; margin-bottom:36px; }
+
+  .sg-tap{
+    position:relative; display:inline-flex;
+    align-items:center; justify-content:center;
+    width:160px; height:160px;
+    margin:12px auto 20px;
   }
-  #sgBtn:active{ transform:scale(.95); }
-  .sg-hint{ margin-top:16px; color:rgba(255,255,255,.45); font-size:12px; }
+  .sg-tap-ring{
+    position:absolute; inset:0; border-radius:50%;
+    border:3px solid rgba(255,209,102,0.7);
+    animation:sgPulse 1.6s ease-out infinite;
+  }
+  .sg-tap-ring::before,
+  .sg-tap-ring::after{
+    content:''; position:absolute; inset:15px; border-radius:50%;
+    border:2px solid rgba(255,209,102,0.45);
+    animation:sgPulse 1.6s ease-out infinite 0.3s;
+  }
+  .sg-tap-ring::after{ inset:30px; animation-delay:0.6s; }
+  @keyframes sgPulse{
+    0%{ transform:scale(0.85); opacity:1; }
+    100%{ transform:scale(1.35); opacity:0; }
+  }
+  .sg-tap-text{
+    position:relative; z-index:2;
+    font-size:17px; font-weight:900; letter-spacing:2px;
+    color:#ffd166; text-shadow:0 2px 8px rgba(255,209,102,.6);
+    animation:sgText 1.2s ease-in-out infinite;
+  }
+  @keyframes sgText{
+    0%,100%{ transform:scale(1); opacity:0.85; }
+    50%{ transform:scale(1.08); opacity:1; }
+  }
+  .sg-hint{ color:rgba(255,255,255,.45); font-size:12px; letter-spacing:1px; }
 
   /* ---------- ROTATE GATE ---------- */
   #rotateGate{
     position:fixed; inset:0; z-index:10000; display:none;
     flex-direction:column; align-items:center; justify-content:center;
-    background:#0a0d15; color:#fff; text-align:center; gap:8px;
+    background:radial-gradient(circle at 50% 40%, #1e2740 0%, #05070d 80%);
+    color:#fff; text-align:center; gap:12px;
     font-family:'Segoe UI',system-ui,sans-serif; padding:20px;
   }
-  #rotateGate .rg-icon{ font-size:76px; animation:rgRot 2.2s ease-in-out infinite; }
-  @keyframes rgRot{ 0%,40%{transform:rotate(0)} 60%,100%{transform:rotate(-90deg)} }
-  #rotateGate p{ margin:0; font-size:17px; font-weight:700; }
-  #rotateGate small{ color:rgba(255,255,255,.5); }
+  #rotateGate .rg-icon{
+    font-size:80px;
+    animation:rgRot 2.4s ease-in-out infinite;
+  }
+  @keyframes rgRot{
+    0%,35%{ transform:rotate(0) scale(1); }
+    55%,100%{ transform:rotate(-90deg) scale(1.05); }
+  }
+  #rotateGate p{ margin:0; font-size:18px; font-weight:800; letter-spacing:0.5px; }
+  #rotateGate b{ color:#ffd166; }
+  #rotateGate small{ color:rgba(255,255,255,.5); font-size:13px; }
 
   @media (orientation: portrait) and (pointer: coarse){
     #rotateGate{ display:flex; }
@@ -117,6 +150,7 @@
     padding-left: calc(22px + env(safe-area-inset-left));
     padding-right: calc(22px + env(safe-area-inset-right));
   }
+  body.fs #startGate{ display:none !important; }
 </style>
 </head>
 <body>
@@ -147,22 +181,25 @@
   </div>
 </div>
 
-<!-- ===== FULLSCREEN START GATE ===== -->
+<!-- ===== AUTO-FULLSCREEN GATE ===== -->
 <div id="startGate">
   <div class="sg-card">
     <div class="sg-logo">🏏</div>
     <h1>GULLI DANDA</h1>
     <div class="sg-sub">POWERED BY PRADEEP SINGH</div>
-    <button id="sgBtn">▶&nbsp; TAP TO PLAY</button>
-    <div class="sg-hint">Full screen + landscape mode me khulega</div>
+    <div class="sg-tap">
+      <span class="sg-tap-ring"></span>
+      <span class="sg-tap-text">TAP ANYWHERE</span>
+    </div>
+    <div class="sg-hint">Landscape fullscreen me khulega</div>
   </div>
 </div>
 
 <!-- ===== PORTRAIT ROTATE GATE (iOS fallback) ===== -->
 <div id="rotateGate">
   <div class="rg-icon">📱</div>
-  <p>Phone ko <b>landscape</b> (horizontal) me ghumayein</p>
-  <small>Best experience ke liye</small>
+  <p>Phone ko <b>landscape</b> me ghumayein</p>
+  <small>Game khud fullscreen ho jayega</small>
 </div>
 
 <script>
@@ -172,20 +209,26 @@ let sendEmojiSticker = () => {};
 "use strict";
 
 /* ================================================================
-   FULLSCREEN + ORIENTATION + WAKE LOCK
+   AUTO FULLSCREEN + LANDSCAPE (any-tap trigger)
    ================================================================ */
 const startGate = document.getElementById('startGate');
-const sgBtn     = document.getElementById('sgBtn');
+const sgBtn     = document.getElementById('sgBtn') || { style: {} };
+
+const isStandalone =
+  window.matchMedia('(display-mode: standalone)').matches ||
+  window.matchMedia('(display-mode: fullscreen)').matches ||
+  window.navigator.standalone === true ||
+  document.referrer.includes('android-app://');
 
 async function lockLandscape(){
   try{
     if (screen.orientation && screen.orientation.lock){
       await screen.orientation.lock('landscape');
     }
-  }catch(e){ /* iOS doesn't support — rotate gate handles it */ }
+  }catch(e){}
 }
 
-async function goFullscreenLandscape(){
+async function enterFullscreen(){
   const el = document.documentElement;
   try{
     if (el.requestFullscreen)              await el.requestFullscreen({ navigationUI:'hide' });
@@ -260,7 +303,7 @@ const SKY_BOTTOM = 148, STADIUM_TOP = 140, STADIUM_BOTTOM = 300, HORIZON = 300;
 const SPLASH_DURATION = 2.6, TOSS_DURATION = 2500, TOSS_RESULT_DURATION = 2400;
 const COIN_DIVISOR = 10;
 
-/* ==================== VOICE SYNTHESIS ==================== */
+/* ==================== VOICE ==================== */
 function speakVoice(text, pitch = 1.1, rate = 1.1){
   try {
     if (!('speechSynthesis' in window)) return;
@@ -273,7 +316,7 @@ function speakVoice(text, pitch = 1.1, rate = 1.1){
   } catch(e){}
 }
 
-/* ==================== EMOJI CHAT SYSTEM ==================== */
+/* ==================== EMOJI CHAT ==================== */
 const activeStickers = [];
 sendEmojiSticker = function(emoji){
   if (!emoji) return;
@@ -297,7 +340,7 @@ function spawnSticker(emoji, isMine){
   });
 }
 
-/* ==================== SHOP CATALOG ==================== */
+/* ==================== SHOP ==================== */
 const SHOP_SKINS = [
   { id:'red',    name:'Classic Red',   color:'#e63946', price:0     },
   { id:'blue',   name:'Ocean Blue',    color:'#3a86ff', price:500   },
@@ -400,7 +443,7 @@ let usernameSuggestions = [];
 let suggestionTimer = null;
 let suggestionsOpen = false;
 
-/* ============ SESSION (FULL DATA CACHE) ============ */
+/* ============ SESSION ============ */
 function saveSession(){
   try {
     const data = {
@@ -516,7 +559,6 @@ function registerUserAccount(username, password){
       Object.assign(ACCOUNT, data);
       ACCOUNT.loggedIn = true; ACCOUNT.isGuest = false; ACCOUNT.loading = false;
       saveSession();
-
       const action = ACCOUNT.afterLoginAction;
       ACCOUNT.afterLoginAction = null;
       if (action === 'online'){
@@ -528,7 +570,6 @@ function registerUserAccount(username, password){
       } else {
         setPhase('menu');
         beep(880, 0.1, 'triangle', 0.11);
-        setTimeout(()=>beep(1200, 0.15, 'triangle', 0.11), 120);
       }
       trackEvent('sign_up', { method: 'username' });
     });
@@ -566,7 +607,6 @@ function loginUserAccount(username, password){
     ACCOUNT.activeBoost = data.activeBoost || 'normal';
     ACCOUNT.loggedIn = true; ACCOUNT.isGuest = false; ACCOUNT.loading = false;
     saveSession();
-
     const action = ACCOUNT.afterLoginAction;
     ACCOUNT.afterLoginAction = null;
     if (action === 'online'){
@@ -614,8 +654,6 @@ function logoutUser(){
   ACCOUNT.afterLoginAction = null;
   usernameSuggestions = []; suggestionsOpen = false;
   clearSession();
-
-  // Logout ke baad turant naya guest banao
   createLocalGuest();
 }
 
@@ -655,7 +693,6 @@ function updateStatsOnline(myScore, won){
   trackEvent('online_match_end', { score: myScore, won: won ? 1 : 0 });
 }
 
-/* ============ BOOT / GUEST / CLOUD SYNC ============ */
 function createLocalGuest(){
   const nm = 'PLAYER' + Math.floor(1000 + Math.random() * 9000);
   ACCOUNT.loggedIn = true;
@@ -819,12 +856,7 @@ function resetMatchFlags(){
   clearTimeout(NET.scanTimer); NET.scanTimer = null;
 }
 
-const SPEC = {
-  ready: false,
-  gx: 0, gy: 0, gr: 0, cx: 0,
-  tgx: 0, tgy: 0, tgr: 0, tcx: 0,
-  fX: []
-};
+const SPEC = { ready: false, gx: 0, gy: 0, gr: 0, cx: 0, tgx: 0, tgy: 0, tgr: 0, tcx: 0, fX: [] };
 function specReset(){ SPEC.ready = false; SPEC.fX = []; }
 
 function initFirebase(){
@@ -844,8 +876,34 @@ function initFirebase(){
     return true;
   } catch(e){ return false; }
 }
+
+let firebaseLoaded = false;
+function preloadFirebase(){
+  if (firebaseLoaded) return;
+  firebaseLoaded = true;
+  const files = ['firebase-app-compat.js','firebase-database-compat.js','firebase-analytics-compat.js'];
+  let loaded = 0;
+  files.forEach(f => {
+    const s = document.createElement('script');
+    s.src = 'https://www.gstatic.com/firebasejs/9.22.2/' + f;
+    s.async = true;
+    s.onload = () => {
+      loaded++;
+      if (loaded === files.length){
+        if (initFirebase()){
+          if (ACCOUNT.loggedIn && !ACCOUNT.isGuest && ACCOUNT.username){
+            syncAccountFromCloud(ACCOUNT.username);
+          }
+        }
+      }
+    };
+    document.head.appendChild(s);
+  });
+}
+
 function genRoomId(){ return 'GD-' + Math.random().toString(36).slice(2,7).toUpperCase(); }
 
+/* ==================== ONLINE ==================== */
 function startOnlineMatchmaking(){
   if (!isOnline){
     G.banner = '📴 NO INTERNET — ONLINE UNAVAILABLE';
@@ -1078,7 +1136,6 @@ function watchRoom(){
       if (!NET.leaveArmed){ NET.leaveArmed = true; armLeaveFlag(); }
       if (wasLeft !== NET.oppLeft) refreshResultButtons();
     }
-
     const dr = data.round || 1;
     if (dr > NET.round){ startNextRound(data, dr); return; }
 
@@ -1109,7 +1166,6 @@ function watchRoom(){
       }).then(() => { NET.roundStarting = false; })
         .catch(() => { NET.roundStarting = false; });
     }
-
     if (role === 'p1' && data.p2 && !data.p2.isBot && !data.tossWinner && !NET.tossDecided){
       NET.tossDecided = true; NET.searching = false;
       const winner = Math.random() < 0.5 ? 'p1' : 'p2';
@@ -1207,11 +1263,8 @@ function reportOnlineScore(score){
   if (NET.autopilot){
     const playerScore = G.score;
     let botScore;
-    if (playerScore < 50){
-      botScore = Math.round(30 + Math.random() * 80);
-    } else {
-      botScore = Math.round(playerScore * (0.55 + Math.random() * 0.75));
-    }
+    if (playerScore < 50){ botScore = Math.round(30 + Math.random() * 80); }
+    else { botScore = Math.round(playerScore * (0.55 + Math.random() * 0.75)); }
     if (botScore < 20) botScore = 20 + Math.round(Math.random() * 40);
     G.botScore = botScore;
     NET.autopilotBot.score = botScore;
@@ -1289,15 +1342,12 @@ function cleanupOnline(){
   NET.joinPopup = null; NET.joinPopupTimer = 0;
   specReset();
 }
-
 function startAutopilotMode(){
   if (!NET.searching || NET.autopilotStarting) return;
   if (performance.now() < NET.autopilotRetryAt) return;
   NET.autopilotStarting = true;
-
   const botData = { name: '🤖 AUTO-PILOT', score: 0, done: false, isBot: true };
   const p1Data  = { name: NET.myName, score: 0, done: false };
-
   const begin = () => {
     NET.autopilotStarting = false;
     if (!NET.searching) return;
@@ -1321,7 +1371,6 @@ function startAutopilotMode(){
     setPhase('toss');
     trackEvent('autopilot_start', {});
   };
-
   if (NET.roomRef){
     const ref = NET.roomRef;
     ref.transaction(cur => {
@@ -1342,11 +1391,8 @@ function startAutopilotMode(){
     NET.roomRef = NET.db.ref('rooms/' + id);
     NET.roomRef.set({ status: 'autopilot', createdAt: Date.now(), round: 1, p1: p1Data, p2: botData })
       .then(() => begin()).catch(() => begin());
-  } else {
-    begin();
-  }
+  } else { begin(); }
 }
-
 function watchAutopilotRoom(){
   if (!NET.roomRef) return;
   detachRoomListeners();
@@ -1361,13 +1407,11 @@ function watchAutopilotRoom(){
         beep(1200, 0.12, 'triangle', 0.14);
         setTimeout(()=>beep(1600, 0.15, 'triangle', 0.13), 120);
         setTimeout(()=>beep(2000, 0.18, 'triangle', 0.12), 250);
-        trackEvent('autopilot_join_popup', { joiner: p2.name });
       }
       autoAcceptJoin(p2.name);
     }
   });
 }
-
 const BATTING_PHASES = ['turnIntro','power','air','fly','fielding','throw','result','turnEnd'];
 function autoAcceptJoin(name){
   if (!NET.autopilot) return;
@@ -1380,14 +1424,12 @@ function autoAcceptJoin(name){
   NET.series = { me: 0, opp: 0 };
   NET.round = NET.round || 1;
   specReset();
-
   const phase = G.phase;
   const upd = {
     status: 'playing',
     'p2/isBot': null, 'p2/score': 0, 'p2/done': false,
     joinedAt: Date.now(), round: NET.round, live: null, rematch: null
   };
-
   if (BATTING_PHASES.indexOf(phase) >= 0){
     NET.myDone = false; NET.turnHandedOver = false;
     NET.tossWinner = 'p1'; NET.currentBatsman = 'p1';
@@ -1413,7 +1455,6 @@ function autoAcceptJoin(name){
     setPhase('toss');
   }
   G.bannerTimer = 2.5;
-
   if (NET.roomRef){
     NET.leaveArmed = true; armLeaveFlag();
     NET.roomRef.update(upd).catch(() => {});
@@ -1424,15 +1465,6 @@ function autoAcceptJoin(name){
   beep(1400, 0.15, 'triangle', 0.13);
   setTimeout(()=>beep(1800, 0.18, 'triangle', 0.13), 150);
 }
-
-function acceptJoin(){
-  if (!NET.joinPopup) return;
-  const name = NET.joinPopup.name;
-  NET.joinPopup = null;
-  NET.joinPopupTimer = 0;
-  autoAcceptJoin(name);
-}
-
 function finishBotMatch(){
   const myScore = G.score;
   const oppScore = G.botScore;
@@ -1458,6 +1490,7 @@ function finishBotMatch(){
   else { beep(240,0.3,'sawtooth',0.10); }
 }
 
+/* ==================== SHOT BUTTONS / AUDIO ==================== */
 const shotButtons = [];
 function layoutShotButtons(){
   const bw = 132, bh = 46, gap = 12;
@@ -1646,7 +1679,7 @@ function rebuildMenuButtons(){
   }
 }
 
-/* ==================== STATIC BACKGROUND CACHE ==================== */
+/* ============ STATIC BG ============ */
 function buildSunSprite(){
   const r = 100;
   sunSprite = document.createElement('canvas');
@@ -1715,7 +1748,7 @@ function buildStaticBG(){
   buildSunSprite();
 }
 
-/* ==================== CROWD ==================== */
+/* ============ CROWD ============ */
 function drawCrowdPerson(c, p, armRaise){
   const s = p.s;
   const headR = 4.6 * s, bodyH = 12.5 * s;
@@ -1805,7 +1838,7 @@ function initCrowd(){
   buildStaticBG();
 }
 
-/* ==================== GAME FLOW ==================== */
+/* ============ GAME FLOW ============ */
 function resetGulli(){ gulli.x = GULLI_START_X; gulli.y = GROUND_Y - 7; gulli.vx = 0; gulli.vy = 0; gulli.rot = 0; gulli.rotV = 0; gulli.grounded = true; }
 function resetFielders(){
   for (const f of fielders){ f.x = f.homeX; f.moving = false; f.runPhase = 0; f.isCatcher = false; f.chasing = false; f.facing = -1; f.speed = f.topSpeed; }
@@ -1928,26 +1961,10 @@ function swing(){
   const cheerLevel = acc * (G.shotType === 'LOFT' ? 1.4 : G.shotType === 'DRIVE' ? 1.1 : 0.7);
   crowdExcitement = Math.max(crowdExcitement, 0.6 + cheerLevel * 1.0);
   playCheer(0.5 + acc * 0.9);
-  if (acc > 0.92) {
-    sweep(900,1800,0.18,'triangle',0.13);
-    G.banner='PERFECT!';
-    speakVoice("Kamaal ka shot!");
-  }
-  else if (acc > 0.6) {
-    beep(700,0.12,'triangle',0.11);
-    G.banner='GREAT HIT!';
-    speakVoice("Dhuandaar hit!");
-  }
-  else if (acc > 0.25) {
-    beep(500,0.12,'triangle',0.09);
-    G.banner='HIT';
-    speakVoice("Badiya shot!");
-  }
-  else {
-    beep(360,0.12,'triangle',0.08);
-    G.banner='WEAK HIT';
-    speakVoice("Halka shot!");
-  }
+  if (acc > 0.92) { sweep(900,1800,0.18,'triangle',0.13); G.banner='PERFECT!'; speakVoice("Kamaal ka shot!"); }
+  else if (acc > 0.6) { beep(700,0.12,'triangle',0.11); G.banner='GREAT HIT!'; speakVoice("Dhuandaar hit!"); }
+  else if (acc > 0.25) { beep(500,0.12,'triangle',0.09); G.banner='HIT'; speakVoice("Badiya shot!"); }
+  else { beep(360,0.12,'triangle',0.08); G.banner='WEAK HIT'; speakVoice("Halka shot!"); }
   G.bannerTimer = 0.9;
 }
 function missGulli(){
@@ -2045,12 +2062,11 @@ function advanceFromTurnEnd(){
       beep(1200, 0.2, 'triangle', 0.14);
       setTimeout(()=>beep(1600, 0.2, 'triangle', 0.14), 180);
       setTimeout(()=>beep(2000, 0.25, 'triangle', 0.13), 360);
-      setTimeout(()=>beep(1600, 0.2, 'triangle', 0.13), 540);
     } else { prepareTurn(); }
   }
 }
 
-/* ==================== PARTICLES ==================== */
+/* ============ PARTICLES ============ */
 function spawnBurst(x,y,acc){
   const n = 12 + Math.round(acc*16);
   for (let i=0;i<n;i++){
@@ -2093,7 +2109,7 @@ function updateParticles(dt){
   if (G.ring){ G.ring.t += dt*2.6; if (G.ring.t>=1) G.ring=null; }
 }
 
-/* ==================== UPDATE ==================== */
+/* ============ UPDATE ============ */
 function update(dt){
   NET.lastSync = (NET.lastSync || 0) + dt;
   if (NET.lastSync > 0.10 && NET.roomRef && NET.role && G.mode === 'online' && !NET.autopilot){
@@ -2107,51 +2123,25 @@ function update(dt){
     else if (G.phase === 'turnEnd') phaseLabel = 'INNINGS DONE';
     else if (G.phase === 'waitingOpp') phaseLabel = 'WAITING';
     else if (G.phase === 'turnIntro') phaseLabel = 'GETTING READY';
-
     const fs = [];
     for (let i = 0; i < fielders.length; i++){
       const f = fielders[i];
-      fs.push([
-        Math.round(f.x),
-        Math.round((f.runPhase || 0) * 100) / 100,
-        f.moving ? 1 : 0,
-        f.facing > 0 ? 1 : -1,
-        Math.round(f.speed || 0),
-        f.color || '#5c9ee0',
-        f.skin  || '#f0c49a',
-        f.hair  || '#3a2416',
-        f.number || ''
-      ]);
+      fs.push([Math.round(f.x), Math.round((f.runPhase || 0) * 100) / 100, f.moving ? 1 : 0, f.facing > 0 ? 1 : -1, Math.round(f.speed || 0), f.color || '#5c9ee0', f.skin || '#f0c49a', f.hair || '#3a2416', f.number || '']);
     }
-
     const skin = getActiveSkin(), danda = getActiveDanda();
     NET.roomRef.child('live/' + NET.role).update({
-      ph: G.phase,
-      lb: phaseLabel,
-      sc: G.score,
-      ou: G.outs,
-      gx: Math.round(gulli.x),
-      gy: Math.round(gulli.y),
+      ph: G.phase, lb: phaseLabel, sc: G.score, ou: G.outs,
+      gx: Math.round(gulli.x), gy: Math.round(gulli.y),
       gr: Math.round(gulli.rot * 100) / 100,
-      gg: gulli.grounded ? 1 : 0,
-      gv: gulli.vy > 0 ? 1 : 0,
-      cx: Math.round(camX),
-      pw: Math.round(G.power),
-      sh: G.shotType,
+      gg: gulli.grounded ? 1 : 0, gv: gulli.vy > 0 ? 1 : 0,
+      cx: Math.round(camX), pw: Math.round(G.power), sh: G.shotType,
       bd: Math.round(G.hitDistance || 0),
-      bn: G.banner || '',
-      bt: Math.round((G.bannerTimer || 0) * 10) / 10,
-      oc: G.outcome || '',
-      ql: Math.round((G.quality || 0) * 100) / 100,
-      sk: skin.color,
-      dn: danda.color,
-      da: danda.accent,
-      nm: NET.myName,
-      fs: fs,
-      ts: Date.now()
+      bn: G.banner || '', bt: Math.round((G.bannerTimer || 0) * 10) / 10,
+      oc: G.outcome || '', ql: Math.round((G.quality || 0) * 100) / 100,
+      sk: skin.color, dn: danda.color, da: danda.accent,
+      nm: NET.myName, fs: fs, ts: Date.now()
     }).catch(()=>{});
   }
-
   if (G.bannerTimer>0) G.bannerTimer -= dt;
   if (G.swingTimer>0) G.swingTimer -= dt;
   if (G.marketMsgTimer>0) G.marketMsgTimer -= dt;
@@ -2166,43 +2156,30 @@ function update(dt){
   if (G.phase === 'splash'){
     G.splashTimer += dt;
     if (Math.random() < 0.7) spawnSplashSpark();
-    if (G.splashTimer >= SPLASH_DURATION){
-      bootAccount();
-    }
+    if (G.splashTimer >= SPLASH_DURATION){ bootAccount(); }
     return;
   }
-
   if (G.phase === 'searching' && NET.searching){
     const elapsed = performance.now() - NET.searchStart;
     const remaining = Math.max(0, 30 - Math.floor(elapsed / 1000));
-    NET.statusMsg = remaining > 0
-      ? 'Searching... Auto-pilot in ' + remaining + 's'
-      : 'Starting auto-pilot...';
-    if (elapsed >= 30000){
-      startAutopilotMode();
-      return;
-    }
+    NET.statusMsg = remaining > 0 ? 'Searching... Auto-pilot in ' + remaining + 's' : 'Starting auto-pilot...';
+    if (elapsed >= 30000){ startAutopilotMode(); return; }
   }
-
   if (NET.joinPopupTimer > 0){
     NET.joinPopupTimer -= dt;
     if (NET.joinPopupTimer <= 0){ NET.joinPopup = null; NET.joinPopupTimer = 0; }
   }
-
   NET.forfeitTimer += dt;
   if (NET.forfeitTimer > 1){ NET.forfeitTimer = 0; checkOppForfeit(); }
-
   if (G.phase === 'turnEnd' && G.mode === 'online'){
     G.turnEndTimer = (G.turnEndTimer || 0) + dt;
     if (G.turnEndTimer >= 2.2){ G.turnEndTimer = 0; advanceFromTurnEnd(); return; }
   }
-
   if (G.phase === 'botBatting'){
     G.botBattingTimer -= dt;
     if (G.botBattingTimer <= 0){ finishBotMatch(); }
     return;
   }
-
   if (G.phase === 'searching' || G.phase === 'waitingOpp' || G.phase === 'market'){ return; }
   if (G.phase === 'toss'){
     if (performance.now() - NET.tossStartTime > TOSS_DURATION){ NET.tossResultStart = performance.now(); setPhase('tossResult'); }
@@ -2362,7 +2339,7 @@ function update(dt){
   }
 }
 
-/* ==================== INPUT ==================== */
+/* ============ INPUT ============ */
 function pointInButton(px, py, b){ return px>=b.x && px<=b.x+b.w && py>=b.y && py<=b.y+b.h; }
 function canvasCoordsFromEvent(e){ const r = canvas.getBoundingClientRect(); return { x:(e.clientX - r.left)*(W/r.width), y:(e.clientY - r.top)*(H/r.height) }; }
 function setShot(id){ if (G.shotType !== id){ G.shotType = id; beep(720, 0.05, 'sine', 0.06); } }
@@ -2485,11 +2462,8 @@ function handleMenuClick(x, y){
       if (b.id === 'doGuest'){ guestLogin(ACCOUNT.formName); return true; }
       if (b.id === 'skipLogin'){
         ACCOUNT.afterLoginAction = null;
-        if (ACCOUNT.isGuest && ACCOUNT.loggedIn){
-          setPhase('menu');
-        } else {
-          createLocalGuest();
-        }
+        if (ACCOUNT.isGuest && ACCOUNT.loggedIn) setPhase('menu');
+        else createLocalGuest();
         return true;
       }
       if (b.id === 'goRegister'){ ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.error = ''; usernameSuggestions = []; suggestionsOpen = false; setPhase('register'); return true; }
@@ -2558,7 +2532,6 @@ function handleMenuClick(x, y){
 function onInput(e){
   if (!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(err){} }
   if (G.phase === 'splash'){ if (G.splashTimer > 0.7){ G.splashTimer = SPLASH_DURATION; } return; }
-
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
   if (G.phase === 'botBatting') return;
   if (G.phase==='menu' || G.phase==='levelSelect' || G.phase==='playerSelect'
@@ -2614,6 +2587,10 @@ function handleAuthKey(e){
   }
 }
 window.addEventListener('keydown', e=>{
+  if (startGate.style.display !== 'none' && (e.code==='Space'||e.code==='Enter'||e.key===' ')){
+    if (typeof triggerStart === 'function') triggerStart();
+    e.preventDefault(); return;
+  }
   if (G.phase === 'splash'){ if (e.code==='Space'||e.code==='Enter'||e.key===' '){ onInput(null); e.preventDefault(); } return; }
   if (G.phase === 'login' || G.phase === 'register' || G.phase === 'guest'){ handleAuthKey(e); return; }
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
@@ -2708,7 +2685,7 @@ mobileInput.addEventListener('keydown', e=>{
   }
 });
 
-/* ==================== DRAWING ==================== */
+/* ============ DRAWING ============ */
 const clouds = [
   { x:140, y:58, s:0.9 }, { x:470, y:98, s:0.65 }, { x:780, y:50, s:0.85 }, { x:1120, y:105, s:0.55 }, { x:1420, y:72, s:0.8 }, { x:1850, y:90, s:0.7 }
 ];
@@ -2822,9 +2799,7 @@ function drawPlayer(){
   const pcolor = G.players[G.currentPlayer] ? G.players[G.currentPlayer].color : '#e63946';
 
   let swingProgress = 0;
-  if (G.swingTimer > 0) {
-    swingProgress = 1 - (G.swingTimer / G.swingDur);
-  }
+  if (G.swingTimer > 0) swingProgress = 1 - (G.swingTimer / G.swingDur);
 
   const lean = swingProgress > 0 ? Math.sin(swingProgress * Math.PI) * 16 : 0;
   const hipY = y - 70;
@@ -2873,10 +2848,8 @@ function drawPlayer(){
     const handX = shoulderX + 8 + (lean * 0.4);
     const handY = shoulderY + 7;
     ctx.save(); ctx.translate(handX, handY); ctx.rotate(ang);
-
     ctx.strokeStyle = '#2d3142'; ctx.lineWidth = 8;
     ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(24, 7); ctx.stroke();
-
     ctx.lineCap = 'round';
     ctx.strokeStyle = danda.color; ctx.lineWidth = 11;
     ctx.beginPath(); ctx.moveTo(18, 7); ctx.lineTo(122, 7); ctx.stroke();
@@ -3491,9 +3464,8 @@ function drawLeaderboard(){
   ctx.fillRect(0,0,W,H);
   centerText('🏆  GLOBAL LEADERBOARD', 55, 32, '#ffd166');
   centerText('Top online scores worldwide', 92, 14, 'rgba(255,255,255,0.65)');
-  if (!isOnline){
-    centerText('📴 Offline — Leaderboard needs internet', 260, 20, 'rgba(255,138,138,0.9)');
-  } else if (!LEADERBOARD.data){ centerText('Loading...', 260, 24, 'rgba(255,255,255,0.7)'); }
+  if (!isOnline){ centerText('📴 Offline — Leaderboard needs internet', 260, 20, 'rgba(255,138,138,0.9)'); }
+  else if (!LEADERBOARD.data){ centerText('Loading...', 260, 24, 'rgba(255,255,255,0.7)'); }
   else if (LEADERBOARD.data.length === 0){ centerText('No scores yet. Be the first!', 260, 20, 'rgba(255,255,255,0.7)'); }
   else {
     const bw = 620, bh = 30, gap = 6;
@@ -3545,22 +3517,18 @@ function drawProfileView(){
   centerText(ACCOUNT.name, 162, 22, '#ffffff');
   if (ACCOUNT.isGuest){ centerText('🎮 GUEST — stats not saved', 184, 11, 'rgba(255,138,138,0.9)'); }
   else { centerText('👤 ' + ACCOUNT.username, 184, 13, 'rgba(255,255,255,0.6)'); }
-
   drawCoinIcon(W/2 - 130, 212, 12);
   ctx.font = '900 18px system-ui,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffd166';
   ctx.fillText('COINS: ' + ACCOUNT.coins, W/2 - 110, 212);
-
   ctx.font = '900 18px system-ui,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ff6b8a';
   ctx.fillText('❤️ LIVES: ' + ACCOUNT.lives, W/2 + 70, 212);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-
   const lv = getLevel(ACCOUNT.highestUnlockedLevel);
   centerText('🏆 HIGHEST: LEVEL ' + ACCOUNT.highestUnlockedLevel + ' (' + lv.name + ')', 238, 12, '#ffd166');
-
   const stats = [
     { label:'Best Single', value: ACCOUNT.bestSingle + 'm', color:'#ffd166' },
     { label:'Best Online', value: ACCOUNT.bestOnline + 'm', color:'#8affa0' },
@@ -3597,23 +3565,13 @@ function drawMarketItem(rect, item, opts){
   const owned = opts.owned;
   const active = opts.active;
   const affordable = ACCOUNT.coins >= item.price;
-
   ctx.save();
   rr(ctx, x, y, w, h, 14);
   const grd = ctx.createLinearGradient(x, y, x, y+h);
-  if (active){
-    grd.addColorStop(0, 'rgba(138,255,160,0.25)');
-    grd.addColorStop(1, 'rgba(138,255,160,0.06)');
-  } else if (owned){
-    grd.addColorStop(0, 'rgba(255,209,102,0.20)');
-    grd.addColorStop(1, 'rgba(255,209,102,0.05)');
-  } else if (affordable){
-    grd.addColorStop(0, 'rgba(92,158,224,0.18)');
-    grd.addColorStop(1, 'rgba(92,158,224,0.05)');
-  } else {
-    grd.addColorStop(0, 'rgba(20,25,40,0.75)');
-    grd.addColorStop(1, 'rgba(20,25,40,0.55)');
-  }
+  if (active){ grd.addColorStop(0, 'rgba(138,255,160,0.25)'); grd.addColorStop(1, 'rgba(138,255,160,0.06)'); }
+  else if (owned){ grd.addColorStop(0, 'rgba(255,209,102,0.20)'); grd.addColorStop(1, 'rgba(255,209,102,0.05)'); }
+  else if (affordable){ grd.addColorStop(0, 'rgba(92,158,224,0.18)'); grd.addColorStop(1, 'rgba(92,158,224,0.05)'); }
+  else { grd.addColorStop(0, 'rgba(20,25,40,0.75)'); grd.addColorStop(1, 'rgba(20,25,40,0.55)'); }
   ctx.fillStyle = grd; ctx.fill();
   ctx.strokeStyle = active ? '#8affa0' : owned ? '#ffd166' : affordable ? '#5c9ee0' : 'rgba(255,255,255,0.15)';
   ctx.lineWidth = active ? 3 : 2; ctx.stroke();
@@ -3677,34 +3635,19 @@ function drawMarketItem(rect, item, opts){
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';
   ctx.fillText(item.name, x + w/2, y + 84);
-
   ctx.font = '700 11px system-ui,sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.fillText(opts.desc || '', x + w/2, y + 101);
-
   ctx.font = '900 15px system-ui,sans-serif';
-  if (active){
-    ctx.fillStyle = '#8affa0';
-    ctx.fillText('✓ EQUIPPED', x + w/2, y + 128);
-  } else if (owned){
-    ctx.fillStyle = '#ffd166';
-    ctx.fillText('OWNED · TAP TO EQUIP', x + w/2, y + 128);
-  } else if (affordable){
-    drawCoinIcon(x + w/2 - 32, y + 126, 9);
-    ctx.fillStyle = '#ffd166';
-    ctx.fillText(item.price, x + w/2 + 8, y + 128);
-  } else {
-    ctx.fillStyle = 'rgba(255,120,120,0.85)';
-    drawCoinIcon(x + w/2 - 32, y + 126, 9, 0.5);
-    ctx.fillText(item.price, x + w/2 + 8, y + 128);
-  }
-
+  if (active){ ctx.fillStyle = '#8affa0'; ctx.fillText('✓ EQUIPPED', x + w/2, y + 128); }
+  else if (owned){ ctx.fillStyle = '#ffd166'; ctx.fillText('OWNED · TAP TO EQUIP', x + w/2, y + 128); }
+  else if (affordable){ drawCoinIcon(x + w/2 - 32, y + 126, 9); ctx.fillStyle = '#ffd166'; ctx.fillText(item.price, x + w/2 + 8, y + 128); }
+  else { ctx.fillStyle = 'rgba(255,120,120,0.85)'; drawCoinIcon(x + w/2 - 32, y + 126, 9, 0.5); ctx.fillText(item.price, x + w/2 + 8, y + 128); }
   if (opts.coinHint){
     ctx.font = '700 10px system-ui,sans-serif';
     ctx.fillStyle = 'rgba(255,209,102,0.75)';
     ctx.fillText(opts.coinHint, x + w/2, y + 146);
   }
-
   ctx.restore();
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
 }
@@ -3712,17 +3655,14 @@ function drawMarketItem(rect, item, opts){
 function drawMarket(){
   ctx.fillStyle = 'rgba(12,16,28,0.95)';
   ctx.fillRect(0,0,W,H);
-
   centerText('🏪  MARKET', 45, 32, '#ffd166');
   centerText('Spend your coins wisely', 72, 13, 'rgba(255,255,255,0.65)');
-
   drawCoinIcon(W - 140, 45, 15);
   ctx.font = '900 20px system-ui,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffd166';
   ctx.fillText(ACCOUNT.coins + '', W - 118, 45);
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-
   for (const b of menuButtons){
     if (b.id.startsWith('tab_')){
       const tabId = b.id.slice(4);
@@ -3741,7 +3681,6 @@ function drawMarket(){
       ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     }
   }
-
   const tab = G.marketTab;
   if (tab === 'skins'){
     const rects = getMarketItemRects('skins', SHOP_SKINS.length);
@@ -3751,13 +3690,9 @@ function drawMarket(){
       const active = ACCOUNT.activeSkin === item.id;
       let desc = 'Player skin';
       if (item.price === 0) desc = 'Default';
-      drawMarketItem(rects[i], item, {
-        owned, active, color: item.color, previewKind: 'skin', desc,
-        coinHint: ''
-      });
+      drawMarketItem(rects[i], item, { owned, active, color: item.color, previewKind: 'skin', desc, coinHint: '' });
     }
-  }
-  else if (tab === 'dandas'){
+  } else if (tab === 'dandas'){
     const rects = getMarketItemRects('dandas', SHOP_DANDAS.length);
     for (let i = 0; i < SHOP_DANDAS.length; i++){
       const item = SHOP_DANDAS[i];
@@ -3768,49 +3703,26 @@ function drawMarket(){
       if (item.id === 'diamond') desc = 'Crystal clear';
       if (item.id === 'emerald') desc = 'Emerald shine';
       if (item.id === 'ruby')    desc = 'Legendary ruby';
-      drawMarketItem(rects[i], item, {
-        owned, active, color: item.color, accent: item.accent,
-        previewKind: 'danda', desc
-      });
+      drawMarketItem(rects[i], item, { owned, active, color: item.color, accent: item.accent, previewKind: 'danda', desc });
     }
-  }
-  else if (tab === 'boosts'){
+  } else if (tab === 'boosts'){
     const rects = getMarketItemRects('boosts', SHOP_BOOSTS.length);
     for (let i = 0; i < SHOP_BOOSTS.length; i++){
       const item = SHOP_BOOSTS[i];
       const owned = ACCOUNT.ownedBoosts.indexOf(item.id) >= 0;
       const active = ACCOUNT.activeBoost === item.id;
-      const speedIcon = item.bonus === 0 ? '—'
-        : item.bonus <= 0.05 ? '⚡'
-        : item.bonus <= 0.10 ? '⚡⚡'
-        : item.bonus <= 0.15 ? '🚀'
-        : '🚀🚀';
-      const boostColor = item.bonus === 0 ? '#9aa0a6'
-        : item.bonus <= 0.05 ? '#9ad0ff'
-        : item.bonus <= 0.10 ? '#8affa0'
-        : item.bonus <= 0.15 ? '#ffbe0b'
-        : '#ff6bcb';
-      drawMarketItem(rects[i], item, {
-        owned, active, color: boostColor,
-        previewKind: 'boost', desc: item.desc || 'Default', speedIcon
-      });
+      const speedIcon = item.bonus === 0 ? '—' : item.bonus <= 0.05 ? '⚡' : item.bonus <= 0.10 ? '⚡⚡' : item.bonus <= 0.15 ? '🚀' : '🚀🚀';
+      const boostColor = item.bonus === 0 ? '#9aa0a6' : item.bonus <= 0.05 ? '#9ad0ff' : item.bonus <= 0.10 ? '#8affa0' : item.bonus <= 0.15 ? '#ffbe0b' : '#ff6bcb';
+      drawMarketItem(rects[i], item, { owned, active, color: boostColor, previewKind: 'boost', desc: item.desc || 'Default', speedIcon });
     }
-  }
-  else if (tab === 'lives'){
+  } else if (tab === 'lives'){
     const rects = getMarketItemRects('lives', 1);
     const item = { id: 'life', name: 'Extra Life', price: LIFE_PRICE };
-    drawMarketItem(rects[0], item, {
-      owned: false, active: false, color: '#ff6b8a',
-      previewKind: 'life',
-      desc: 'Survive one OUT and keep playing!',
-      coinHint: 'Current: ' + ACCOUNT.lives + ' lives'
-    });
-
+    drawMarketItem(rects[0], item, { owned: false, active: false, color: '#ff6b8a', previewKind: 'life', desc: 'Survive one OUT and keep playing!', coinHint: 'Current: ' + ACCOUNT.lives + ' lives' });
     centerText('Buy multiple lives — they stack!', W/2, 350, 14, 'rgba(255,255,255,0.75)');
     centerText('Each life lets you survive one OUT.', W/2, 375, 13, 'rgba(255,255,255,0.6)');
     centerText('Lives work in Single Player mode.', W/2, 397, 13, 'rgba(255,209,102,0.7)');
   }
-
   if (G.marketMsgTimer > 0 && G.marketMsg){
     ctx.save();
     const alpha = Math.min(1, G.marketMsgTimer / 0.4);
@@ -3828,10 +3740,7 @@ function drawMarket(){
     ctx.restore();
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   }
-
-  for (const b of menuButtons){
-    if (b.id === 'back') drawMenuButton(b, '#ffd166');
-  }
+  for (const b of menuButtons){ if (b.id === 'back') drawMenuButton(b, '#ffd166'); }
 }
 
 function drawToss(){
@@ -3905,7 +3814,6 @@ function drawSpectatorScene(live, dt){
     centerText('Connecting to opponent stream' + dots, H/2, 22, 'rgba(255,255,255,0.75)');
     return;
   }
-
   if (!SPEC.ready){
     SPEC.gx = SPEC.tgx = live.gx || 0;
     SPEC.gy = SPEC.tgy = live.gy || (GROUND_Y - 7);
@@ -3917,13 +3825,11 @@ function drawSpectatorScene(live, dt){
   SPEC.tgy = live.gy || (GROUND_Y - 7);
   SPEC.tgr = live.gr || 0;
   SPEC.tcx = live.cx || 0;
-
   const k = Math.min(1, dt * 20);
   SPEC.gx += (SPEC.tgx - SPEC.gx) * k;
   SPEC.gy += (SPEC.tgy - SPEC.gy) * k;
   SPEC.gr += (SPEC.tgr - SPEC.gr) * k;
   SPEC.cx += (SPEC.tcx - SPEC.cx) * Math.min(1, dt * 10);
-
   const fList = live.fs || [];
   for (let i = 0; i < fList.length; i++){
     const tx = fList[i][0] || 0;
@@ -3931,7 +3837,6 @@ function drawSpectatorScene(live, dt){
     else SPEC.fX[i] += (tx - SPEC.fX[i]) * k;
   }
   SPEC.fX.length = fList.length;
-
   const bakCamX = camX;
   const bakFielders = fielders.slice();
   const bakGulli = { x:gulli.x, y:gulli.y, vx:gulli.vx, vy:gulli.vy, rot:gulli.rot, rotV:gulli.rotV, grounded:gulli.grounded };
@@ -3941,7 +3846,6 @@ function drawSpectatorScene(live, dt){
   const bakPhase = G.phase, bakPower = G.power, bakShot = G.shotType;
   const bakHit = G.hitDistance, bakOutcome = G.outcome, bakZonePop = G.zonePop;
   const bakOn = SPEC_ON, bakSkin = SPEC_SKIN, bakDanda = SPEC_DANDA;
-
   camX = SPEC.cx;
   fielders.length = 0;
   for (let i = 0; i < fList.length; i++){
@@ -3955,38 +3859,24 @@ function drawSpectatorScene(live, dt){
       isCatcher: false, chasing: false, number: f[8] || '', playerName: null
     });
   }
-  gulli.x = SPEC.gx;
-  gulli.y = SPEC.gy;
-  gulli.rot = SPEC.gr;
-  gulli.vx = 0;
-  gulli.vy = live.gv ? 120 : 0;
-  gulli.grounded = live.gg !== 0;
+  gulli.x = SPEC.gx; gulli.y = SPEC.gy; gulli.rot = SPEC.gr;
+  gulli.vx = 0; gulli.vy = live.gv ? 120 : 0; gulli.grounded = live.gg !== 0;
   G.players = [{ name: live.nm || NET.oppName || 'OPPONENT', color: live.sk || '#3a86ff' }];
   G.currentPlayer = 0;
-  G.particles = [];
-  G.ring = null;
-  G.banner = live.bn || '';
-  G.bannerTimer = live.bt || 0;
-  G.phase = live.ph || 'power';
-  G.power = live.pw || 0;
-  G.shotType = live.sh || 'DRIVE';
-  G.hitDistance = live.bd || 0;
-  G.outcome = live.oc || '';
-  G.zonePop = 0.6;
+  G.particles = []; G.ring = null;
+  G.banner = live.bn || ''; G.bannerTimer = live.bt || 0;
+  G.phase = live.ph || 'power'; G.power = live.pw || 0;
+  G.shotType = live.sh || 'DRIVE'; G.hitDistance = live.bd || 0;
+  G.outcome = live.oc || ''; G.zonePop = 0.6;
   SPEC_ON = true;
   SPEC_SKIN = { id:'spec', name:'', color: live.sk || '#3a86ff', price:0 };
   SPEC_DANDA = { id:'spec', name:'', color: live.dn || '#b07c42', accent: live.da || '#8a5a2b', price:0 };
-
   try {
-    drawSky();
-    drawStadium();
-    drawField();
-    drawDistanceMarkers();
+    drawSky(); drawStadium(); drawField(); drawDistanceMarkers();
     if (G.phase === 'fielding' || G.phase === 'throw' || G.phase === 'result') drawDandaOnGround();
     drawZone();
     for (const f of fielders) drawFielder(f);
-    drawGulli();
-    drawPlayer();
+    drawGulli(); drawPlayer();
     drawPowerMeter('OPPONENT BATTING');
     drawShotSelector(true);
     if (G.bannerTimer > 0 && G.banner){
@@ -4017,22 +3907,18 @@ function drawWaitingOpp(){
   if (!crowdCanvas) initCrowd();
   const live = NET.oppLive;
   drawSpectatorScene(live, frameDt);
-
   ctx.save();
   const g = ctx.createLinearGradient(0, 0, 0, 86);
   g.addColorStop(0, 'rgba(10,14,24,0.92)');
   g.addColorStop(1, 'rgba(10,14,24,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, 86);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, 86);
   ctx.restore();
-
   const blink = 0.55 + 0.45 * Math.sin(performance.now() / 300);
   ctx.save();
   ctx.globalAlpha = blink;
   ctx.fillStyle = '#ff4d4d';
   ctx.beginPath(); ctx.arc(34, 26, 7, 0, Math.PI*2); ctx.fill();
   ctx.restore();
-
   ctx.save();
   ctx.font = '900 17px system-ui,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -4042,7 +3928,6 @@ function drawWaitingOpp(){
   ctx.fillStyle = 'rgba(255,255,255,0.62)';
   ctx.fillText(live && live.lb ? ('Status: ' + live.lb) : 'Waiting for stream…', 52, 46);
   ctx.restore();
-
   if (live){
     ctx.save();
     rr(ctx, W - 300, 10, 280, 40, 10);
@@ -4059,7 +3944,6 @@ function drawWaitingOpp(){
     ctx.restore();
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
-
   ctx.save();
   ctx.fillStyle = 'rgba(10,14,24,0.8)';
   ctx.fillRect(0, H - 50, W, 50);
@@ -4082,7 +3966,6 @@ function drawMenuScreen(){
   ctx.fillRect(0,0,W,H);
   centerText('GULLI  DANDA', 78, 52, '#ffd166');
   centerText('CHAMPIONSHIP', 112, 20, 'rgba(255,255,255,0.85)');
-
   const bw = 260, bh = 52, bx = 18, by = 18;
   ctx.save();
   rr(ctx, bx, by, bw, bh, 12);
@@ -4100,7 +3983,6 @@ function drawMenuScreen(){
     : ('@' + ACCOUNT.username + ' · Lv' + ACCOUNT.highestUnlockedLevel + ' · 🪙 ' + ACCOUNT.coins + ' · ❤️ ' + ACCOUNT.lives);
   ctx.fillText(sub, bx + 14, by + 36);
   ctx.restore();
-
   const pvW = 130, pvH = 52, pvX = W - 18 - pvW, pvY = 18;
   const loW = 110, loH = 52, loX = pvX - 12 - loW, loY = 18;
   ctx.save();
@@ -4121,13 +4003,11 @@ function drawMenuScreen(){
   ctx.fillStyle='#ff8a8a';
   ctx.fillText('🚪 LOGOUT', loX + loW/2, loY + loH/2);
   ctx.restore();
-
   const pulse = 0.6 + 0.4*Math.sin(performance.now()/320);
   ctx.globalAlpha = pulse;
   centerText('CHOOSE A MODE', 202, 15, 'rgba(255,255,255,0.7)');
   ctx.globalAlpha = 1;
   for (const b of menuButtons) drawMenuButton(b);
-
   ctx.font = '700 11px system-ui,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(255,209,102,0.85)';
@@ -4298,10 +4178,8 @@ function drawNameEntry(){
     ctx.beginPath();
     ctx.arc(dx, dotY, i === idx ? 7 : 5, 0, Math.PI*2);
     if (i < idx){ ctx.fillStyle = G.players[i].color; ctx.fill(); }
-    else if (i === idx){
-      ctx.fillStyle = p.color; ctx.fill();
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
-    } else { ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill(); }
+    else if (i === idx){ ctx.fillStyle = p.color; ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke(); }
+    else { ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill(); }
   }
 }
 
@@ -4484,15 +4362,9 @@ function drawGameOver(){
       ctx.fillStyle = '#ffd166';
       ctx.fillText('+ ' + c.total + ' COINS', cx - 60, cy - 8);
       ctx.font = '700 13px system-ui,sans-serif';
-      if (c.bonus){
-        ctx.fillStyle = '#8affa0';
-        ctx.fillText('🎉 BONUS! 2x coins for 2x target!', cx - 60, cy + 14);
-      } else {
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.fillText('Get ' + (lv.target*2) + ' pts for 2x coins!', cx - 60, cy + 14);
-      }
+      if (c.bonus){ ctx.fillStyle = '#8affa0'; ctx.fillText('🎉 BONUS! 2x coins for 2x target!', cx - 60, cy + 14); }
+      else { ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillText('Get ' + (lv.target*2) + ' pts for 2x coins!', cx - 60, cy + 14); }
       ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-
       if (ACCOUNT.isGuest){
         ctx.save();
         const pulse2 = 0.7 + 0.3 * Math.sin(performance.now() / 320);
@@ -4602,12 +4474,10 @@ function drawJoinPopup(){
   const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 200);
   const bw = 440, bh = 80;
   const bx = W/2 - bw/2, by = 90;
-
   ctx.save();
   ctx.globalAlpha = Math.min(1, NET.joinPopupTimer / 2);
   ctx.shadowColor = 'rgba(138,255,160,' + (pulse * 0.9) + ')';
   ctx.shadowBlur = 26 + pulse * 8;
-
   rr(ctx, bx, by, bw, bh, 16);
   const grd = ctx.createLinearGradient(bx, by, bx, by+bh);
   grd.addColorStop(0, 'rgba(35,70,50,0.97)');
@@ -4615,33 +4485,27 @@ function drawJoinPopup(){
   ctx.fillStyle = grd; ctx.fill();
   ctx.strokeStyle = '#8affa0'; ctx.lineWidth = 3; ctx.stroke();
   ctx.shadowBlur = 0;
-
   ctx.font = '900 26px system-ui,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffd166';
   ctx.fillText('🔔', bx + 18, by + bh/2);
-
   ctx.font = '900 22px system-ui,sans-serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#8affa0';
   ctx.fillText(popup.name + ' IS ONLINE!', bx + 58, by + 26);
-
   ctx.font = '700 13px system-ui,sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
   ctx.fillText('Linked automatically — match is on!', bx + 58, by + 54);
-
   const ax = bx + bw - 36 + Math.sin(performance.now()/280) * 5;
   ctx.fillStyle = '#8affa0';
   ctx.font = '900 30px system-ui,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('▶', ax, by + bh/2);
-
   const pbW = bw - 40, pbX = bx + 20, pbY = by + bh - 8;
   ctx.fillStyle = 'rgba(255,255,255,0.15)';
   rr(ctx, pbX, pbY, pbW, 4, 2); ctx.fill();
   ctx.fillStyle = '#8affa0';
   rr(ctx, pbX, pbY, pbW * (NET.joinPopupTimer / 4), 4, 2); ctx.fill();
-
   ctx.restore();
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
@@ -4650,31 +4514,24 @@ function drawBotBattingOverlay(){
   if (G.phase !== 'botBatting') return;
   ctx.fillStyle = 'rgba(12,16,28,0.88)';
   ctx.fillRect(0, 0, W, H);
-
   const t = performance.now() / 1000;
   const cx = W/2, cy = 200;
   const bob = Math.sin(t * 3) * 6;
-
   ctx.save();
   ctx.translate(cx, cy + bob);
-
   const glow = ctx.createRadialGradient(0, 0, 10, 0, 0, 100);
   glow.addColorStop(0, 'rgba(92,158,224,0.5)');
   glow.addColorStop(1, 'rgba(92,158,224,0)');
   ctx.fillStyle = glow;
   ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI*2); ctx.fill();
-
   ctx.font = '900 84px system-ui,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('🤖', 0, 0);
   ctx.restore();
-
   centerText('🤖 AUTO-PILOT IS BATTING...', 320, 30, '#5c9ee0');
   centerText('Your score: ' + G.score + ' pts', 360, 22, '#ffd166');
-
   const dots = '.'.repeat(1 + (Math.floor(performance.now()/400) % 3));
   centerText('Simulating opponent innings' + dots, 400, 16, 'rgba(255,255,255,0.75)');
-
   const pbW = 380, pbH = 6, pbX = W/2 - pbW/2, pbY = 440;
   ctx.fillStyle = 'rgba(255,255,255,0.15)';
   rr(ctx, pbX, pbY, pbW, pbH, 3); ctx.fill();
@@ -4683,11 +4540,10 @@ function drawBotBattingOverlay(){
   pbGrd.addColorStop(0, '#5c9ee0'); pbGrd.addColorStop(1, '#ffd166');
   ctx.fillStyle = pbGrd;
   rr(ctx, pbX, pbY, pbW * progress, pbH, 3); ctx.fill();
-
   centerText('Get ready for results...', 480, 14, 'rgba(255,209,102,0.8)');
 }
 
-/* ==================== MAIN RENDER ==================== */
+/* ============ MAIN RENDER ============ */
 function draw(){
   ctx.clearRect(0,0,W,H);
   if (G.phase === 'splash'){ drawSplash(); return; }
@@ -4738,7 +4594,7 @@ function draw(){
   drawJoinPopup();
 }
 
-/* ==================== HUD (throttled) ==================== */
+/* ============ HUD (throttled) ============ */
 const uiScore = document.getElementById('uiScore');
 const uiBest = document.getElementById('uiBest');
 const uiOuts = document.getElementById('uiOuts');
@@ -4756,10 +4612,8 @@ function updateHUD(){
       || G.phase === 'toss' || G.phase === 'tossResult' || G.phase === 'leaderboard'
       || G.phase === 'profileView' || G.phase === 'market' || G.phase === 'botBatting'
       || G.phase === 'waitingOpp');
-
   const newDisp = isMenuPhase ? 'none' : 'flex';
   if (_hudCache.disp !== newDisp){ _hudCache.disp = newDisp; hud.style.display = newDisp; }
-
   if (!isMenuPhase){
     if (_hudCache.score !== G.score){ _hudCache.score = G.score; uiScore.textContent = G.score; }
     if (_hudCache.best  !== G.best ){ _hudCache.best  = G.best;  uiBest.textContent  = G.best;  }
@@ -4770,14 +4624,13 @@ function updateHUD(){
     if (uiCoins && _hudCache.coins !== ACCOUNT.coins){ _hudCache.coins = ACCOUNT.coins; uiCoins.textContent = ACCOUNT.coins; }
     if (uiLives && _hudCache.lives !== ACCOUNT.lives){ _hudCache.lives = ACCOUNT.lives; uiLives.textContent = ACCOUNT.lives; }
   }
-
   if (chatStickerBar){
     const showChat = (G.mode === 'online' && (G.phase === 'power' || G.phase === 'air' || G.phase === 'fly' || G.phase === 'fielding' || G.phase === 'throw' || G.phase === 'result' || G.phase === 'waitingOpp'));
     chatStickerBar.style.display = showChat ? 'flex' : 'none';
   }
 }
 
-/* ==================== ENGINE LOOP ==================== */
+/* ============ LOOP ============ */
 let last = performance.now();
 function loop(now){
   let dt = (now-last)/1000;
@@ -4790,48 +4643,54 @@ function loop(now){
 
 resetGulli();
 rebuildMenuButtons();
-setTimeout(()=>{ try{ playSplashChime(); } catch(e){} }, 120);
+setTimeout(()=>{ try{ playSplashChime(); }catch(e){} }, 120);
 requestAnimationFrame(loop);
 
 /* ================================================================
-   START GATE — fullscreen + landscape + firebase preload
+   START GATE — any tap triggers fullscreen+landscape
    ================================================================ */
 let fsStarted = false;
-sgBtn.addEventListener('click', async () => {
+async function triggerStart(){
   if (fsStarted) return;
+  if (window.matchMedia('(orientation: portrait) and (pointer: coarse)').matches) return;
   fsStarted = true;
-  sgBtn.textContent = 'LOADING…';
-  await goFullscreenLandscape();
-
-  // unlock audio context on mobile
+  const tapText = startGate.querySelector('.sg-tap-text');
+  if (tapText) tapText.textContent = 'LOADING…';
+  await enterFullscreen();
   try{
     if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
     actx.resume();
   }catch(e){}
-
-  // Preload firebase in background
   preloadFirebase();
-
   startGate.classList.add('hide');
   setTimeout(()=>{ startGate.style.display = 'none'; }, 400);
-
-  // Fast-forward splash
-  G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.9);
+  G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.7);
   try{ playSplashChime(); }catch(e){}
-}, { passive:true });
+}
 
-// Also allow skip on keyboard
-window.addEventListener('keydown', (e) => {
-  if (startGate.style.display !== 'none' && (e.code === 'Space' || e.code === 'Enter')){
-    sgBtn.click();
+if (isStandalone){
+  startGate.style.display = 'none';
+  document.body.classList.add('fs');
+  lockLandscape().catch(()=>{});
+  setTimeout(()=>{
+    try{
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      actx.resume();
+    }catch(e){}
+    preloadFirebase();
+    G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.5);
+  }, 100);
+} else {
+  startGate.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-  }
-});
+    triggerStart();
+  }, { passive: false });
+}
 
 document.addEventListener('fullscreenchange', () => {
   if (document.fullscreenElement){
     document.body.classList.add('fs');
-    lockLandscape();
+    lockLandscape().catch(()=>{});
   } else {
     document.body.classList.remove('fs');
   }
@@ -4843,38 +4702,9 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-/* ================================================================
-   FIREBASE LAZY PRELOAD
-   ================================================================ */
-let firebaseLoaded = false;
-function preloadFirebase(){
-  if (firebaseLoaded) return;
-  firebaseLoaded = true;
-  const files = [
-    'firebase-app-compat.js',
-    'firebase-database-compat.js',
-    'firebase-analytics-compat.js'
-  ];
-  let loaded = 0;
-  files.forEach(f => {
-    const s = document.createElement('script');
-    s.src = 'https://www.gstatic.com/firebasejs/9.22.2/' + f;
-    s.async = true;
-    s.onload = () => {
-      loaded++;
-      if (loaded === files.length){
-        // All loaded → init
-        if (initFirebase()) {
-          // If already in menu as account, sync now
-          if (ACCOUNT.loggedIn && !ACCOUNT.isGuest && ACCOUNT.username){
-            syncAccountFromCloud(ACCOUNT.username);
-          }
-        }
-      }
-    };
-    document.head.appendChild(s);
-  });
-}
+window.addEventListener('orientationchange', () => {
+  if (document.fullscreenElement) setTimeout(()=>lockLandscape().catch(()=>{}), 300);
+});
 
 })();
 </script>
