@@ -6,6 +6,10 @@
 <title>Gulli Danda — Powered by Pradeep Singh</title>
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#0a0d15">
+<meta name="screen-orientation" content="landscape">
+<meta name="x5-orientation" content="landscape">
+<meta name="x5-fullscreen" content="true">
+<meta name="full-screen" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -147,7 +151,7 @@
   body.fs #hud{
     padding-top: calc(16px + env(safe-area-inset-top));
     padding-left: calc(22px + env(safe-area-inset-left));
-    padding-right: calc(22px + env(safe-area-inset-right));
+    padding-right: calc(22px + env(safe-area-inset-right)); 
   }
   body.fs #startGate{ display:none !important; }
 
@@ -230,7 +234,116 @@
     font-family:inherit; letter-spacing:0.5px;
     box-shadow:0 8px 24px rgba(255,209,102,0.35);
   }
-  #rotateGate button:active{ transform:scale(0.96); }
+    #rotateGate button:active{ transform:scale(0.96); }
+
+  /* portrait me game khud landscape ho jaye */
+  @media (orientation: portrait) and (pointer: coarse){
+    #rotateGate{ display:none !important; }
+    #wrap{
+      position:fixed; top:50%; left:50%;
+      width:min(100vh, calc(100vw * 16 / 9));
+      width:min(100dvh, calc(100dvw * 16 / 9));
+      height:auto; aspect-ratio:16 / 9; max-height:none;
+      transform:translate(-50%,-50%) rotate(90deg);
+    }
+    body.fs #wrap{
+      width:min(100dvh, calc(100dvw * 16 / 9));
+      height:auto;
+    }
+  }
+
+  /* ===== SHARE OVERLAY ===== */
+  #shareOverlay{
+    position:fixed; inset:0; z-index:10002;
+    display:none;
+    align-items:center; justify-content:center;
+    background:rgba(5,7,13,0.88);
+    backdrop-filter:blur(8px);
+    font-family:'Segoe UI',system-ui,sans-serif;
+    padding:20px;
+    padding-top:env(safe-area-inset-top);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  #shareOverlay.show{ display:flex; }
+  .sh-card{
+    max-width:420px; width:100%;
+    background:linear-gradient(180deg,#1e2740,#0f1420);
+    border:1px solid rgba(255,209,102,0.4);
+    border-radius:20px;
+    padding:24px 20px;
+    text-align:center;
+    box-shadow:0 24px 60px rgba(0,0,0,0.7);
+    animation:shPop .3s ease-out;
+  }
+  @keyframes shPop{
+    0%{ transform:scale(0.85); opacity:0; }
+    100%{ transform:scale(1); opacity:1; }
+  }
+  .sh-emoji{ font-size:56px; margin-bottom:8px; }
+  .sh-card h3{
+    margin:0 0 6px;
+    font-size:22px; font-weight:900; letter-spacing:0.5px;
+    background:linear-gradient(180deg,#fff4c2,#ffd166 50%,#e0a82e);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .sh-score{
+    font-size:42px; font-weight:900; color:#ffd166;
+    margin:8px 0 4px;
+    text-shadow:0 4px 12px rgba(255,209,102,0.4);
+  }
+  .sh-sub{
+    color:rgba(255,255,255,0.7);
+    font-size:13px; margin-bottom:22px;
+    letter-spacing:0.3px;
+  }
+  .sh-buttons{ display:flex; flex-direction:column; gap:10px; }
+  .sh-btn{
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    padding:15px 20px; border:0; border-radius:14px;
+    font-size:16px; font-weight:800; cursor:pointer;
+    font-family:inherit; letter-spacing:0.3px;
+    transition:transform .12s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .sh-btn:active{ transform:scale(0.96); }
+  .sh-btn-primary{
+    background:linear-gradient(180deg,#25D366,#128C7E);
+    color:#ffffff;
+    box-shadow:0 8px 24px rgba(37,211,102,0.35);
+  }
+  .sh-btn-secondary{
+    background:rgba(255,255,255,0.08);
+    border:2px solid rgba(255,255,255,0.25);
+    color:rgba(255,255,255,0.9);
+  }
+  .sh-btn-copy{
+    background:linear-gradient(180deg,#ffe17a,#e0a82e);
+    color:#1a1206;
+    box-shadow:0 8px 24px rgba(255,209,102,0.35);
+  }
+  .sh-close{
+    margin-top:12px;
+    background:transparent; border:0;
+    color:rgba(255,255,255,0.5);
+    font-size:13px; cursor:pointer;
+    padding:10px; font-family:inherit;
+    text-decoration:underline;
+  }
+  .sh-copied-toast{
+    position:fixed; left:50%; bottom:80px;
+    transform:translateX(-50%);
+    background:rgba(30,40,60,0.95);
+    color:#8affa0; font-weight:800;
+    padding:12px 24px; border-radius:12px;
+    font-size:14px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.5);
+    border:1px solid rgba(138,255,160,0.4);
+    z-index:10005;
+    opacity:0; pointer-events:none;
+    transition:opacity .3s ease;
+    font-family:'Segoe UI',system-ui,sans-serif;
+  }
+  .sh-copied-toast.show{ opacity:1; }
 </style>
 </head>
 <body>
@@ -297,6 +410,29 @@
   </div>
 </div>
 
+<div id="shareOverlay">
+  <div class="sh-card">
+    <div class="sh-emoji" id="shEmoji">🏏</div>
+    <h3 id="shTitle">GREAT MATCH!</h3>
+    <div class="sh-score" id="shScore">0 pts</div>
+    <div class="sh-sub" id="shSub">Share your score with friends</div>
+    <div class="sh-buttons">
+      <button class="sh-btn sh-btn-primary" id="shWhatsApp">
+        <span style="font-size:20px;">📱</span> Share on WhatsApp
+      </button>
+      <button class="sh-btn sh-btn-secondary" id="shMore">
+        <span style="font-size:20px;">🌐</span> Share to Other Apps
+      </button>
+      <button class="sh-btn sh-btn-copy" id="shCopy">
+        <span style="font-size:20px;">📋</span> Copy Score
+      </button>
+    </div>
+    <button class="sh-close" id="shClose">Close</button>
+  </div>
+</div>
+
+<div class="sh-copied-toast" id="shToast">✅ Copied!</div>
+
 <script>
 var sendEmojiSticker = function(){};
 
@@ -310,6 +446,9 @@ var isStandalone =
   window.matchMedia('(display-mode: fullscreen)').matches ||
   window.navigator.standalone === true ||
   document.referrer.indexOf('android-app://') === 0;
+
+/* FIX 1: portrait rotation ke liye media query */
+var portraitMQ = window.matchMedia('(orientation: portrait) and (pointer: coarse)');
 
 function lockLandscape(){
   return new Promise(function(resolve){
@@ -360,6 +499,7 @@ var SWEET_LO = 62, SWEET_HI = 88;
 var SKY_BOTTOM = 148, STADIUM_TOP = 140, STADIUM_BOTTOM = 300, HORIZON = 300;
 var SPLASH_DURATION = 2.6, TOSS_DURATION = 2500, TOSS_RESULT_DURATION = 2400;
 var COIN_DIVISOR = 10;
+var SHARE_URL = 'https://gullidanda.co.in';
 
 function speakVoice(text, pitch, rate){
   pitch = pitch || 1.1; rate = rate || 1.1;
@@ -800,7 +940,8 @@ var G = {
   nameEntry: { playerIndex: 0, currentText: '', online: false },
   splashTimer: 0, coinsEarned: 0, coinsBonus: false,
   marketTab: 'skins', marketMsg: '', marketMsgTimer: 0,
-  botScore: 0, botBattingTimer: 0, turnEndTimer: 0
+  botScore: 0, botBattingTimer: 0, turnEndTimer: 0,
+  shareButtonRect: null
 };
 
 var gulli = { x:0, y:0, vx:0, vy:0, rot:0, rotV:0, grounded:true };
@@ -2226,7 +2367,18 @@ function update(dt){
 }
 
 function pointInButton(px, py, b){ return px>=b.x && px<=b.x+b.w && py>=b.y && py<=b.y+b.h; }
-function canvasCoordsFromEvent(e){ var r = canvas.getBoundingClientRect(); return { x:(e.clientX - r.left)*(W/r.width), y:(e.clientY - r.top)*(H/r.height) }; }
+
+/* FIX 2: portrait rotation ke liye touch coordinates */
+function canvasCoordsFromEvent(e){
+  var r = canvas.getBoundingClientRect();
+  if (portraitMQ.matches){
+    var sx = e.clientX - (r.left + r.width/2);
+    var sy = e.clientY - (r.top + r.height/2);
+    return { x: (sy + r.height/2) * (W / r.height),
+             y: (-sx + r.width/2) * (H / r.width) };
+  }
+  return { x:(e.clientX - r.left)*(W/r.width), y:(e.clientY - r.top)*(H/r.height) };
+}
 function setShot(id){ if (G.shotType !== id){ G.shotType = id; beep(720, 0.05, 'sine', 0.06); } }
 
 var FOOTER_LINK_Y = H - 46;
@@ -2295,6 +2447,14 @@ function marketBuyLife(){
 }
 
 function handleMenuClick(x, y){
+  // Share button
+  if (G.phase === 'gameOver' && G.shareButtonRect){
+    if (pointInButton(x, y, G.shareButtonRect)){
+      beep(880, 0.06, 'triangle', 0.09);
+      openShareOverlay();
+      return true;
+    }
+  }
   if (G.phase === 'levelSelect'){
     var pageL = G.levelPage || 0;
     for (var i=0; i<5; i++){
@@ -4124,6 +4284,25 @@ function drawGameOver(){
   ctx.fillStyle = 'rgba(12,16,28,0.72)';
   ctx.fillRect(0,0,W,H);
   var t = performance.now() / 1000;
+
+  // Share button — top right corner
+  var sbW = 130, sbH = 42;
+  var sbX = W - sbW - 20, sbY = 20;
+  ctx.save();
+  rr(ctx, sbX, sbY, sbW, sbH, 12);
+  var sbGrd = ctx.createLinearGradient(sbX, sbY, sbX, sbY+sbH);
+  sbGrd.addColorStop(0, 'rgba(37,211,102,0.35)');
+  sbGrd.addColorStop(1, 'rgba(18,140,126,0.35)');
+  ctx.fillStyle = sbGrd; ctx.fill();
+  ctx.strokeStyle = 'rgba(37,211,102,0.9)'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.font = '900 16px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('📤 SHARE', sbX + sbW/2, sbY + sbH/2);
+  ctx.restore();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  G.shareButtonRect = { x: sbX, y: sbY, w: sbW, h: sbH };
+
   if (G.mode === 'onlineResults'){
     var w = G.players[G.gameOverWinner];
     var isDraw = G.gameOverWinner === -1;
@@ -4438,11 +4617,153 @@ setTimeout(function(){ try{ playSplashChime(); }catch(e){} }, 120);
 requestAnimationFrame(loop);
 
 /* ================================================================
-   ESCAPE IN-APP BROWSER — better experience in default browser
+   SHARE SYSTEM — WhatsApp / Facebook / Instagram / Native Share
+   ================================================================ */
+function buildShareText(){
+  var score = G.score || 0;
+  var mode = G.mode;
+  var emoji = '🏏';
+  var title = '';
+  var body = '';
+
+  if (mode === 'onlineResults'){
+    var w = G.gameOverWinner;
+    if (w === 0) { title = 'I WON! 🏆'; emoji = '🏆'; }
+    else if (w === 1) { title = 'CLOSE MATCH! 😅'; emoji = '😅'; }
+    else { title = 'DRAW! 🤝'; emoji = '🤝'; }
+    body = 'Online Match — ' + score + ' pts';
+  } else if (mode === 'single'){
+    if (G.levelCleared){
+      title = 'LEVEL ' + G.level + ' CLEARED! 🎉';
+      emoji = '🎉';
+      body = 'Score: ' + score + ' pts · Level ' + G.level;
+    } else {
+      title = 'Trying Level ' + G.level + '! 💪';
+      emoji = '💪';
+      body = 'Score: ' + score + ' pts';
+    }
+  } else {
+    title = 'GREAT GAME! 🏏';
+    body = 'Score: ' + score + ' pts';
+  }
+
+  var text = emoji + ' ' + title + '\n' +
+             body + '\n\n' +
+             '🎮 Khelo Gulli Danda — bilkul FREE!\n' +
+             '👉 ' + SHARE_URL;
+
+  return {
+    emoji: emoji,
+    title: title,
+    text: text,
+    shortText: '🏏 Maine Gulli Danda me ' + score + ' points score kiye! Tum try karo: ' + SHARE_URL
+  };
+}
+
+function openShareOverlay(){
+  var overlay = document.getElementById('shareOverlay');
+  if (!overlay) return;
+  var data = buildShareText();
+  var emojiEl = document.getElementById('shEmoji');
+  var titleEl = document.getElementById('shTitle');
+  var scoreEl = document.getElementById('shScore');
+  var subEl = document.getElementById('shSub');
+  if (emojiEl) emojiEl.textContent = data.emoji;
+  if (titleEl) titleEl.textContent = data.title;
+  if (scoreEl) scoreEl.textContent = (G.score || 0) + ' pts';
+  if (subEl) subEl.textContent = 'Share your score with friends';
+  overlay.classList.add('show');
+  beep(880, 0.08, 'triangle', 0.10);
+  setTimeout(function(){ beep(1200, 0.10, 'triangle', 0.10); }, 80);
+}
+function closeShareOverlay(){
+  var overlay = document.getElementById('shareOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+function shareToWhatsApp(){
+  var data = buildShareText();
+  var url = 'https://wa.me/?text=' + encodeURIComponent(data.text);
+  try { window.open(url, '_blank', 'noopener'); }
+  catch(e){ window.location.href = url; }
+  closeShareOverlay();
+}
+function shareNative(){
+  var data = buildShareText();
+  if (navigator.share){
+    navigator.share({
+      title: 'Gulli Danda — ' + (G.score || 0) + ' points!',
+      text: data.shortText,
+      url: SHARE_URL
+    }).then(function(){ closeShareOverlay(); })
+      .catch(function(err){
+        if (err && err.name !== 'AbortError') fallbackShare();
+      });
+    return;
+  }
+  fallbackShare();
+}
+function fallbackShare(){
+  var data = buildShareText();
+  var text = encodeURIComponent(data.text);
+  var url = encodeURIComponent(SHARE_URL);
+  var choice = window.confirm('🌐 Share Options:\n\nOK = Facebook\nCancel = Twitter/X');
+  if (choice){ window.open('https://www.facebook.com/sharer/sharer.php?u=' + url + '&quote=' + text, '_blank', 'noopener'); }
+  else { window.open('https://twitter.com/intent/tweet?text=' + text + '&url=' + url, '_blank', 'noopener'); }
+  closeShareOverlay();
+}
+function copyScoreToClipboard(){
+  var data = buildShareText();
+  function showToast(msg){
+    var toast = document.getElementById('shToast');
+    if (!toast) return;
+    toast.textContent = msg || '✅ Copied!';
+    toast.classList.add('show');
+    setTimeout(function(){ toast.classList.remove('show'); }, 1800);
+  }
+  function doCopy(text){
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ showToast('✅ Copied!'); })
+        .catch(function(){ legacyCopy(text); });
+    } else { legacyCopy(text); }
+  }
+  function legacyCopy(text){
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast(ok ? '✅ Copied!' : '❌ Copy failed');
+    } catch(e){ showToast('❌ Copy failed'); }
+  }
+  doCopy(data.text);
+  try { beep(1400, 0.10, 'triangle', 0.10); } catch(e){}
+}
+
+(function initShareListeners(){
+  function attach(){
+    var shWA = document.getElementById('shWhatsApp');
+    var shMore = document.getElementById('shMore');
+    var shCopy = document.getElementById('shCopy');
+    var shClose = document.getElementById('shClose');
+    var shOverlay = document.getElementById('shareOverlay');
+    if (shWA) shWA.addEventListener('click', function(e){ e.preventDefault(); shareToWhatsApp(); });
+    if (shMore) shMore.addEventListener('click', function(e){ e.preventDefault(); shareNative(); });
+    if (shCopy) shCopy.addEventListener('click', function(e){ e.preventDefault(); copyScoreToClipboard(); });
+    if (shClose) shClose.addEventListener('click', function(e){ e.preventDefault(); closeShareOverlay(); });
+    if (shOverlay) shOverlay.addEventListener('click', function(e){ if (e.target === shOverlay) closeShareOverlay(); });
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', attach);
+  } else { attach(); }
+})();
+
+/* ================================================================
+   ESCAPE IN-APP BROWSER
    ================================================================ */
 (function(){
   var ua = navigator.userAgent || '';
-
   var isFB      = /FBAN|FBAV|FB_IAB|FBIOS/i.test(ua);
   var isIG      = /Instagram/i.test(ua);
   var isWA      = /WhatsApp/i.test(ua);
@@ -4453,11 +4774,8 @@ requestAnimationFrame(loop);
   var isLine    = /Line\//i.test(ua);
   var isSnap    = /Snapchat/i.test(ua);
   var isInApp   = isFB || isIG || isWA || isMSG || isTW || isTikTok || isLI || isLine || isSnap;
-
-  var isIOS     = /iPad|iPhone|iPod/.test(ua) ||
-                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var isIOS     = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var isAndroid = /Android/i.test(ua);
-
   var isIframe = false;
   try { isIframe = window.self !== window.top; } catch(e){ isIframe = true; }
 
@@ -4485,14 +4803,8 @@ requestAnimationFrame(loop);
         return true;
       }
       if (isIOS){
-        if (isFB || isMSG){
-          window.location.href = 'x-safari-' + url;
-          return true;
-        }
-        if (isIG){
-          window.location.href = 'instagram://extbrowser/?url=' + encodeURIComponent(url);
-          return true;
-        }
+        if (isFB || isMSG){ window.location.href = 'x-safari-' + url; return true; }
+        if (isIG){ window.location.href = 'instagram://extbrowser/?url=' + encodeURIComponent(url); return true; }
         if (stepsEl) stepsEl.style.display = 'block';
         return false;
       }
@@ -4502,7 +4814,6 @@ requestAnimationFrame(loop);
   }
 
   eg.classList.add('show');
-
   var autoTried = false;
   setTimeout(function(){
     if (autoTried) return;
@@ -4510,17 +4821,12 @@ requestAnimationFrame(loop);
     tryEscape();
   }, 900);
 
-  function onEscapeClick(e){
-    e.preventDefault();
-    e.stopPropagation();
-    tryEscape();
-  }
+  function onEscapeClick(e){ e.preventDefault(); e.stopPropagation(); tryEscape(); }
   escBtn.addEventListener('click', onEscapeClick);
   escBtn.addEventListener('touchend', onEscapeClick, { passive: false });
 
   function onSkipClick(e){
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     eg.classList.remove('show');
     if (rg) rg.setAttribute('data-dismissed', 'true');
   }
@@ -4530,13 +4836,8 @@ requestAnimationFrame(loop);
   var rsBtn = document.getElementById('rotateSkipBtn');
   if (rsBtn){
     function onRotateSkip(e){
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       if (rg) rg.setAttribute('data-dismissed', 'true');
-      var sg = document.getElementById('startGate');
-      if (sg && sg.style.display !== 'none'){
-        // Just hide rotate gate, let user tap start gate normally
-      }
     }
     rsBtn.addEventListener('click', onRotateSkip);
     rsBtn.addEventListener('touchend', onRotateSkip, { passive: false });
@@ -4556,7 +4857,6 @@ function isIOSSafariLocal(){
   var isSafari = /Safari/.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS/.test(ua);
   return isIOS && isSafari;
 }
-
 function isInAppBrowserLocal(){
   var ua = navigator.userAgent || '';
   return /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Messenger|WhatsApp|Line\/|Snapchat|Twitter|TikTok|Bytedance|MicroMessenger|LinkedInApp|FBID/i.test(ua);
@@ -4566,23 +4866,14 @@ function finishStart(){
   if (fsStarted) return;
   fsStarted = true;
   if (autoProceedTimer) clearTimeout(autoProceedTimer);
-
   var tapText = startGate.querySelector('.sg-tap-text');
   if (tapText) tapText.textContent = 'LOADING…';
-
   startGate.classList.add('hide');
   setTimeout(function(){ startGate.style.display = 'none'; }, 400);
-
   try { lockLandscape(); } catch(e){}
-  try {
-    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){});
-  } catch(e){}
-  try {
-    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-    actx.resume();
-  } catch(e){}
+  try { if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){}); } catch(e){}
+  try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch(e){}
   try { if (typeof firebase !== 'undefined' && !NET.ready) initFirebase(); } catch(e){}
-
   G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.7);
   try { playSplashChime(); } catch(e){}
 }
@@ -4590,7 +4881,6 @@ function finishStart(){
 function triggerStart(){
   if (fsStarted) return;
   fsAttempts++;
-
   var tapText = startGate.querySelector('.sg-tap-text');
   var el = document.documentElement;
 
@@ -4603,13 +4893,16 @@ function triggerStart(){
   var fsAttempted = false;
   try {
     if (el.requestFullscreen){
-      el.requestFullscreen().catch(function(){});
+      /* FIX 3: navigationUI:'hide' + lockLandscape after */
+      el.requestFullscreen({ navigationUI: 'hide' }).then(lockLandscape).catch(function(){});
       fsAttempted = true;
     } else if (el.webkitRequestFullscreen){
       el.webkitRequestFullscreen();
+      lockLandscape().catch(function(){});
       fsAttempted = true;
     } else if (el.msRequestFullscreen){
       el.msRequestFullscreen();
+      lockLandscape().catch(function(){});
       fsAttempted = true;
     }
   } catch(e){}
@@ -4629,10 +4922,7 @@ if (isStandalone){
   document.body.classList.add('fs');
   lockLandscape().catch(function(){});
   setTimeout(function(){
-    try{
-      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-      actx.resume();
-    }catch(e){}
+    try{ if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); }catch(e){}
     if (typeof firebase !== 'undefined' && !NET.ready) initFirebase();
     G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.5);
   }, 100);
@@ -4640,10 +4930,8 @@ if (isStandalone){
   startGate.addEventListener('click', function(){ triggerStart(); });
   startGate.addEventListener('touchend', function(){ triggerStart(); }, { passive: true });
   window.addEventListener('keydown', function(e){
-    if (startGate.style.display !== 'none' &&
-        (e.code === 'Space' || e.code === 'Enter' || e.key === ' ')){
-      triggerStart();
-      e.preventDefault();
+    if (startGate.style.display !== 'none' && (e.code === 'Space' || e.code === 'Enter' || e.key === ' ')){
+      triggerStart(); e.preventDefault();
     }
   });
   autoProceedTimer = setTimeout(function(){ if (!fsStarted) finishStart(); }, 2500);
@@ -4653,21 +4941,15 @@ document.addEventListener('fullscreenchange', function(){
   if (document.fullscreenElement){
     document.body.classList.add('fs');
     lockLandscape().catch(function(){});
-  } else {
-    document.body.classList.remove('fs');
-  }
+  } else { document.body.classList.remove('fs'); }
 });
-
 document.addEventListener('visibilitychange', function(){
   if (document.visibilityState === 'visible' && 'wakeLock' in navigator){
     navigator.wakeLock.request('screen').catch(function(){});
   }
 });
-
 window.addEventListener('orientationchange', function(){
-  if (document.fullscreenElement){
-    setTimeout(function(){ lockLandscape().catch(function(){}); }, 300);
-  }
+  if (document.fullscreenElement){ setTimeout(function(){ lockLandscape().catch(function(){}); }, 300); }
 });
 
 })();
