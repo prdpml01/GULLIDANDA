@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://gulli-danda-c4e39-default-rtdb.firebaseio.com" crossorigin>
 <!-- Auto Ads Code Yahan Daalo -->
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4410967458339869" crossorigin="anonymous"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics-compat.js"></script>
 <style>
@@ -60,7 +60,6 @@
   .sticker-btn:hover{transform:scale(1.2);background:rgba(255,209,102,0.25);}
   .sticker-btn:active{transform:scale(0.92);}
 
-  /* ---------- AUTO FULLSCREEN GATE ---------- */
   #startGate{
     position:fixed; inset:0; z-index:9999;
     display:flex; align-items:center; justify-content:center;
@@ -118,7 +117,6 @@
   }
   .sg-hint{ color:rgba(255,255,255,.45); font-size:12px; letter-spacing:1px; }
 
-  /* ---------- ROTATE GATE ---------- */
   #rotateGate{
     position:fixed; inset:0; z-index:10000; display:none;
     flex-direction:column; align-items:center; justify-content:center;
@@ -142,7 +140,6 @@
     #rotateGate{ display:flex; }
   }
 
-  /* ---------- FULLSCREEN MODE ADJUST ---------- */
   body.fs #wrap{
     width: min(100vw, calc(100dvh * 16 / 9));
     height: min(100dvh, calc(100vw * 9 / 16));
@@ -212,10 +209,9 @@ let sendEmojiSticker = () => {};
 "use strict";
 
 /* ================================================================
-   AUTO FULLSCREEN + LANDSCAPE (any-tap trigger)
+   FULLSCREEN GATE VARIABLES
    ================================================================ */
 const startGate = document.getElementById('startGate');
-const sgBtn     = document.getElementById('sgBtn') || { style: {} };
 
 const isStandalone =
   window.matchMedia('(display-mode: standalone)').matches ||
@@ -231,31 +227,6 @@ async function lockLandscape(){
   }catch(e){}
 }
 
-async function enterFullscreen(){
-  const el = document.documentElement;
-  let ok = false;
-  try{
-    if (el.requestFullscreen){
-      await el.requestFullscreen();               // ← navigationUI hataya (mobile pe fail karta tha)
-      ok = true;
-    } else if (el.webkitRequestFullscreen){
-      el.webkitRequestFullscreen();
-      ok = true;
-    } else if (el.msRequestFullscreen){
-      el.msRequestFullscreen();
-      ok = true;
-    }
-  }catch(e){ ok = false; }
-
-  if (ok){
-    document.body.classList.add('fs');
-    await lockLandscape();
-    try{
-      if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
-    }catch(e){}
-  }
-  return ok;
-}
 /* ================================================================
    SERVICE WORKER (Offline PWA)
    ================================================================ */
@@ -553,7 +524,19 @@ function fetchUsernameSuggestions(prefix){
 }
 
 function registerUserAccount(username, password){
-  if (!NET.ready){ ACCOUNT.error = 'Network not ready'; return; }
+  if (!NET.ready){
+    ACCOUNT.error = 'Connecting...';
+    try { if (typeof firebase !== 'undefined') initFirebase(); } catch(e){}
+    let tries = 0;
+    const retry = () => {
+      if (NET.ready){ ACCOUNT.error = ''; registerUserAccount(username, password); return; }
+      tries++;
+      if (tries > 15){ ACCOUNT.error = 'No internet — check connection'; ACCOUNT.loading = false; return; }
+      setTimeout(retry, 300);
+    };
+    setTimeout(retry, 300);
+    return;
+  }
   if (!isValidUsername(username)){ ACCOUNT.error = 'Username must be 3-15 chars (A-Z, 0-9, _)'; return; }
   if (!isValidPassword(password)){ ACCOUNT.error = 'Password must be 4-20 chars'; return; }
   ACCOUNT.error = ''; ACCOUNT.loading = true;
@@ -592,7 +575,6 @@ function registerUserAccount(username, password){
 
 function loginUserAccount(username, password){
   if (!NET.ready){
-    // Firebase load hone ki koshish karo, phir retry
     ACCOUNT.error = 'Connecting...';
     try { if (typeof firebase !== 'undefined') initFirebase(); } catch(e){}
     let tries = 0;
@@ -902,30 +884,6 @@ function initFirebase(){
     } catch(e){}
     return true;
   } catch(e){ return false; }
-}
-
-let firebaseLoaded = false;
-function preloadFirebase(){
-  if (firebaseLoaded) return;
-  firebaseLoaded = true;
-  const files = ['firebase-app-compat.js','firebase-database-compat.js','firebase-analytics-compat.js'];
-  let loaded = 0;
-  files.forEach(f => {
-    const s = document.createElement('script');
-    s.src = 'https://www.gstatic.com/firebasejs/9.22.2/' + f;
-    s.async = true;
-    s.onload = () => {
-      loaded++;
-      if (loaded === files.length){
-        if (initFirebase()){
-          if (ACCOUNT.loggedIn && !ACCOUNT.isGuest && ACCOUNT.username){
-            syncAccountFromCloud(ACCOUNT.username);
-          }
-        }
-      }
-    };
-    document.head.appendChild(s);
-  });
 }
 
 function genRoomId(){ return 'GD-' + Math.random().toString(36).slice(2,7).toUpperCase(); }
@@ -2614,10 +2572,6 @@ function handleAuthKey(e){
   }
 }
 window.addEventListener('keydown', e=>{
-  if (startGate.style.display !== 'none' && (e.code==='Space'||e.code==='Enter'||e.key===' ')){
-    if (typeof triggerStart === 'function') triggerStart();
-    e.preventDefault(); return;
-  }
   if (G.phase === 'splash'){ if (e.code==='Space'||e.code==='Enter'||e.key===' '){ onInput(null); e.preventDefault(); } return; }
   if (G.phase === 'login' || G.phase === 'register' || G.phase === 'guest'){ handleAuthKey(e); return; }
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
@@ -4621,7 +4575,7 @@ function draw(){
   drawJoinPopup();
 }
 
-/* ============ HUD (throttled) ============ */
+/* ============ HUD ============ */
 const uiScore = document.getElementById('uiScore');
 const uiBest = document.getElementById('uiBest');
 const uiOuts = document.getElementById('uiOuts');
@@ -4677,53 +4631,72 @@ requestAnimationFrame(loop);
    START GATE — any tap triggers fullscreen+landscape
    ================================================================ */
 let fsStarted = false;
+
 async function triggerStart(){
   if (fsStarted) return;
 
-  // Portrait me rok do (rotate gate handle karega)
-  if (window.matchMedia('(orientation: portrait)').matches){
-    // Koshish karo landscape lock karne ki — agar ho jaye to aage badho
-    try{
-      if (screen.orientation && screen.orientation.lock){
-        await screen.orientation.lock('landscape');
-        await new Promise(r => setTimeout(r, 300));
-      }
-    }catch(e){}
-    if (window.matchMedia('(orientation: portrait)').matches) return;
+  const tapText = startGate.querySelector('.sg-tap-text');
+  const el = document.documentElement;
+
+  // ⚡ CRITICAL: requestFullscreen() must be called FIRST, synchronously,
+  // with no awaits before it — otherwise mobile Chrome rejects it.
+  let fsAttempted = false;
+  try {
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(()=>{});
+      fsAttempted = true;
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+      fsAttempted = true;
+    } else if (el.msRequestFullscreen) {
+      el.msRequestFullscreen();
+      fsAttempted = true;
+    }
+  } catch(e){}
+
+  if (!fsAttempted){
+    if (tapText) tapText.textContent = 'FULLSCREEN NOT SUPPORTED';
+    return;
   }
 
-  const tapText = startGate.querySelector('.sg-tap-text');
+  // Wait a moment for browser to actually enter fullscreen
+  await new Promise(r => setTimeout(r, 200));
 
-  // FULLSCREEN — SYNCHRONOUS user gesture ke andar
-  const fsOk = await enterFullscreen();
-
-  // Agar fullscreen fail hua to user ko bolo phir tap karne ko
-  if (!fsOk){
+  // If fullscreen didn't take, let user tap again
+  if (!document.fullscreenElement && !document.webkitFullscreenElement){
     if (tapText) tapText.textContent = 'TAP AGAIN';
-    return;   // fsStarted true nahi kar rahe — next tap pe retry hoga
+    return;
   }
 
   fsStarted = true;
   if (tapText) tapText.textContent = 'LOADING…';
+  document.body.classList.add('fs');
+
+  // NOW safe to do other async stuff (gesture no longer needed)
+  try { await lockLandscape(); } catch(e){}
+  try {
+    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
+  } catch(e){}
 
   // Audio unlock
-  try{
+  try {
     if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
     actx.resume();
-  }catch(e){}
+  } catch(e){}
 
-  // Firebase load (agar nahi hua to)
+  // Firebase init if not yet
   try { if (typeof firebase !== 'undefined' && !NET.ready) initFirebase(); } catch(e){}
 
-  // Gate hide
+  // Hide gate
   startGate.classList.add('hide');
   setTimeout(()=>{ startGate.style.display = 'none'; }, 400);
 
-  // Splash fast-forward
+  // Fast-forward splash
   G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.7);
-  try{ playSplashChime(); }catch(e){}
+  try { playSplashChime(); } catch(e){}
 }
 
+/* ---------- PWA MODE: skip gate entirely ---------- */
 if (isStandalone){
   startGate.style.display = 'none';
   document.body.classList.add('fs');
@@ -4733,19 +4706,23 @@ if (isStandalone){
       if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
       actx.resume();
     }catch(e){}
-    preloadFirebase();
+    if (typeof firebase !== 'undefined' && !NET.ready) initFirebase();
     G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.5);
   }, 100);
 } else {
- // 'click' use karo — Chrome mobile me fullscreen gesture 'click' pe better kaam karta hai
-startGate.addEventListener('click', (e) => {
-  triggerStart();
-});
-// Aur touch ke liye bhi (double trigger nahi hoga — fsStarted check hai)
-startGate.addEventListener('touchend', (e) => {
-  triggerStart();
-}, { passive: true });
+  /* ---------- BROWSER MODE: tap/touch/key triggers ---------- */
+  startGate.addEventListener('click', () => { triggerStart(); });
+  startGate.addEventListener('touchend', () => { triggerStart(); }, { passive: true });
+  window.addEventListener('keydown', (e) => {
+    if (startGate.style.display !== 'none' &&
+        (e.code === 'Space' || e.code === 'Enter' || e.key === ' ')){
+      triggerStart();
+      e.preventDefault();
+    }
+  });
+}
 
+/* ---------- Fullscreen state sync ---------- */
 document.addEventListener('fullscreenchange', () => {
   if (document.fullscreenElement){
     document.body.classList.add('fs');
@@ -4755,14 +4732,18 @@ document.addEventListener('fullscreenchange', () => {
   }
 });
 
+/* ---------- Wake lock refresh ---------- */
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && 'wakeLock' in navigator){
     navigator.wakeLock.request('screen').catch(()=>{});
   }
 });
 
+/* ---------- Auto-relock orientation on rotate ---------- */
 window.addEventListener('orientationchange', () => {
-  if (document.fullscreenElement) setTimeout(()=>lockLandscape().catch(()=>{}), 300);
+  if (document.fullscreenElement) {
+    setTimeout(()=>lockLandscape().catch(()=>{}), 300);
+  }
 });
 
 })();
