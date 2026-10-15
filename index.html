@@ -85,6 +85,15 @@
   .sh-close{margin-top:12px;background:transparent;border:0;color:rgba(255,255,255,0.5);font-size:13px;cursor:pointer;padding:10px;font-family:inherit;text-decoration:underline;}
   .sh-copied-toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(30,40,60,0.95);color:#8affa0;font-weight:800;padding:12px 24px;border-radius:12px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,0.5);border:1px solid rgba(138,255,160,0.4);z-index:10005;opacity:0;pointer-events:none;transition:opacity .3s ease;}
   .sh-copied-toast.show{opacity:1;}
+    @media (orientation: portrait) and (pointer: coarse){
+    #wrap{
+      position:fixed; top:50%; left:50%;
+      width:min(100vh, calc(100vw * 16 / 9));
+      width:min(100dvh, calc(100dvw * 16 / 9));
+      height:auto; aspect-ratio:16 / 9; max-height:none;
+      transform:translate(-50%,-50%) rotate(90deg);
+    }
+  }
 </style>
 </head>
 <body>
@@ -721,7 +730,7 @@ var shake = 0;
 var frameDt = 0.016;
 var staticBG = null, sunSprite = null;
 var portraitMQ = null;
-try { portraitMQ = window.matchMedia('(orientation: portrait)'); } catch(e){ portraitMQ = { matches: false }; }
+try { portraitMQ = window.matchMedia('(orientation: portrait) and (pointer: coarse)'); } catch(e){ portraitMQ = { matches: false }; }
 
 /* ================================================================
    NET
@@ -3847,8 +3856,6 @@ function drawLoginScreen(){
   ctx.save();
   rr(ctx, gbX, gbY, gbW, gbH, 12);
   var grd = ctx.createLinearGradient(gbX, gbY, gbX, gbY+gbH);
-  grd.addColorStop(0, 'rgba(60,70,90,/* ================================================================
-   PART 3 — paste EXACTLY from here, replacing your last broken line:
   grd.addColorStop(0, 'rgba(60,70,90,0.85)');
   grd.addColorStop(1, 'rgba(30,40,55,0.85)');
   ctx.fillStyle = grd; ctx.fill();
