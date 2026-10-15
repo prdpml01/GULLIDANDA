@@ -264,11 +264,15 @@ var LEVEL_NAMES = ['ROOKIE','AMATEUR','PRO','EXPERT','LEGEND','MASTER','GRANDMAS
 
 // Har level pe +500 score target badhta hai
 function getLevelTarget(n){
+  n = Number(n); // Pehle number me convert karo
+  if (isNaN(n)) n = 1; // Agar NaN hai toh Level 1 maan lo
   n = Math.max(1, Math.floor(n));
-  return 500 * n;           // L1=500, L2=1000, L3=1500, L4=2000 ...
+  return 500 * n;           // L1=500, L2=1000, L3=1500 ...
 }
 
 function getLevel(n){
+  n = Number(n);
+  if (isNaN(n)) n = 1;
   n = Math.max(1, Math.floor(n));
   var target = getLevelTarget(n);
   var speed1 = Math.min(600 + (n-1) * 100, 2400);
