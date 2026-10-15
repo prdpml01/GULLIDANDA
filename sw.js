@@ -1,11 +1,11 @@
 /* GULLI DANDA — SERVICE WORKER (Offline PWA) */
-const CACHE_NAME = 'gulli-danda-v3';
-const CORE_ASSETS = ['/', '/index.html', '/manifest.json'];
+const CACHE_NAME = 'gulli-danda-v4';
+const CORE_ASSETS = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(CORE_ASSETS))
+      .then(cache => cache.addAll(CORE_ASSETS).catch(()=>{}))
       .then(() => self.skipWaiting())
       .catch(() => self.skipWaiting())
   );
@@ -34,19 +34,21 @@ self.addEventListener('fetch', event => {
     url.hostname.includes('google-analytics') ||
     url.hostname.includes('pagead')
   ) return;
-  if (req.mode === 'navigate') {
-    event.respondWith(
-      fetch(req)
-        .then(res => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then(c => c.put('/', copy)).catch(()=>{});
-          return res;
-        })
-        .catch(() => caches.match('/').then(r => r || caches.match('/index.html')))
-    );
-    return;
-  }
+
+  // Same-origin only — safe for subdirectory
   if (url.origin === location.origin) {
+    if (req.mode === 'navigate') {
+      event.respondWith(
+        fetch(req)
+          .then(res => {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(()=>{});
+            return res;
+          })
+          .catch(() => caches.match(req).then(r => r || caches.match('./index.html')))
+      );
+      return;
+    }
     event.respondWith(
       caches.match(req).then(hit => {
         if (hit) return hit;
@@ -56,23 +58,10 @@ self.addEventListener('fetch', event => {
             caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(()=>{});
           }
           return res;
-        }).catch(() => caches.match('/'));
+        }).catch(() => caches.match('./index.html'));
       })
     );
-    return;
   }
-  event.respondWith(
-    caches.match(req).then(hit => {
-      const netFetch = fetch(req).then(res => {
-        if (res && res.status === 200) {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(()=>{});
-        }
-        return res;
-      }).catch(() => hit);
-      return hit || netFetch;
-    })
-  );
 });
 
 self.addEventListener('message', event => {
