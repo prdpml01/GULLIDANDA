@@ -4,26 +4,34 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Gulli Danda — Powered by Pradeep Singh</title>
-  <!-- Auto Ads Code Yahan Daalo -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0a0d15">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gulli Danda">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://gulli-danda-c4e39-default-rtdb.firebaseio.com" crossorigin>
+<!-- Auto Ads Code Yahan Daalo -->
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4410967458339869" crossorigin="anonymous"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics-compat.js"></script>
 <style>
   html,body{margin:0;width:100%;height:100%;height:100dvh;
     background:radial-gradient(circle at 50% 0%, #2b3350 0%, #141824 70%);
     display:flex;align-items:center;justify-content:center;
     font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
     overflow:hidden;user-select:none;-webkit-tap-highlight-color:transparent;
-    padding:0;box-sizing:border-box;}
+    padding:0;box-sizing:border-box;
+    overscroll-behavior:none;touch-action:none;}
+  *{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
   #wrap{position:relative;
-    width: min(97vw, 980px, calc(97vh  * 16 / 9));
-    width: min(97vw, 980px, calc(97dvh * 16 / 9));
+    width: min(97vw, calc(97vh  * 16 / 9));
+    width: min(97vw, calc(97dvh * 16 / 9));
     aspect-ratio: 16 / 9;
     max-height: 97vh; max-height: 97dvh;}
   canvas{width:100%;height:100%;display:block;border-radius:16px;
     box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 0 3px rgba(255,255,255,.07);
-    cursor:pointer;touch-action:manipulation;}
+    cursor:pointer;touch-action:none;}
   #hud{position:absolute;inset:0;pointer-events:none;padding:16px 22px;
     display:flex;justify-content:space-between;align-items:flex-start;
     font-weight:800;color:#fff;text-shadow:0 3px 8px rgba(0,0,0,.45);
@@ -39,7 +47,7 @@
     width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;
     background:transparent;color:transparent;font-size:16px;
     caret-color:transparent;z-index:-1;pointer-events:none;}
- #chatStickerBar{position:absolute;right:16px;top:50%;transform:translateY(-50%);
+  #chatStickerBar{position:absolute;right:16px;top:50%;transform:translateY(-50%);
     display:flex;flex-direction:column;gap:8px;background:rgba(15,20,32,0.78);backdrop-filter:blur(8px);
     border:1px solid rgba(255,255,255,0.2);border-radius:24px;padding:8px 6px;
     z-index:25;pointer-events:auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);}
@@ -48,13 +56,74 @@
     display:flex;align-items:center;justify-content:center;transition:transform 0.15s ease, background 0.15s ease;}
   .sticker-btn:hover{transform:scale(1.2);background:rgba(255,209,102,0.25);}
   .sticker-btn:active{transform:scale(0.92);}
+
+  /* ---------- FULLSCREEN GATE ---------- */
+  #startGate{
+    position:fixed; inset:0; z-index:9999;
+    display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 30%, #2b3350 0%, #0a0d15 75%);
+    font-family:'Segoe UI',system-ui,sans-serif;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right)
+            env(safe-area-inset-bottom) env(safe-area-inset-left);
+    transition:opacity .35s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #startGate.hide{ opacity:0; pointer-events:none; }
+  .sg-card{ text-align:center; padding:24px; }
+  .sg-logo{ font-size:64px; animation:sgBob 2s ease-in-out infinite; }
+  @keyframes sgBob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+  .sg-card h1{
+    margin:8px 0 4px; font-size:clamp(28px,7vw,52px); letter-spacing:2px;
+    background:linear-gradient(180deg,#fff4c2,#ffd166 45%,#a06b12);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    font-weight:900;
+  }
+  .sg-sub{ color:rgba(255,255,255,.5); font-size:11px; letter-spacing:3px; margin-bottom:28px; }
+  #sgBtn{
+    border:0; border-radius:14px; padding:16px 46px; cursor:pointer;
+    font-size:20px; font-weight:900; color:#1a1206;
+    background:linear-gradient(180deg,#ffe17a,#ffd166 50%,#e0a82e);
+    box-shadow:0 10px 28px rgba(255,209,102,.35);
+    transition:transform .12s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #sgBtn:active{ transform:scale(.95); }
+  .sg-hint{ margin-top:16px; color:rgba(255,255,255,.45); font-size:12px; }
+
+  /* ---------- ROTATE GATE ---------- */
+  #rotateGate{
+    position:fixed; inset:0; z-index:10000; display:none;
+    flex-direction:column; align-items:center; justify-content:center;
+    background:#0a0d15; color:#fff; text-align:center; gap:8px;
+    font-family:'Segoe UI',system-ui,sans-serif; padding:20px;
+  }
+  #rotateGate .rg-icon{ font-size:76px; animation:rgRot 2.2s ease-in-out infinite; }
+  @keyframes rgRot{ 0%,40%{transform:rotate(0)} 60%,100%{transform:rotate(-90deg)} }
+  #rotateGate p{ margin:0; font-size:17px; font-weight:700; }
+  #rotateGate small{ color:rgba(255,255,255,.5); }
+
+  @media (orientation: portrait) and (pointer: coarse){
+    #rotateGate{ display:flex; }
+  }
+
+  /* ---------- FULLSCREEN MODE ADJUST ---------- */
+  body.fs #wrap{
+    width: min(100vw, calc(100dvh * 16 / 9));
+    height: min(100dvh, calc(100vw * 9 / 16));
+  }
+  body.fs canvas{ border-radius:0; box-shadow:none; }
+  body.fs #hud{
+    padding-top: calc(16px + env(safe-area-inset-top));
+    padding-left: calc(22px + env(safe-area-inset-left));
+    padding-right: calc(22px + env(safe-area-inset-right));
+  }
 </style>
 </head>
 <body>
 <div id="wrap">
   <canvas id="game" width="960" height="540"></canvas>
-  <input id="mobileNameInput" type="text" maxlength="20" 
-         autocomplete="off" autocorrect="off" autocapitalize="none" 
+  <input id="mobileNameInput" type="text" maxlength="20"
+         autocomplete="off" autocorrect="off" autocapitalize="none"
          spellcheck="false" aria-hidden="true">
   <div id="hud">
     <div class="right">
@@ -78,12 +147,97 @@
   </div>
 </div>
 
+<!-- ===== FULLSCREEN START GATE ===== -->
+<div id="startGate">
+  <div class="sg-card">
+    <div class="sg-logo">🏏</div>
+    <h1>GULLI DANDA</h1>
+    <div class="sg-sub">POWERED BY PRADEEP SINGH</div>
+    <button id="sgBtn">▶&nbsp; TAP TO PLAY</button>
+    <div class="sg-hint">Full screen + landscape mode me khulega</div>
+  </div>
+</div>
+
+<!-- ===== PORTRAIT ROTATE GATE (iOS fallback) ===== -->
+<div id="rotateGate">
+  <div class="rg-icon">📱</div>
+  <p>Phone ko <b>landscape</b> (horizontal) me ghumayein</p>
+  <small>Best experience ke liye</small>
+</div>
+
 <script>
 let sendEmojiSticker = () => {};
 
 (() => {
 "use strict";
 
+/* ================================================================
+   FULLSCREEN + ORIENTATION + WAKE LOCK
+   ================================================================ */
+const startGate = document.getElementById('startGate');
+const sgBtn     = document.getElementById('sgBtn');
+
+async function lockLandscape(){
+  try{
+    if (screen.orientation && screen.orientation.lock){
+      await screen.orientation.lock('landscape');
+    }
+  }catch(e){ /* iOS doesn't support — rotate gate handles it */ }
+}
+
+async function goFullscreenLandscape(){
+  const el = document.documentElement;
+  try{
+    if (el.requestFullscreen)              await el.requestFullscreen({ navigationUI:'hide' });
+    else if (el.webkitRequestFullscreen)   el.webkitRequestFullscreen();
+    else if (el.msRequestFullscreen)       el.msRequestFullscreen();
+  }catch(e){}
+  document.body.classList.add('fs');
+  await lockLandscape();
+  try{
+    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
+  }catch(e){}
+}
+
+/* ================================================================
+   SERVICE WORKER (Offline PWA)
+   ================================================================ */
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(reg => {
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller){
+              nw.postMessage('SKIP_WAITING');
+            }
+          });
+        });
+      })
+      .catch(()=>{});
+  });
+}
+
+let isOnline = navigator.onLine;
+window.addEventListener('online',  () => {
+  isOnline = true;
+  if (typeof G !== 'undefined' && G.phase === 'menu'){
+    G.banner = '🌐 BACK ONLINE'; G.bannerTimer = 1.5;
+  }
+});
+window.addEventListener('offline', () => {
+  isOnline = false;
+  if (typeof G !== 'undefined'){
+    G.banner = '📴 OFFLINE MODE — Single & Local Play only';
+    G.bannerTimer = 2.5;
+  }
+});
+
+/* ================================================================
+   FIREBASE CONFIG
+   ================================================================ */
 const firebaseConfig = {
   apiKey: "AIzaSyDyTIaepAi4wmXNbNSuyMyN5cRLuXW77OE",
   authDomain: "gulli-danda-c4e39.firebaseapp.com",
@@ -104,7 +258,6 @@ const ZONE_X = GULLI_START_X, ZONE_Y = GROUND_Y - 145, ZONE_R = 78;
 const SWEET_LO = 62, SWEET_HI = 88;
 const SKY_BOTTOM = 148, STADIUM_TOP = 140, STADIUM_BOTTOM = 300, HORIZON = 300;
 const SPLASH_DURATION = 2.6, TOSS_DURATION = 2500, TOSS_RESULT_DURATION = 2400;
-
 const COIN_DIVISOR = 10;
 
 /* ==================== VOICE SYNTHESIS ==================== */
@@ -218,7 +371,7 @@ const PLAYER_COLORS = ['#e63946', '#3a86ff', '#06d6a0', '#ffbe0b', '#a06bff'];
 const PLAYER_NAMES  = ['RED',     'BLUE',    'GREEN',   'YELLOW',  'PURPLE'];
 const CONFETTI_COLORS = ['#ffd166','#ff8a8a','#8affa0','#5c9ee0','#e0a95c','#ff6bcb','#ffffff','#a06bff'];
 
-const SESSION_KEY = 'gulli_danda_session_v3';
+const SESSION_KEY = 'gulli_danda_session_v4';
 
 const ACCOUNT = {
   loggedIn: false,
@@ -239,38 +392,77 @@ const ACCOUNT = {
   loading: false, error: '',
   formUsername: '', formPassword: '', formName: '',
   formFocus: 'username',
-  mode: 'login'
+  mode: 'login',
+  afterLoginAction: null
 };
 
 let usernameSuggestions = [];
 let suggestionTimer = null;
 let suggestionsOpen = false;
 
+/* ============ SESSION (FULL DATA CACHE) ============ */
 function saveSession(){
   try {
-    const base = {
-      coins: ACCOUNT.coins,
-      lives: ACCOUNT.lives,
-      highestUnlockedLevel: ACCOUNT.highestUnlockedLevel,
-      ownedSkins: ACCOUNT.ownedSkins,
-      ownedDandas: ACCOUNT.ownedDandas,
-      ownedBoosts: ACCOUNT.ownedBoosts,
-      activeSkin: ACCOUNT.activeSkin,
-      activeDanda: ACCOUNT.activeDanda,
-      activeBoost: ACCOUNT.activeBoost
+    const data = {
+      savedAt: Date.now(),
+      isGuest: !!ACCOUNT.isGuest,
+      username: ACCOUNT.username || '',
+      name: ACCOUNT.name || '',
+      passwordHash: ACCOUNT.passwordHash || '',
+      bestSingle: ACCOUNT.bestSingle || 0,
+      bestOnline: ACCOUNT.bestOnline || 0,
+      matchesPlayed: ACCOUNT.matchesPlayed || 0,
+      onlineMatches: ACCOUNT.onlineMatches || 0,
+      wins: ACCOUNT.wins || 0,
+      losses: ACCOUNT.losses || 0,
+      totalRuns: ACCOUNT.totalRuns || 0,
+      highestUnlockedLevel: ACCOUNT.highestUnlockedLevel || 1,
+      coins: ACCOUNT.coins || 0,
+      lives: ACCOUNT.lives || 0,
+      ownedSkins:  ACCOUNT.ownedSkins  || ['red'],
+      ownedDandas: ACCOUNT.ownedDandas || ['brown'],
+      ownedBoosts: ACCOUNT.ownedBoosts || ['normal'],
+      activeSkin:  ACCOUNT.activeSkin  || 'red',
+      activeDanda: ACCOUNT.activeDanda || 'brown',
+      activeBoost: ACCOUNT.activeBoost || 'normal'
     };
-    if (ACCOUNT.isGuest){
-      localStorage.setItem(SESSION_KEY, JSON.stringify(Object.assign({ isGuest: true, name: ACCOUNT.name }, base)));
-    } else {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ username: ACCOUNT.username, isGuest: false }));
-    }
+    localStorage.setItem(SESSION_KEY, JSON.stringify(data));
   } catch(e){}
 }
-function clearSession(){ try { localStorage.removeItem(SESSION_KEY); } catch(e){} }
 function loadSession(){
-  try { const raw = localStorage.getItem(SESSION_KEY); if (raw) return JSON.parse(raw); } catch(e){}
-  return null;
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e){ return null; }
 }
+function clearSession(){ try { localStorage.removeItem(SESSION_KEY); } catch(e){} }
+
+function applySessionToAccount(s){
+  if (!s) return;
+  ACCOUNT.isGuest = !!s.isGuest;
+  ACCOUNT.username = s.username || '';
+  ACCOUNT.name = s.name || (ACCOUNT.isGuest ? 'GUEST' : 'PLAYER');
+  ACCOUNT.passwordHash = s.passwordHash || '';
+  ACCOUNT.bestSingle = s.bestSingle || 0;
+  ACCOUNT.bestOnline = s.bestOnline || 0;
+  ACCOUNT.matchesPlayed = s.matchesPlayed || 0;
+  ACCOUNT.onlineMatches = s.onlineMatches || 0;
+  ACCOUNT.wins = s.wins || 0;
+  ACCOUNT.losses = s.losses || 0;
+  ACCOUNT.totalRuns = s.totalRuns || 0;
+  ACCOUNT.highestUnlockedLevel = Math.max(1, s.highestUnlockedLevel || 1);
+  ACCOUNT.coins = Math.max(0, s.coins || 0);
+  ACCOUNT.lives = Math.max(0, s.lives || 0);
+  ACCOUNT.ownedSkins  = s.ownedSkins  || ['red'];
+  ACCOUNT.ownedDandas = s.ownedDandas || ['brown'];
+  ACCOUNT.ownedBoosts = s.ownedBoosts || ['normal'];
+  ACCOUNT.activeSkin  = s.activeSkin  || 'red';
+  ACCOUNT.activeDanda = s.activeDanda || 'brown';
+  ACCOUNT.activeBoost = s.activeBoost || 'normal';
+  ACCOUNT.loggedIn = true;
+}
+
 function normalizeUsername(u){ return String(u || '').toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 15); }
 function usernameKey(u){ return 'u_' + String(u || '').toLowerCase(); }
 function isValidUsername(u){ return u && u.length >= 3 && u.length <= 15; }
@@ -323,9 +515,21 @@ function registerUserAccount(username, password){
     return NET.db.ref('accounts/' + key).set(data).then(() => {
       Object.assign(ACCOUNT, data);
       ACCOUNT.loggedIn = true; ACCOUNT.isGuest = false; ACCOUNT.loading = false;
-      saveSession(); setPhase('menu');
-      beep(880, 0.1, 'triangle', 0.11);
-      setTimeout(()=>beep(1200, 0.15, 'triangle', 0.11), 120);
+      saveSession();
+
+      const action = ACCOUNT.afterLoginAction;
+      ACCOUNT.afterLoginAction = null;
+      if (action === 'online'){
+        G.banner = '✅ REGISTERED — STARTING ONLINE';
+        G.bannerTimer = 2;
+        beep(880, 0.1, 'triangle', 0.11);
+        setTimeout(() => beep(1200, 0.15, 'triangle', 0.11), 120);
+        setTimeout(() => startOnlineMatchmaking(), 500);
+      } else {
+        setPhase('menu');
+        beep(880, 0.1, 'triangle', 0.11);
+        setTimeout(()=>beep(1200, 0.15, 'triangle', 0.11), 120);
+      }
       trackEvent('sign_up', { method: 'username' });
     });
   }).catch(() => { ACCOUNT.error = 'Connection error. Try again.'; ACCOUNT.loading = false; });
@@ -361,8 +565,20 @@ function loginUserAccount(username, password){
     ACCOUNT.activeDanda = data.activeDanda || 'brown';
     ACCOUNT.activeBoost = data.activeBoost || 'normal';
     ACCOUNT.loggedIn = true; ACCOUNT.isGuest = false; ACCOUNT.loading = false;
-    saveSession(); setPhase('menu');
-    beep(880, 0.1, 'triangle', 0.11);
+    saveSession();
+
+    const action = ACCOUNT.afterLoginAction;
+    ACCOUNT.afterLoginAction = null;
+    if (action === 'online'){
+      G.banner = '✅ LOGGED IN — STARTING ONLINE';
+      G.bannerTimer = 2;
+      beep(880, 0.1, 'triangle', 0.11);
+      setTimeout(() => beep(1200, 0.15, 'triangle', 0.11), 120);
+      setTimeout(() => startOnlineMatchmaking(), 500);
+    } else {
+      setPhase('menu');
+      beep(880, 0.1, 'triangle', 0.11);
+    }
     trackEvent('login', { method: 'username' });
   }).catch(() => { ACCOUNT.error = 'Connection error. Try again.'; ACCOUNT.loading = false; });
 }
@@ -395,11 +611,16 @@ function logoutUser(){
   ACCOUNT.activeSkin = 'red'; ACCOUNT.activeDanda = 'brown'; ACCOUNT.activeBoost = 'normal';
   ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.formName = '';
   ACCOUNT.formFocus = 'username'; ACCOUNT.mode = 'login'; ACCOUNT.error = '';
+  ACCOUNT.afterLoginAction = null;
   usernameSuggestions = []; suggestionsOpen = false;
-  clearSession(); setPhase('login');
+  clearSession();
+
+  // Logout ke baad turant naya guest banao
+  createLocalGuest();
 }
 
 function syncAccountStats(){
+  saveSession();
   if (!NET.ready || !ACCOUNT.loggedIn || ACCOUNT.isGuest || !ACCOUNT.username) return;
   const key = usernameKey(ACCOUNT.username);
   NET.db.ref('accounts/' + key).update({
@@ -432,6 +653,82 @@ function updateStatsOnline(myScore, won){
   if (won) ACCOUNT.wins++; else ACCOUNT.losses++;
   syncAccountStats();
   trackEvent('online_match_end', { score: myScore, won: won ? 1 : 0 });
+}
+
+/* ============ BOOT / GUEST / CLOUD SYNC ============ */
+function createLocalGuest(){
+  const nm = 'PLAYER' + Math.floor(1000 + Math.random() * 9000);
+  ACCOUNT.loggedIn = true;
+  ACCOUNT.isGuest = true;
+  ACCOUNT.username = '';
+  ACCOUNT.name = nm;
+  ACCOUNT.passwordHash = '';
+  ACCOUNT.bestSingle = 0; ACCOUNT.bestOnline = 0;
+  ACCOUNT.matchesPlayed = 0; ACCOUNT.onlineMatches = 0;
+  ACCOUNT.wins = 0; ACCOUNT.losses = 0; ACCOUNT.totalRuns = 0;
+  ACCOUNT.highestUnlockedLevel = 1;
+  ACCOUNT.coins = 0; ACCOUNT.lives = 0;
+  ACCOUNT.ownedSkins = ['red'];
+  ACCOUNT.ownedDandas = ['brown'];
+  ACCOUNT.ownedBoosts = ['normal'];
+  ACCOUNT.activeSkin = 'red';
+  ACCOUNT.activeDanda = 'brown';
+  ACCOUNT.activeBoost = 'normal';
+  saveSession();
+  setPhase('menu');
+  G.banner = '👋 WELCOME ' + nm + ' — Tap 👤 to save';
+  G.bannerTimer = 3.5;
+  beep(880, 0.10, 'triangle', 0.08);
+}
+
+function syncAccountFromCloud(username){
+  const attempt = (tries) => {
+    if (!NET.ready){
+      if (tries > 0) { setTimeout(() => attempt(tries - 1), 300); return; }
+      return;
+    }
+    const key = usernameKey(username);
+    NET.db.ref('accounts/' + key).once('value').then(snap => {
+      if (!snap.exists()) return;
+      const data = snap.val();
+      ACCOUNT.name = data.name || ACCOUNT.name;
+      ACCOUNT.passwordHash = data.passwordHash || ACCOUNT.passwordHash;
+      ACCOUNT.bestSingle = Math.max(ACCOUNT.bestSingle, data.bestSingle || 0);
+      ACCOUNT.bestOnline = Math.max(ACCOUNT.bestOnline, data.bestOnline || 0);
+      ACCOUNT.matchesPlayed = Math.max(ACCOUNT.matchesPlayed, data.matchesPlayed || 0);
+      ACCOUNT.onlineMatches = Math.max(ACCOUNT.onlineMatches, data.onlineMatches || 0);
+      ACCOUNT.wins = Math.max(ACCOUNT.wins, data.wins || 0);
+      ACCOUNT.losses = Math.max(ACCOUNT.losses, data.losses || 0);
+      ACCOUNT.totalRuns = Math.max(ACCOUNT.totalRuns, data.totalRuns || 0);
+      ACCOUNT.highestUnlockedLevel = Math.max(ACCOUNT.highestUnlockedLevel, data.highestUnlockedLevel || 1);
+      ACCOUNT.coins = Math.max(ACCOUNT.coins, data.coins || 0);
+      ACCOUNT.lives = Math.max(ACCOUNT.lives, data.lives || 0);
+      ACCOUNT.ownedSkins  = Array.from(new Set([...(ACCOUNT.ownedSkins  || []), ...(data.ownedSkins  || [])]));
+      ACCOUNT.ownedDandas = Array.from(new Set([...(ACCOUNT.ownedDandas || []), ...(data.ownedDandas || [])]));
+      ACCOUNT.ownedBoosts = Array.from(new Set([...(ACCOUNT.ownedBoosts || []), ...(data.ownedBoosts || [])]));
+      saveSession();
+    }).catch(()=>{});
+  };
+  attempt(15);
+}
+
+function bootAccount(){
+  const session = loadSession();
+  if (!session){ createLocalGuest(); return; }
+  if (session.isGuest){
+    applySessionToAccount(session);
+    setPhase('menu');
+    beep(880, 0.1, 'triangle', 0.08);
+    return;
+  }
+  if (session.username){
+    applySessionToAccount(session);
+    setPhase('menu');
+    beep(880, 0.1, 'triangle', 0.08);
+    syncAccountFromCloud(session.username);
+    return;
+  }
+  createLocalGuest();
 }
 
 const LEADERBOARD = { data: null, loading: false };
@@ -470,7 +767,8 @@ const G = {
   marketTab: 'skins',
   marketMsg: '', marketMsgTimer: 0,
   botScore: 0,
-  botBattingTimer: 0
+  botBattingTimer: 0,
+  turnEndTimer: 0
 };
 
 const gulli = { x:0, y:0, vx:0, vy:0, rot:0, rotV:0, grounded:true };
@@ -488,6 +786,7 @@ const SHIRT_TONES = ['#eceef2','#d94f4f','#4f7fd9','#e0b84f','#5fbf7a','#8a6ad9'
 let crowdCanvas = null, crowdRows = [], frontRowPeople = [], flashes = [], crowdFlags = [];
 let shake = 0;
 let frameDt = 0.016;
+let staticBG = null, sunSprite = null;
 
 const NET = {
   ready: false, db: null, roomId: null, role: null,
@@ -548,8 +847,22 @@ function initFirebase(){
 function genRoomId(){ return 'GD-' + Math.random().toString(36).slice(2,7).toUpperCase(); }
 
 function startOnlineMatchmaking(){
-  if (!ACCOUNT.loggedIn){ setPhase('login'); return; }
-  if (ACCOUNT.isGuest){ G.banner = 'REGISTER TO PLAY ONLINE'; G.bannerTimer = 2.5; return; }
+  if (!isOnline){
+    G.banner = '📴 NO INTERNET — ONLINE UNAVAILABLE';
+    G.bannerTimer = 2.5;
+    beep(200, 0.2, 'sawtooth', 0.10);
+    return;
+  }
+  if (!ACCOUNT.loggedIn || ACCOUNT.isGuest){
+    ACCOUNT.afterLoginAction = 'online';
+    ACCOUNT.error = '';
+    ACCOUNT.formUsername = '';
+    ACCOUNT.formPassword = '';
+    setPhase('login');
+    G.banner = '🔓 LOGIN TO PLAY ONLINE';
+    G.bannerTimer = 2;
+    return;
+  }
   NET.myName = ACCOUNT.name;
   NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppName = '';
   NET.oppLive = null; NET.tossWinner = null; NET.currentBatsman = null;
@@ -1304,8 +1617,9 @@ function rebuildMenuButtons(){
   }
   else if (G.phase === 'searching'){ menuButtons.push({ id:'cancelSearch', label:'✖  CANCEL', x: W/2 - 100, y: H - 70, w: 200, h: 50 }); }
   else if (G.phase === 'login'){
-    menuButtons.push({ id:'doLogin',    label:'🔓  LOGIN',         x: W/2 - 180, y: 340, w: 360, h: 54 });
-    menuButtons.push({ id:'goRegister', label:'NEW? REGISTER  →', x: W/2 - 180, y: 458, w: 360, h: 40 });
+    menuButtons.push({ id:'doLogin',    label:'🔓  LOGIN',          x: W/2 - 180, y: 340, w: 360, h: 54 });
+    menuButtons.push({ id:'goRegister', label:'NEW? REGISTER  →',   x: W/2 - 180, y: 458, w: 360, h: 40 });
+    menuButtons.push({ id:'skipLogin',  label:'◀  PLAY AS GUEST',   x: W/2 - 180, y: 508, w: 360, h: 34 });
   }
   else if (G.phase === 'register'){
     menuButtons.push({ id:'doRegister', label:'✅  CREATE ACCOUNT', x: W/2 - 180, y: 400, w: 360, h: 54 });
@@ -1330,6 +1644,75 @@ function rebuildMenuButtons(){
     menuButtons.push({ id:'tab_lives',  label:'❤️️ LIVES',  x: startX + 3*(tabW+tabGap), y: 88, w: tabW, h: tabH });
     menuButtons.push({ id:'back', label:'← BACK', x: W/2 - 80, y: 490, w: 160, h: 40 });
   }
+}
+
+/* ==================== STATIC BACKGROUND CACHE ==================== */
+function buildSunSprite(){
+  const r = 100;
+  sunSprite = document.createElement('canvas');
+  sunSprite.width = sunSprite.height = r * 2;
+  const c = sunSprite.getContext('2d');
+  const g = c.createRadialGradient(r, r, 10, r, r, r);
+  g.addColorStop(0,   'rgba(255,246,200,1)');
+  g.addColorStop(0.35,'rgba(255,228,140,0.5)');
+  g.addColorStop(1,   'rgba(255,220,120,0)');
+  c.fillStyle = g; c.beginPath(); c.arc(r, r, r, 0, Math.PI*2); c.fill();
+  c.fillStyle = '#fff6c8'; c.beginPath(); c.arc(r, r, 30, 0, Math.PI*2); c.fill();
+}
+function buildStaticBG(){
+  staticBG = document.createElement('canvas');
+  staticBG.width = W; staticBG.height = H;
+  const c = staticBG.getContext('2d');
+
+  const sg = c.createLinearGradient(0, 0, 0, SKY_BOTTOM);
+  sg.addColorStop(0, '#5fb4e8'); sg.addColorStop(0.55, '#9fd8f0'); sg.addColorStop(1, '#ffe7b8');
+  c.fillStyle = sg; c.fillRect(0, 0, W, SKY_BOTTOM + 2);
+
+  const wg = c.createLinearGradient(0, STADIUM_TOP - 16, 0, STADIUM_BOTTOM);
+  wg.addColorStop(0, '#28304a'); wg.addColorStop(0.45, '#161d2e'); wg.addColorStop(1, '#080d16');
+  c.fillStyle = wg; c.fillRect(0, STADIUM_TOP - 16, W, STADIUM_BOTTOM - STADIUM_TOP + 16);
+
+  for (const sec of crowdSections){
+    const g = c.createLinearGradient(0, STADIUM_TOP, 0, STADIUM_BOTTOM);
+    g.addColorStop(0, hexA(sec.color, 0.04));
+    g.addColorStop(1, hexA(sec.color, 0.28));
+    c.fillStyle = g; c.fillRect(sec.x, STADIUM_TOP, sec.w, STADIUM_BOTTOM - STADIUM_TOP);
+  }
+
+  c.fillStyle = 'rgba(10,14,24,0.95)';   c.fillRect(0, STADIUM_BOTTOM - 6, W, 18);
+  c.fillStyle = 'rgba(255,255,255,0.14)'; c.fillRect(0, STADIUM_BOTTOM - 6, W, 2);
+  c.fillStyle = '#0d1220'; c.fillRect(0, STADIUM_TOP - 16, W, 18);
+  c.fillStyle = '#1e2736'; c.fillRect(0, STADIUM_TOP - 2, W, 3);
+
+  for (let lx = 60; lx < W; lx += 180){
+    c.fillStyle = 'rgba(255,240,180,0.18)';
+    c.beginPath(); c.arc(lx, STADIUM_TOP - 6, 15, 0, Math.PI*2); c.fill();
+    c.fillStyle = 'rgba(255,248,215,0.95)';
+    c.beginPath(); c.arc(lx, STADIUM_TOP - 6, 3.2, 0, Math.PI*2); c.fill();
+  }
+
+  const fg = c.createLinearGradient(0, HORIZON, 0, H);
+  fg.addColorStop(0, '#7cb85c'); fg.addColorStop(0.35, '#8fcb6e'); fg.addColorStop(1, '#4a8f3c');
+  c.fillStyle = fg; c.fillRect(0, HORIZON, W, H - HORIZON);
+
+  c.beginPath(); c.moveTo(0, HORIZON); c.quadraticCurveTo(W/2, HORIZON-6, W, HORIZON);
+  c.lineTo(W, HORIZON+2); c.lineTo(0, HORIZON+2); c.closePath();
+  c.fillStyle = 'rgba(255,255,255,0.15)'; c.fill();
+
+  c.strokeStyle = 'rgba(255,255,255,0.055)'; c.lineWidth = 1;
+  for (let y = HORIZON + 20; y < H; y += 22){
+    c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke();
+  }
+
+  const ropeY = GROUND_Y - 55;
+  c.strokeStyle = 'rgba(255,255,255,0.55)'; c.lineWidth = 2.5;
+  c.setLineDash([14, 10]);
+  c.beginPath(); c.moveTo(0, ropeY+10); c.quadraticCurveTo(W/2, ropeY-22, W, ropeY+10); c.stroke();
+  c.setLineDash([]);
+  c.strokeStyle = 'rgba(255,255,255,0.12)'; c.lineWidth = 6;
+  c.beginPath(); c.moveTo(0, ropeY+10); c.quadraticCurveTo(W/2, ropeY-22, W, ropeY+10); c.stroke();
+
+  buildSunSprite();
 }
 
 /* ==================== CROWD ==================== */
@@ -1419,6 +1802,7 @@ function initCrowd(){
       crowdFlags.push({ x: sec.x + sec.w * (i + 0.5) / n, color: sec.color, phase: Math.random() * Math.PI * 2, w: 46 + Math.random() * 26 });
     }
   }
+  buildStaticBG();
 }
 
 /* ==================== GAME FLOW ==================== */
@@ -1544,24 +1928,24 @@ function swing(){
   const cheerLevel = acc * (G.shotType === 'LOFT' ? 1.4 : G.shotType === 'DRIVE' ? 1.1 : 0.7);
   crowdExcitement = Math.max(crowdExcitement, 0.6 + cheerLevel * 1.0);
   playCheer(0.5 + acc * 0.9);
-  if (acc > 0.92) { 
-    sweep(900,1800,0.18,'triangle',0.13); 
-    G.banner='PERFECT!'; 
+  if (acc > 0.92) {
+    sweep(900,1800,0.18,'triangle',0.13);
+    G.banner='PERFECT!';
     speakVoice("Kamaal ka shot!");
   }
-  else if (acc > 0.6) { 
-    beep(700,0.12,'triangle',0.11); 
-    G.banner='GREAT HIT!'; 
+  else if (acc > 0.6) {
+    beep(700,0.12,'triangle',0.11);
+    G.banner='GREAT HIT!';
     speakVoice("Dhuandaar hit!");
   }
-  else if (acc > 0.25) { 
-    beep(500,0.12,'triangle',0.09); 
-    G.banner='HIT'; 
+  else if (acc > 0.25) {
+    beep(500,0.12,'triangle',0.09);
+    G.banner='HIT';
     speakVoice("Badiya shot!");
   }
-  else { 
-    beep(360,0.12,'triangle',0.08); 
-    G.banner='WEAK HIT'; 
+  else {
+    beep(360,0.12,'triangle',0.08);
+    G.banner='WEAK HIT';
     speakVoice("Halka shot!");
   }
   G.bannerTimer = 0.9;
@@ -1783,52 +2167,7 @@ function update(dt){
     G.splashTimer += dt;
     if (Math.random() < 0.7) spawnSplashSpark();
     if (G.splashTimer >= SPLASH_DURATION){
-      const session = loadSession();
-      if (session){
-        if (session.isGuest){
-          ACCOUNT.loggedIn = true; ACCOUNT.isGuest = true;
-          ACCOUNT.name = session.name || 'GUEST';
-          ACCOUNT.highestUnlockedLevel = Math.max(1, session.highestUnlockedLevel || 1);
-          ACCOUNT.coins = Math.max(0, session.coins || 0);
-          ACCOUNT.lives = Math.max(0, session.lives || 0);
-          ACCOUNT.ownedSkins = session.ownedSkins || ['red'];
-          ACCOUNT.ownedDandas = session.ownedDandas || ['brown'];
-          ACCOUNT.ownedBoosts = session.ownedBoosts || ['normal'];
-          ACCOUNT.activeSkin = session.activeSkin || 'red';
-          ACCOUNT.activeDanda = session.activeDanda || 'brown';
-          ACCOUNT.activeBoost = session.activeBoost || 'normal';
-          setPhase('menu');
-        } else if (session.username && NET.ready){
-          const key = usernameKey(session.username);
-          NET.db.ref('accounts/' + key).once('value').then(snap => {
-            if (snap.exists()){
-              const data = snap.val();
-              ACCOUNT.username = data.username || session.username;
-              ACCOUNT.name = data.name || ACCOUNT.username;
-              ACCOUNT.passwordHash = data.passwordHash;
-              ACCOUNT.bestSingle = data.bestSingle || 0;
-              ACCOUNT.bestOnline = data.bestOnline || 0;
-              ACCOUNT.matchesPlayed = data.matchesPlayed || 0;
-              ACCOUNT.onlineMatches = data.onlineMatches || 0;
-              ACCOUNT.wins = data.wins || 0;
-              ACCOUNT.losses = data.losses || 0;
-              ACCOUNT.totalRuns = data.totalRuns || 0;
-              ACCOUNT.highestUnlockedLevel = Math.max(1, data.highestUnlockedLevel || 1);
-              ACCOUNT.coins = Math.max(0, data.coins || 0);
-              ACCOUNT.lives = Math.max(0, data.lives || 0);
-              ACCOUNT.ownedSkins = data.ownedSkins || ['red'];
-              ACCOUNT.ownedDandas = data.ownedDandas || ['brown'];
-              ACCOUNT.ownedBoosts = data.ownedBoosts || ['normal'];
-              ACCOUNT.activeSkin = data.activeSkin || 'red';
-              ACCOUNT.activeDanda = data.activeDanda || 'brown';
-              ACCOUNT.activeBoost = data.activeBoost || 'normal';
-              ACCOUNT.loggedIn = true; ACCOUNT.isGuest = false;
-              setPhase('menu');
-            } else { setPhase('login'); }
-          }).catch(()=>{ setPhase('login'); });
-        } else { setPhase('login'); }
-      } else { setPhase('login'); }
-      beep(880, 0.1, 'triangle', 0.08);
+      bootAccount();
     }
     return;
   }
@@ -2144,6 +2483,15 @@ function handleMenuClick(x, y){
       if (b.id === 'doLogin'){ loginUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword); return true; }
       if (b.id === 'doRegister'){ registerUserAccount(ACCOUNT.formUsername, ACCOUNT.formPassword); return true; }
       if (b.id === 'doGuest'){ guestLogin(ACCOUNT.formName); return true; }
+      if (b.id === 'skipLogin'){
+        ACCOUNT.afterLoginAction = null;
+        if (ACCOUNT.isGuest && ACCOUNT.loggedIn){
+          setPhase('menu');
+        } else {
+          createLocalGuest();
+        }
+        return true;
+      }
       if (b.id === 'goRegister'){ ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.error = ''; usernameSuggestions = []; suggestionsOpen = false; setPhase('register'); return true; }
       if (b.id === 'goLogin' || b.id === 'goLoginFromGuest'){ ACCOUNT.formUsername = ''; ACCOUNT.formPassword = ''; ACCOUNT.formName = ''; ACCOUNT.error = ''; usernameSuggestions = []; suggestionsOpen = false; setPhase('login'); return true; }
       if (b.id === 'pagePrev'){ G.levelPage = Math.max(0, (G.levelPage || 0) - 1); rebuildMenuButtons(); return true; }
@@ -2365,28 +2713,21 @@ const clouds = [
   { x:140, y:58, s:0.9 }, { x:470, y:98, s:0.65 }, { x:780, y:50, s:0.85 }, { x:1120, y:105, s:0.55 }, { x:1420, y:72, s:0.8 }, { x:1850, y:90, s:0.7 }
 ];
 function drawSky(){
-  const g = ctx.createLinearGradient(0,0,0,SKY_BOTTOM);
-  g.addColorStop(0,'#5fb4e8'); g.addColorStop(0.55,'#9fd8f0'); g.addColorStop(1,'#ffe7b8');
-  ctx.fillStyle = g; ctx.fillRect(0,0,W,SKY_BOTTOM+2);
-  const sx = 810 - camX*0.04, sy = 72;
-  const sg = ctx.createRadialGradient(sx,sy,10,sx,sy,100);
-  sg.addColorStop(0,'rgba(255,246,200,1)'); sg.addColorStop(0.35,'rgba(255,228,140,0.5)'); sg.addColorStop(1,'rgba(255,220,120,0)');
-  ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sx,sy,100,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle = '#fff6c8'; ctx.beginPath(); ctx.arc(sx,sy,30,0,Math.PI*2); ctx.fill();
+  if (staticBG) ctx.drawImage(staticBG, 0, 0);
+  if (sunSprite){
+    const sx = 810 - camX * 0.04;
+    ctx.drawImage(sunSprite, sx - 100, 72 - 100);
+  }
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  for (const c of clouds){ let x = c.x - camX*0.12; x = ((x % 2200)+2200)%2200 - 300; drawCloud(x, c.y, c.s); }
+  for (const c of clouds){
+    let x = c.x - camX * 0.12;
+    x = ((x % 2200) + 2200) % 2200 - 300;
+    drawCloud(x, c.y, c.s);
+  }
 }
 function drawCloud(x,y,s){ ctx.beginPath(); ctx.arc(x, y, 24*s, 0, Math.PI*2); ctx.arc(x+28*s, y-11*s, 32*s, 0, Math.PI*2); ctx.arc(x+66*s, y, 22*s, 0, Math.PI*2); ctx.arc(x+34*s, y+11*s, 24*s, 0, Math.PI*2); ctx.fill(); }
 function drawStadium(){
   const t = performance.now() / 1000;
-  const wallGrd = ctx.createLinearGradient(0, STADIUM_TOP - 16, 0, STADIUM_BOTTOM);
-  wallGrd.addColorStop(0, '#28304a'); wallGrd.addColorStop(0.45,'#161d2e'); wallGrd.addColorStop(1, '#080d16');
-  ctx.fillStyle = wallGrd; ctx.fillRect(0, STADIUM_TOP - 16, W, STADIUM_BOTTOM - STADIUM_TOP + 16);
-  for (const sec of crowdSections){
-    const g = ctx.createLinearGradient(0, STADIUM_TOP, 0, STADIUM_BOTTOM);
-    g.addColorStop(0, hexA(sec.color, 0.04)); g.addColorStop(1, hexA(sec.color, 0.28));
-    ctx.fillStyle = g; ctx.fillRect(sec.x, STADIUM_TOP, sec.w, STADIUM_BOTTOM - STADIUM_TOP);
-  }
   const jump = Math.abs(Math.sin(t * 3.4)) * crowdExcitement * 5;
   if (crowdCanvas) ctx.drawImage(crowdCanvas, 0, -jump);
   for (const p of frontRowPeople){
@@ -2412,33 +2753,8 @@ function drawStadium(){
     rr(ctx, -f.w/2, 11, f.w, 5, 2); ctx.fill();
     ctx.restore();
   }
-  ctx.fillStyle = 'rgba(10,14,24,0.95)'; ctx.fillRect(0, STADIUM_BOTTOM - 6, W, 18);
-  ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.fillRect(0, STADIUM_BOTTOM - 6, W, 2);
-  ctx.fillStyle = '#0d1220'; ctx.fillRect(0, STADIUM_TOP - 16, W, 18);
-  ctx.fillStyle = '#1e2736'; ctx.fillRect(0, STADIUM_TOP - 2, W, 3);
-  for (let lx = 60; lx < W; lx += 180){
-    ctx.fillStyle = 'rgba(255,240,180,0.18)'; ctx.beginPath(); ctx.arc(lx, STADIUM_TOP - 6, 15, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,248,215,0.95)'; ctx.beginPath(); ctx.arc(lx, STADIUM_TOP - 6, 3.2, 0, Math.PI*2); ctx.fill();
-  }
 }
 function drawField(){
-  const g = ctx.createLinearGradient(0, HORIZON, 0, H);
-  g.addColorStop(0, '#7cb85c'); g.addColorStop(0.35, '#8fcb6e'); g.addColorStop(1, '#4a8f3c');
-  ctx.fillStyle = g; ctx.fillRect(0, HORIZON, W, H - HORIZON);
-  ctx.beginPath(); ctx.moveTo(0, HORIZON); ctx.quadraticCurveTo(W/2, HORIZON - 6, W, HORIZON);
-  ctx.lineTo(W, HORIZON + 2); ctx.lineTo(0, HORIZON + 2); ctx.closePath();
-  ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.055)'; ctx.lineWidth = 1;
-  for (let y = HORIZON + 20; y < H; y += 22){ ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-  const ropeY = GROUND_Y - 55;
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 2.5;
-  ctx.setLineDash([14, 10]);
-  ctx.beginPath(); ctx.moveTo(0, ropeY + 10); ctx.quadraticCurveTo(W/2, ropeY - 22, W, ropeY + 10); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 6;
-  ctx.beginPath(); ctx.moveTo(0, ropeY + 10); ctx.quadraticCurveTo(W/2, ropeY - 22, W, ropeY + 10); ctx.stroke();
-  ctx.restore();
   ctx.strokeStyle='rgba(255,255,255,0.16)'; ctx.lineWidth=2;
   const startW = Math.floor(camX/46)*46;
   for (let wx=startW; wx<camX+W+46; wx+=46){
@@ -2492,15 +2808,14 @@ function drawDandaOnGround(){
   }
 }
 function dandaAngle(){
-  if (G.swingTimer>0){ 
-    const t = 1 - G.swingTimer/G.swingDur; 
-    const e = 1 - Math.pow(1-t,3); 
-    return lerp(-1.6, 1.45, e); 
+  if (G.swingTimer>0){
+    const t = 1 - G.swingTimer/G.swingDur;
+    const e = 1 - Math.pow(1-t,3);
+    return lerp(-1.6, 1.45, e);
   }
   return 0.72;
 }
 
-/* ==================== REALISTIC BATTER ANIMATION ==================== */
 function drawPlayer(){
   const x = PLAYER_X - camX, y = GROUND_Y;
   const danda = getActiveDanda();
@@ -2510,7 +2825,7 @@ function drawPlayer(){
   if (G.swingTimer > 0) {
     swingProgress = 1 - (G.swingTimer / G.swingDur);
   }
-  
+
   const lean = swingProgress > 0 ? Math.sin(swingProgress * Math.PI) * 16 : 0;
   const hipY = y - 70;
   const shoulderX = x + lean * 0.9;
@@ -2518,29 +2833,24 @@ function drawPlayer(){
   const headY = shoulderY - 21;
 
   ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle='#000';
-  ctx.beginPath(); ctx.ellipse
-ctx.beginPath(); ctx.ellipse(x + lean * 0.5, y + 3, 38 + Math.abs(lean), 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  ctx.beginPath(); ctx.ellipse(x + lean * 0.5, y + 3, 38 + Math.abs(lean), 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
 
-  // Dynamic Legs with Weight Transfer
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.strokeStyle = '#2d3142'; ctx.lineWidth = 9;
   ctx.beginPath();
-  ctx.moveTo(x, hipY); ctx.lineTo(x - 22, y - 2);            // Back foot anchor
-  ctx.moveTo(x, hipY); ctx.lineTo(x + 18 + lean, y - 2);     // Front lead foot step
+  ctx.moveTo(x, hipY); ctx.lineTo(x - 22, y - 2);
+  ctx.moveTo(x, hipY); ctx.lineTo(x + 18 + lean, y - 2);
   ctx.stroke();
 
-  // Torso Rotation with Core Shift
   ctx.strokeStyle = pcolor; ctx.lineWidth = 19;
   ctx.beginPath(); ctx.moveTo(x, hipY); ctx.lineTo(shoulderX, shoulderY); ctx.stroke();
 
-  // Head and Cap
   ctx.fillStyle = '#f0c49a';
   ctx.beginPath(); ctx.arc(shoulderX, headY, 19, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#2d3142'; ctx.lineWidth = 4; ctx.stroke();
   ctx.fillStyle = '#2d3142';
   ctx.beginPath(); ctx.arc(shoulderX, headY - 3, 19, Math.PI * 1.05, Math.PI * 2.05); ctx.fill();
 
-  // Player Name Tag in Multiplayer
   if ((G.mode === 'multi' || G.mode === 'online' || G.mode === 'onlineResults') && G.players[G.currentPlayer]){
     const p = G.players[G.currentPlayer];
     ctx.save();
@@ -2558,18 +2868,15 @@ ctx.beginPath(); ctx.ellipse(x + lean * 0.5, y + 3, 38 + Math.abs(lean), 9, 0, 0
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
 
-  // Batting Arm and Danda Follow-Through
   if (G.phase!=='fielding' && G.phase!=='throw' && G.phase!=='turnIntro' && G.phase!=='turnEnd' && G.phase!=='gameOver' && G.phase!=='nameEntry' && G.phase!=='splash' && G.phase!=='waitingOpp' && G.phase!=='toss' && G.phase!=='tossResult' && G.phase!=='login' && G.phase!=='register' && G.phase!=='guest' && G.phase!=='leaderboard' && G.phase!=='profileView' && G.phase!=='market' && G.phase!=='botBatting'){
     const ang = dandaAngle();
     const handX = shoulderX + 8 + (lean * 0.4);
     const handY = shoulderY + 7;
     ctx.save(); ctx.translate(handX, handY); ctx.rotate(ang);
 
-    // Forearm
     ctx.strokeStyle = '#2d3142'; ctx.lineWidth = 8;
     ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(24, 7); ctx.stroke();
 
-    // Danda Barrel
     ctx.lineCap = 'round';
     ctx.strokeStyle = danda.color; ctx.lineWidth = 11;
     ctx.beginPath(); ctx.moveTo(18, 7); ctx.lineTo(122, 7); ctx.stroke();
@@ -2578,7 +2885,6 @@ ctx.beginPath(); ctx.ellipse(x + lean * 0.5, y + 3, 38 + Math.abs(lean), 9, 0, 0
     ctx.beginPath(); ctx.moveTo(18, 7);  ctx.lineTo(26, 7);  ctx.stroke();
     ctx.restore();
   } else {
-    // Resting Stance
     ctx.strokeStyle = '#2d3142'; ctx.lineWidth = 8;
     ctx.beginPath();
     ctx.moveTo(shoulderX + 4, shoulderY + 4); ctx.lineTo(shoulderX + 26, shoulderY + 30);
@@ -2810,9 +3116,12 @@ function drawShotSelector(spectating){
       const grd = ctx.createLinearGradient(0,-b.h/2,0,b.h/2);
       grd.addColorStop(0, shot.color); grd.addColorStop(1, shade(shot.color, -30));
       ctx.fillStyle = grd;
-      ctx.shadowColor = shot.color; ctx.shadowBlur = 18;
-      ctx.fill(); ctx.shadowBlur = 0;
-    } else { ctx.fillStyle = 'rgba(20,25,40,0.55)'; ctx.fill(); }
+      ctx.fill();
+      ctx.strokeStyle = shot.color; ctx.lineWidth = 4; ctx.stroke();
+    } else {
+      ctx.fillStyle = 'rgba(20,25,40,0.55)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
     ctx.strokeStyle = active ? '#ffffff' : 'rgba(255,255,255,0.35)';
     ctx.lineWidth = active ? 3 : 1.5; ctx.stroke();
     ctx.font='900 15px system-ui,sans-serif';
@@ -3126,14 +3435,14 @@ function drawInputBox(box, label, value, isFocused, isPassword){
 function drawLoginScreen(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
   ctx.fillRect(0,0,W,H);
-  centerText('🔓  LOGIN', 70, 38, '#ffd166');
-  centerText('Enter username & password to continue', 110, 15, 'rgba(255,255,255,0.7)');
+  centerText('🔓  LOGIN', 55, 34, '#ffd166');
+  centerText('Save your progress · Play online', 92, 14, 'rgba(255,255,255,0.7)');
+  centerText('(Password sirf pehli baar — phir hamesha login rahoge)', 112, 11, 'rgba(255,209,102,0.65)');
   drawInputBox(AUTH_BOXES.login.username, '👤 USERNAME', ACCOUNT.formUsername, ACCOUNT.formFocus === 'username', false);
   drawSuggestionDropdown(AUTH_BOXES.login.username);
   drawInputBox(AUTH_BOXES.login.password, '🔒 PASSWORD', ACCOUNT.formPassword, ACCOUNT.formFocus === 'password', true);
-  centerText('Suggestion: tap username box to see existing', W/2, 320, 11, 'rgba(255,209,102,0.6)');
-  if (ACCOUNT.loading) centerText('Logging in...', 315, 14, 'rgba(255,209,102,0.9)');
-  else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 315, 14, '#ff8a8a');
+  if (ACCOUNT.loading) centerText('Logging in...', 320, 14, 'rgba(255,209,102,0.9)');
+  else if (ACCOUNT.error) centerText('⚠ ' + ACCOUNT.error, 320, 14, '#ff8a8a');
   const gbW = 360, gbH = 46, gbX = W/2 - gbW/2, gbY = 398;
   ctx.save();
   rr(ctx, gbX, gbY, gbW, gbH, 12);
@@ -3182,7 +3491,9 @@ function drawLeaderboard(){
   ctx.fillRect(0,0,W,H);
   centerText('🏆  GLOBAL LEADERBOARD', 55, 32, '#ffd166');
   centerText('Top online scores worldwide', 92, 14, 'rgba(255,255,255,0.65)');
-  if (!LEADERBOARD.data){ centerText('Loading...', 260, 24, 'rgba(255,255,255,0.7)'); }
+  if (!isOnline){
+    centerText('📴 Offline — Leaderboard needs internet', 260, 20, 'rgba(255,138,138,0.9)');
+  } else if (!LEADERBOARD.data){ centerText('Loading...', 260, 24, 'rgba(255,255,255,0.7)'); }
   else if (LEADERBOARD.data.length === 0){ centerText('No scores yet. Be the first!', 260, 20, 'rgba(255,255,255,0.7)'); }
   else {
     const bw = 620, bh = 30, gap = 6;
@@ -4181,6 +4492,18 @@ function drawGameOver(){
         ctx.fillText('Get ' + (lv.target*2) + ' pts for 2x coins!', cx - 60, cy + 14);
       }
       ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+
+      if (ACCOUNT.isGuest){
+        ctx.save();
+        const pulse2 = 0.7 + 0.3 * Math.sin(performance.now() / 320);
+        ctx.globalAlpha = pulse2;
+        ctx.font = '700 13px system-ui,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,209,102,0.9)';
+        ctx.fillText('💾 Login to save your score on the cloud', W/2, H - 85);
+        ctx.restore();
+        ctx.textAlign = 'left';
+      }
     } else {
       centerText('LEVEL ' + G.level + ' FAILED', 130, 38, '#ff8a8a');
       centerText('You scored ' + G.score + ' pts — needed ' + lv.target + ' pts', 178, 18, 'rgba(255,255,255,0.85)');
@@ -4415,7 +4738,7 @@ function draw(){
   drawJoinPopup();
 }
 
-/* ==================== HUD & STICKER VISIBILITY ==================== */
+/* ==================== HUD (throttled) ==================== */
 const uiScore = document.getElementById('uiScore');
 const uiBest = document.getElementById('uiBest');
 const uiOuts = document.getElementById('uiOuts');
@@ -4423,6 +4746,7 @@ const uiTurn = document.getElementById('uiTurn');
 const uiCoins = document.getElementById('uiCoins');
 const uiLives = document.getElementById('uiLives');
 const chatStickerBar = document.getElementById('chatStickerBar');
+const _hudCache = { score:-1, best:-1, outs:'', turn:'', coins:-1, lives:-1, disp:'' };
 
 function updateHUD(){
   const hud = document.getElementById('hud');
@@ -4433,19 +4757,20 @@ function updateHUD(){
       || G.phase === 'profileView' || G.phase === 'market' || G.phase === 'botBatting'
       || G.phase === 'waitingOpp');
 
-  if (isMenuPhase){
-    hud.style.display = 'none';
-  } else {
-    hud.style.display = 'flex';
-    uiScore.textContent = G.score;
-    uiBest.textContent = G.best;
-    uiOuts.textContent = G.outs + '/1';
-    uiTurn.textContent = (G.currentPlayer + 1) + '/' + G.players.length;
-    if (uiCoins) uiCoins.textContent = ACCOUNT.coins;
-    if (uiLives) uiLives.textContent = ACCOUNT.lives;
+  const newDisp = isMenuPhase ? 'none' : 'flex';
+  if (_hudCache.disp !== newDisp){ _hudCache.disp = newDisp; hud.style.display = newDisp; }
+
+  if (!isMenuPhase){
+    if (_hudCache.score !== G.score){ _hudCache.score = G.score; uiScore.textContent = G.score; }
+    if (_hudCache.best  !== G.best ){ _hudCache.best  = G.best;  uiBest.textContent  = G.best;  }
+    const outsTxt = G.outs + '/1';
+    if (_hudCache.outs !== outsTxt){ _hudCache.outs = outsTxt; uiOuts.textContent = outsTxt; }
+    const turnTxt = (G.currentPlayer+1) + '/' + G.players.length;
+    if (_hudCache.turn !== turnTxt){ _hudCache.turn = turnTxt; uiTurn.textContent = turnTxt; }
+    if (uiCoins && _hudCache.coins !== ACCOUNT.coins){ _hudCache.coins = ACCOUNT.coins; uiCoins.textContent = ACCOUNT.coins; }
+    if (uiLives && _hudCache.lives !== ACCOUNT.lives){ _hudCache.lives = ACCOUNT.lives; uiLives.textContent = ACCOUNT.lives; }
   }
 
-  // Floating Emoji Bar will only appear during Online matches
   if (chatStickerBar){
     const showChat = (G.mode === 'online' && (G.phase === 'power' || G.phase === 'air' || G.phase === 'fly' || G.phase === 'fielding' || G.phase === 'throw' || G.phase === 'result' || G.phase === 'waitingOpp'));
     chatStickerBar.style.display = showChat ? 'flex' : 'none';
@@ -4465,9 +4790,91 @@ function loop(now){
 
 resetGulli();
 rebuildMenuButtons();
-initFirebase();
 setTimeout(()=>{ try{ playSplashChime(); } catch(e){} }, 120);
 requestAnimationFrame(loop);
+
+/* ================================================================
+   START GATE — fullscreen + landscape + firebase preload
+   ================================================================ */
+let fsStarted = false;
+sgBtn.addEventListener('click', async () => {
+  if (fsStarted) return;
+  fsStarted = true;
+  sgBtn.textContent = 'LOADING…';
+  await goFullscreenLandscape();
+
+  // unlock audio context on mobile
+  try{
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    actx.resume();
+  }catch(e){}
+
+  // Preload firebase in background
+  preloadFirebase();
+
+  startGate.classList.add('hide');
+  setTimeout(()=>{ startGate.style.display = 'none'; }, 400);
+
+  // Fast-forward splash
+  G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.9);
+  try{ playSplashChime(); }catch(e){}
+}, { passive:true });
+
+// Also allow skip on keyboard
+window.addEventListener('keydown', (e) => {
+  if (startGate.style.display !== 'none' && (e.code === 'Space' || e.code === 'Enter')){
+    sgBtn.click();
+    e.preventDefault();
+  }
+});
+
+document.addEventListener('fullscreenchange', () => {
+  if (document.fullscreenElement){
+    document.body.classList.add('fs');
+    lockLandscape();
+  } else {
+    document.body.classList.remove('fs');
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && 'wakeLock' in navigator){
+    navigator.wakeLock.request('screen').catch(()=>{});
+  }
+});
+
+/* ================================================================
+   FIREBASE LAZY PRELOAD
+   ================================================================ */
+let firebaseLoaded = false;
+function preloadFirebase(){
+  if (firebaseLoaded) return;
+  firebaseLoaded = true;
+  const files = [
+    'firebase-app-compat.js',
+    'firebase-database-compat.js',
+    'firebase-analytics-compat.js'
+  ];
+  let loaded = 0;
+  files.forEach(f => {
+    const s = document.createElement('script');
+    s.src = 'https://www.gstatic.com/firebasejs/9.22.2/' + f;
+    s.async = true;
+    s.onload = () => {
+      loaded++;
+      if (loaded === files.length){
+        // All loaded → init
+        if (initFirebase()) {
+          // If already in menu as account, sync now
+          if (ACCOUNT.loggedIn && !ACCOUNT.isGuest && ACCOUNT.username){
+            syncAccountFromCloud(ACCOUNT.username);
+          }
+        }
+      }
+    };
+    document.head.appendChild(s);
+  });
+}
 
 })();
 </script>
