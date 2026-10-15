@@ -260,8 +260,7 @@ function getActiveBoost(){ return SHOP_BOOSTS.find(function(b){ return b.id === 
 /* ================================================================
    LEVEL SYSTEM
    ================================================================ */
-var LEVEL_NAMES = ['ROOKIE','AMATEUR','PRO','EXPERT','LEGEND','MASTER','GRANDMASTER','CHAMPION','ELITE','SUPREME','TITAN','IMMORTAL','GODLIKE','UNSTOPPABLE','PHENOMENAL'];
-function getLevelTarget(n){ n = Math.max(1, Math.floor(n)); return 500 * Math.pow(2, n - 1); }
+function getLevelTarget(n){ n = Math.max(1, Math.floor(n)); return 500 * n; }
 function getLevel(n){
   n = Math.max(1, Math.floor(n));
   var target = getLevelTarget(n);
