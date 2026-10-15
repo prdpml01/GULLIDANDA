@@ -260,7 +260,14 @@ function getActiveBoost(){ return SHOP_BOOSTS.find(function(b){ return b.id === 
 /* ================================================================
    LEVEL SYSTEM
    ================================================================ */
-function getLevelTarget(n){ n = Math.max(1, Math.floor(n)); return 500 * n; }
+var LEVEL_NAMES = ['ROOKIE','AMATEUR','PRO','EXPERT','LEGEND','MASTER','GRANDMASTER','CHAMPION','ELITE','SUPREME','TITAN','IMMORTAL','GODLIKE','UNSTOPPABLE','PHENOMENAL'];
+
+// Har level pe +500 score target badhta hai
+function getLevelTarget(n){
+  n = Math.max(1, Math.floor(n));
+  return 500 * n;           // L1=500, L2=1000, L3=1500, L4=2000 ...
+}
+
 function getLevel(n){
   n = Math.max(1, Math.floor(n));
   var target = getLevelTarget(n);
@@ -272,21 +279,12 @@ function getLevel(n){
   else name = 'LEGEND ' + n;
   return { level: n, target: target, speed:[speed1, speed2], error: error, name: name };
 }
+
 function calcCoins(score, target){
   var base = Math.floor(score / COIN_DIVISOR);
   var isBonus = score >= 2 * target;
   return { base: base, bonus: isBonus, total: isBonus ? base * 2 : base };
 }
-
-var SHOTS = {
-  PUSH:  { vxBase:  560, vyBase: -260, label:'PUSH',  sub:'SAFE',  color:'#3fa35a' },
-  DRIVE: { vxBase:  980, vyBase: -580, label:'DRIVE', sub:'MID',   color:'#c99a2e' },
-  LOFT:  { vxBase: 1380, vyBase: -840, label:'LOFT',  sub:'RISKY', color:'#a53939' }
-};
-var PLAYER_COLORS = ['#e63946', '#3a86ff', '#06d6a0', '#ffbe0b', '#a06bff'];
-var PLAYER_NAMES  = ['RED',     'BLUE',    'GREEN',   'YELLOW',  'PURPLE'];
-var CONFETTI_COLORS = ['#ffd166','#ff8a8a','#8affa0','#5c9ee0','#e0a95c','#ff6bcb','#ffffff','#a06bff'];
-
 /* ================================================================
    ACCOUNT
    ================================================================ */
