@@ -189,18 +189,18 @@
       <span class="sg-tap-ring"></span>
       <span class="sg-tap-text">TAP ANYWHERE</span>
     </div>
-    <div class="sg-hint">Landscape fullscreen me khulega</div>
+    <div class="sg-hint">Fullscreen me khulega</div>
   </div>
 </div>
 
 <div id="rotateGate">
   <div class="rg-icon">📱</div>
   <p>Phone ko <b>landscape</b> me ghumayein</p>
-  <small>Game khud fullscreen ho jayega</small>
+  <small>Best experience ke liye</small>
 </div>
 
 <script>
-let sendEmojiSticker = () => {};
+var sendEmojiSticker = function(){};
 
 (function(){
 "use strict";
@@ -216,7 +216,6 @@ var isStandalone =
   window.navigator.standalone === true ||
   document.referrer.indexOf('android-app://') === 0;
 
-/* ============ Safe orientation lock ============ */
 function lockLandscape(){
   return new Promise(function(resolve){
     try{
@@ -235,7 +234,7 @@ function lockLandscape(){
 }
 
 /* ================================================================
-   SERVICE WORKER (Offline PWA)
+   SERVICE WORKER
    ================================================================ */
 if ('serviceWorker' in navigator){
   window.addEventListener('load', function(){
@@ -270,9 +269,6 @@ window.addEventListener('offline', function(){
   }
 });
 
-/* ================================================================
-   FIREBASE CONFIG
-   ================================================================ */
 var firebaseConfig = {
   apiKey: "AIzaSyDyTIaepAi4wmXNbNSuyMyN5cRLuXW77OE",
   authDomain: "gulli-danda-c4e39.firebaseapp.com",
@@ -295,7 +291,6 @@ var SKY_BOTTOM = 148, STADIUM_TOP = 140, STADIUM_BOTTOM = 300, HORIZON = 300;
 var SPLASH_DURATION = 2.6, TOSS_DURATION = 2500, TOSS_RESULT_DURATION = 2400;
 var COIN_DIVISOR = 10;
 
-/* ==================== VOICE ==================== */
 function speakVoice(text, pitch, rate){
   pitch = pitch || 1.1; rate = rate || 1.1;
   try {
@@ -309,7 +304,6 @@ function speakVoice(text, pitch, rate){
   } catch(e){}
 }
 
-/* ==================== EMOJI CHAT ==================== */
 var activeStickers = [];
 sendEmojiSticker = function(emoji){
   if (!emoji) return;
@@ -333,7 +327,6 @@ function spawnSticker(emoji, isMine){
   });
 }
 
-/* ==================== SHOP ==================== */
 var SHOP_SKINS = [
   { id:'red',    name:'Classic Red',   color:'#e63946', price:0     },
   { id:'blue',   name:'Ocean Blue',    color:'#3a86ff', price:500   },
@@ -436,7 +429,6 @@ var usernameSuggestions = [];
 var suggestionTimer = null;
 var suggestionsOpen = false;
 
-/* ============ SESSION ============ */
 function saveSession(){
   try {
     var data = {
@@ -896,7 +888,6 @@ function initFirebase(){
 
 function genRoomId(){ return 'GD-' + Math.random().toString(36).slice(2,7).toUpperCase(); }
 
-/* ==================== ONLINE ==================== */
 function startOnlineMatchmaking(){
   if (!isOnline){
     G.banner = '📴 NO INTERNET — ONLINE UNAVAILABLE';
@@ -1484,7 +1475,6 @@ function finishBotMatch(){
   else { beep(240,0.3,'sawtooth',0.10); }
 }
 
-/* ==================== SHOT BUTTONS / AUDIO ==================== */
 var shotButtons = [];
 function layoutShotButtons(){
   var bw = 132, bh = 46, gap = 12;
@@ -1676,7 +1666,6 @@ function rebuildMenuButtons(){
   }
 }
 
-/* ============ STATIC BG ============ */
 function buildSunSprite(){
   var r = 100;
   sunSprite = document.createElement('canvas');
@@ -1746,7 +1735,6 @@ function buildStaticBG(){
   buildSunSprite();
 }
 
-/* ============ CROWD ============ */
 function drawCrowdPerson(c, p, armRaise){
   var s = p.s;
   var headR = 4.6 * s, bodyH = 12.5 * s;
@@ -1837,7 +1825,6 @@ function initCrowd(){
   buildStaticBG();
 }
 
-/* ============ GAME FLOW ============ */
 function resetGulli(){ gulli.x = GULLI_START_X; gulli.y = GROUND_Y - 7; gulli.vx = 0; gulli.vy = 0; gulli.rot = 0; gulli.rotV = 0; gulli.grounded = true; }
 function resetFielders(){
   for (var i = 0; i < fielders.length; i++){
@@ -2068,7 +2055,6 @@ function advanceFromTurnEnd(){
   }
 }
 
-/* ============ PARTICLES ============ */
 function spawnBurst(x,y,acc){
   var n = 12 + Math.round(acc*16);
   for (var i=0;i<n;i++){
@@ -2111,7 +2097,6 @@ function updateParticles(dt){
   if (G.ring){ G.ring.t += dt*2.6; if (G.ring.t>=1) G.ring=null; }
 }
 
-/* ============ UPDATE ============ */
 function update(dt){
   NET.lastSync = (NET.lastSync || 0) + dt;
   if (NET.lastSync > 0.10 && NET.roomRef && NET.role && G.mode === 'online' && !NET.autopilot){
@@ -2344,7 +2329,6 @@ function update(dt){
   }
 }
 
-/* ============ INPUT ============ */
 function pointInButton(px, py, b){ return px>=b.x && px<=b.x+b.w && py>=b.y && py<=b.y+b.h; }
 function canvasCoordsFromEvent(e){ var r = canvas.getBoundingClientRect(); return { x:(e.clientX - r.left)*(W/r.width), y:(e.clientY - r.top)*(H/r.height) }; }
 function setShot(id){ if (G.shotType !== id){ G.shotType = id; beep(720, 0.05, 'sine', 0.06); } }
@@ -2688,7 +2672,6 @@ mobileInput.addEventListener('keydown', function(e){
   }
 });
 
-/* ============ DRAWING ============ */
 var clouds = [
   { x:140, y:58, s:0.9 }, { x:470, y:98, s:0.65 }, { x:780, y:50, s:0.85 }, { x:1120, y:105, s:0.55 }, { x:1420, y:72, s:0.8 }, { x:1850, y:90, s:0.7 }
 ];
@@ -4555,7 +4538,6 @@ function drawBotBattingOverlay(){
   centerText('Get ready for results...', 480, 14, 'rgba(255,209,102,0.8)');
 }
 
-/* ============ MAIN RENDER ============ */
 function draw(){
   ctx.clearRect(0,0,W,H);
   if (G.phase === 'splash'){ drawSplash(); return; }
@@ -4606,7 +4588,6 @@ function draw(){
   drawJoinPopup();
 }
 
-/* ============ HUD ============ */
 var uiScore = document.getElementById('uiScore');
 var uiBest = document.getElementById('uiBest');
 var uiOuts = document.getElementById('uiOuts');
@@ -4642,7 +4623,6 @@ function updateHUD(){
   }
 }
 
-/* ============ LOOP ============ */
 var last = performance.now();
 function loop(now){
   var dt = (now-last)/1000;
@@ -4659,16 +4639,47 @@ setTimeout(function(){ try{ playSplashChime(); }catch(e){} }, 120);
 requestAnimationFrame(loop);
 
 /* ================================================================
-   START GATE — any tap triggers fullscreen+landscape
+   START GATE — in-app browser + fullscreen + fallback
    ================================================================ */
 var fsStarted = false;
 var fsAttempts = 0;
+var autoProceedTimer = null;
 
 function isIOSSafari(){
   var ua = navigator.userAgent;
   var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var isSafari = /Safari/.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS/.test(ua);
   return isIOS && isSafari;
+}
+
+function isInAppBrowser(){
+  var ua = navigator.userAgent || '';
+  return /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Messenger|WhatsApp|Line\/|Snapchat|Twitter|TikTok|Bytedance|MicroMessenger|LinkedInApp|FBID/i.test(ua);
+}
+
+function finishStart(){
+  if (fsStarted) return;
+  fsStarted = true;
+  if (autoProceedTimer) clearTimeout(autoProceedTimer);
+
+  var tapText = startGate.querySelector('.sg-tap-text');
+  if (tapText) tapText.textContent = 'LOADING…';
+
+  startGate.classList.add('hide');
+  setTimeout(function(){ startGate.style.display = 'none'; }, 400);
+
+  try { lockLandscape(); } catch(e){}
+  try {
+    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){});
+  } catch(e){}
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    actx.resume();
+  } catch(e){}
+  try { if (typeof firebase !== 'undefined' && !NET.ready) initFirebase(); } catch(e){}
+
+  G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.7);
+  try { playSplashChime(); } catch(e){}
 }
 
 function triggerStart(){
@@ -4678,24 +4689,13 @@ function triggerStart(){
   var tapText = startGate.querySelector('.sg-tap-text');
   var el = document.documentElement;
 
-  // iOS Safari — fullscreen API for divs doesn't work. Skip it.
-  if (isIOSSafari()){
-    fsStarted = true;
+  // SKIP FULLSCREEN for iOS Safari + all in-app browsers
+  if (isIOSSafari() || isInAppBrowser()){
     if (tapText) tapText.textContent = 'LOADING…';
-    startGate.classList.add('hide');
-    setTimeout(function(){ startGate.style.display = 'none'; }, 400);
-    try { lockLandscape(); } catch(e){}
-    try {
-      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-      actx.resume();
-    } catch(e){}
-    try { if (typeof firebase !== 'undefined' && !NET.ready) initFirebase(); } catch(e){}
-    G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.7);
-    try { playSplashChime(); } catch(e){}
+    finishStart();
     return;
   }
 
-  // Try fullscreen — SYNCHRONOUS call
   var fsAttempted = false;
   try {
     if (el.requestFullscreen) {
@@ -4710,44 +4710,29 @@ function triggerStart(){
     }
   } catch(e){}
 
-  // Wait for fullscreen to apply
+  if (!fsAttempted){
+    finishStart();
+    return;
+  }
+
   setTimeout(function(){
     var fsOk = !!(document.fullscreenElement || document.webkitFullscreenElement);
 
-    // If first attempt failed and we tried fullscreen — allow retry once
-    if (!fsOk && fsAttempted && fsAttempts < 2){
+    if (fsOk){
+      document.body.classList.add('fs');
+      finishStart();
+      return;
+    }
+
+    if (fsAttempts < 2){
       if (tapText) tapText.textContent = 'TAP AGAIN';
       return;
     }
 
-    // Either worked OR 2nd attempt — PROCEED ANYWAY (fallback)
-    fsStarted = true;
-    if (tapText) tapText.textContent = 'LOADING…';
-
-    if (fsOk) document.body.classList.add('fs');
-
-    try { lockLandscape(); } catch(e){}
-
-    try {
-      if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){});
-    } catch(e){}
-
-    try {
-      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-      actx.resume();
-    } catch(e){}
-
-    try { if (typeof firebase !== 'undefined' && !NET.ready) initFirebase(); } catch(e){}
-
-    startGate.classList.add('hide');
-    setTimeout(function(){ startGate.style.display = 'none'; }, 400);
-
-    G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.7);
-    try { playSplashChime(); } catch(e){}
+    finishStart();
   }, 250);
 }
 
-/* ---------- PWA MODE: skip gate entirely ---------- */
 if (isStandalone){
   startGate.style.display = 'none';
   document.body.classList.add('fs');
@@ -4761,7 +4746,6 @@ if (isStandalone){
     G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.5);
   }, 100);
 } else {
-  /* ---------- BROWSER MODE: tap/touch/key triggers ---------- */
   startGate.addEventListener('click', function(){ triggerStart(); });
   startGate.addEventListener('touchend', function(){ triggerStart(); }, { passive: true });
   window.addEventListener('keydown', function(e){
@@ -4771,9 +4755,13 @@ if (isStandalone){
       e.preventDefault();
     }
   });
+
+  // Auto-proceed after 2.5s (user stuck nahi rahega)
+  autoProceedTimer = setTimeout(function(){
+    if (!fsStarted) finishStart();
+  }, 2500);
 }
 
-/* ---------- Fullscreen state sync ---------- */
 document.addEventListener('fullscreenchange', function(){
   if (document.fullscreenElement){
     document.body.classList.add('fs');
@@ -4783,14 +4771,12 @@ document.addEventListener('fullscreenchange', function(){
   }
 });
 
-/* ---------- Wake lock refresh ---------- */
 document.addEventListener('visibilitychange', function(){
   if (document.visibilityState === 'visible' && 'wakeLock' in navigator){
     navigator.wakeLock.request('screen').catch(function(){});
   }
 });
 
-/* ---------- Auto-relock orientation on rotate ---------- */
 window.addEventListener('orientationchange', function(){
   if (document.fullscreenElement) {
     setTimeout(function(){ lockLandscape().catch(function(){}); }, 300);
