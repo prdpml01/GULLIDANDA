@@ -179,6 +179,11 @@ var SPLASH_DURATION = 2.6, TOSS_DURATION = 2500, TOSS_RESULT_DURATION = 2400;
 var COIN_DIVISOR = 10;
 var SHARE_URL = 'https://gullidanda.co.in';
 
+// ✅ FIX: Missing constants
+var PLAYER_NAMES = ['YOU','P1','P2','P3','P4'];
+var PLAYER_COLORS = ['#e63946','#3a86ff','#06d6a0','#ffbe0b','#a06bff'];
+var CONFETTI_COLORS = ['#ffd166','#ff6b8a','#8affa0','#3a86ff','#ffbe0b','#ffffff','#ff8a8a','#a06bff'];
+
 /* ================================================================
    FIREBASE
    ================================================================ */
@@ -266,12 +271,11 @@ var SHOTS = {
   DRIVE: { vxBase:  980, vyBase: -580, label:'DRIVE', sub:'MID',   color:'#c99a2e' },
   LOFT:  { vxBase: 1380, vyBase: -840, label:'LOFT',  sub:'RISKY', color:'#a53939' }
 };
-// Har level pe +500 score target badhta hai
 function getLevelTarget(n){
-  n = Number(n); // Pehle number me convert karo
-  if (isNaN(n)) n = 1; // Agar NaN hai toh Level 1 maan lo
+  n = Number(n);
+  if (isNaN(n)) n = 1;
   n = Math.max(1, Math.floor(n));
-  return 500 * n;           // L1=500, L2=1000, L3=1500 ...
+  return 500 * n;
 }
 
 function getLevel(n){
@@ -293,6 +297,7 @@ function calcCoins(score, target){
   var isBonus = score >= 2 * target;
   return { base: base, bonus: isBonus, total: isBonus ? base * 2 : base };
 }
+
 /* ================================================================
    ACCOUNT
    ================================================================ */
@@ -1294,6 +1299,7 @@ function watchAutopilotRoom(){
     }
   });
 }
+// ✅ FIX: Added result and turnEnd to BATTING_PHASES
 var BATTING_PHASES = ['turnIntro','power','air','fly','fielding','throw','result','turnEnd'];
 function autoAcceptJoin(name){
   if (!NET.autopilot) return;
@@ -1455,8 +1461,7 @@ function hexA(hex, a){
 }
 
 /* ================================================================
-   MESSAGE 2 — PART 1
-   Background · Crowd · Game Flow · Particles · Update · Input · Scene Drawing
+   BACKGROUND · CROWD · GAME FLOW · PARTICLES · UPDATE · INPUT
    ================================================================ */
 function buildSunSprite(){
   var r = 100;
@@ -1661,20 +1666,26 @@ function buildFielders(){
     });
   }
 }
+// ✅ FIX: startSinglePlayer resets levelCleared and handles lock properly
 function startSinglePlayer(level){
   level = Math.max(1, Math.floor(level));
-  if (level > ACCOUNT.highestUnlockedLevel){ G.banner = 'LOCKED!'; G.bannerTimer = 2.2; beep(200, 0.2, 'sawtooth', 0.10); return; }
+  // Agar level clear ho chuka hai, toh lock check skip karo
+  if (level > ACCOUNT.highestUnlockedLevel && !G.levelCleared){
+    G.banner = 'LOCKED!'; G.bannerTimer = 2.2; beep(200, 0.2, 'sawtooth', 0.10); return;
+  }
   G.mode = 'single'; G.level = level;
+  G.levelCleared = false; // ✅ Reset levelCleared
   var skin = getActiveSkin();
   G.players = [{ name: ACCOUNT.name || 'YOU', color: skin.color, score:0, outs:0 }];
   G.currentPlayer = 0;
-  G.gameOverWinner = null; G.gameOverMsg = ''; G.levelCleared = false;
+  G.gameOverWinner = null; G.gameOverMsg = '';
   G.celebrationTimer = 0; G.confettiTimer = 0;
   G.coinsEarned = 0; G.coinsBonus = false;
   initCrowd(); prepareTurn();
 }
 function startMultiPlayer(count){
   G.mode = 'multi'; G.level = 1;
+  G.levelCleared = false;
   G.players = [];
   for (var i=0; i<count; i++){ G.players.push({ name: PLAYER_NAMES[i], color: PLAYER_COLORS[i], score:0, outs:0 }); }
   G.players[0].name = ACCOUNT.name || PLAYER_NAMES[0];
@@ -1932,6 +1943,7 @@ function update(dt){
     if (G.splashTimer >= SPLASH_DURATION){ bootAccount(); }
     return;
   }
+  // ✅ FIX: searching phase — forfeit check after searching block
   if (G.phase === 'searching' && NET.searching){
     var elapsed = performance.now() - NET.searchStart;
     var remaining = Math.max(0, 30 - Math.floor(elapsed / 1000));
@@ -1942,6 +1954,7 @@ function update(dt){
     NET.joinPopupTimer -= dt;
     if (NET.joinPopupTimer <= 0){ NET.joinPopup = null; NET.joinPopupTimer = 0; }
   }
+  // ✅ FIX: forfeit check runs regardless of phase (except splash)
   NET.forfeitTimer += dt;
   if (NET.forfeitTimer > 1){ NET.forfeitTimer = 0; checkOppForfeit(); }
   if (G.phase === 'turnEnd' && G.mode === 'online'){
@@ -2189,6 +2202,8 @@ function marketBuyLife(){
   playPurchaseSound(); G.marketMsg = 'Life purchased! Total: ' + ACCOUNT.lives; G.marketMsgTimer = 1.8;
 }
 function handleMenuClick(x, y){
+  // ✅ FIX: nameEntry — click anywhere commits name
+  if (G.phase === 'nameEntry'){ commitName(); return true; }
   if (G.phase === 'gameOver' && G.shareButtonRect){
     if (pointInButton(x, y, G.shareButtonRect)){ beep(880, 0.06, 'triangle', 0.09); openShareOverlay(); return true; }
   }
@@ -2262,10 +2277,14 @@ function handleMenuClick(x, y){
       if (b.id === 'back'){ setPhase('menu'); return true; }
       if (b.id === 'startBat'){ beginBatting(); return true; }
       if (b.id === 'continue'){ advanceFromTurnEnd(); return true; }
+      // ✅ FIX: nextLevel — level clear hone ke baad lock check skip
       if (b.id === 'nextLevel'){
         var next = G.level + 1;
-        if (next <= ACCOUNT.highestUnlockedLevel){ startSinglePlayer(next); }
-        else { G.banner = 'LOCKED!'; G.bannerTimer = 2; beep(200, 0.2, 'sawtooth', 0.10); }
+        if (!G.levelCleared && next > ACCOUNT.highestUnlockedLevel){
+          G.banner = 'LOCKED!'; G.bannerTimer = 2; beep(200, 0.2, 'sawtooth', 0.10);
+          return true;
+        }
+        startSinglePlayer(next);
         return true;
       }
       if (b.id === 'retry'){ startSinglePlayer(G.level); return true; }
@@ -3115,8 +3134,7 @@ function drawStar(cx, cy, outer, inner, points){
 }
 
 /* ================================================================
-   MESSAGE 2 — PART 2
-   Screens · Master draw() · Game loop
+   SCREENS · MASTER DRAW · GAME LOOP
    ================================================================ */
 function drawLeaderboard(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
@@ -3958,7 +3976,12 @@ function drawJoinPopup(){
    ================================================================ */
 function setPhase(p){
   G.phase = p;
-  G.shareButtonRect = (p === 'gameOver') ? { x: W - 160, y: 18, w: 130, h: 44 } : null;
+  // ✅ FIX: shareButtonRect only for onlineResults/single gameOver
+  if (p === 'gameOver'){
+    G.shareButtonRect = (G.mode === 'single' || G.mode === 'onlineResults') ? { x: W - 160, y: 18, w: 130, h: 44 } : null;
+  } else {
+    G.shareButtonRect = null;
+  }
   if (p === 'login' || p === 'register'){ ACCOUNT.formFocus = 'username'; suggestionsOpen = false; usernameSuggestions = []; }
   if (p === 'guest'){ ACCOUNT.formFocus = 'guestName'; }
   if (p === 'levelSelect'){ G.levelPage = Math.max(0, Math.floor((ACCOUNT.highestUnlockedLevel - 1) / 5)); }
