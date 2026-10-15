@@ -261,7 +261,11 @@ function getActiveBoost(){ return SHOP_BOOSTS.find(function(b){ return b.id === 
    LEVEL SYSTEM
    ================================================================ */
 var LEVEL_NAMES = ['ROOKIE','AMATEUR','PRO','EXPERT','LEGEND','MASTER','GRANDMASTER','CHAMPION','ELITE','SUPREME','TITAN','IMMORTAL','GODLIKE','UNSTOPPABLE','PHENOMENAL'];
-
+var SHOTS = {
+  PUSH:  { vxBase:  560, vyBase: -260, label:'PUSH',  sub:'SAFE',  color:'#3fa35a' },
+  DRIVE: { vxBase:  980, vyBase: -580, label:'DRIVE', sub:'MID',   color:'#c99a2e' },
+  LOFT:  { vxBase: 1380, vyBase: -840, label:'LOFT',  sub:'RISKY', color:'#a53939' }
+};
 // Har level pe +500 score target badhta hai
 function getLevelTarget(n){
   n = Number(n); // Pehle number me convert karo
