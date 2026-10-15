@@ -15,6 +15,9 @@
 <link rel="preconnect" href="https://gulli-danda-c4e39-default-rtdb.firebaseio.com" crossorigin>
 <!-- Auto Ads Code Yahan Daalo -->
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4410967458339869" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics-compat.js"></script>
 <style>
   html,body{margin:0;width:100%;height:100%;height:100dvh;
     background:radial-gradient(circle at 50% 0%, #2b3350 0%, #141824 70%);
@@ -230,18 +233,29 @@ async function lockLandscape(){
 
 async function enterFullscreen(){
   const el = document.documentElement;
+  let ok = false;
   try{
-    if (el.requestFullscreen)              await el.requestFullscreen({ navigationUI:'hide' });
-    else if (el.webkitRequestFullscreen)   el.webkitRequestFullscreen();
-    else if (el.msRequestFullscreen)       el.msRequestFullscreen();
-  }catch(e){}
-  document.body.classList.add('fs');
-  await lockLandscape();
-  try{
-    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
-  }catch(e){}
-}
+    if (el.requestFullscreen){
+      await el.requestFullscreen();               // ← navigationUI hataya (mobile pe fail karta tha)
+      ok = true;
+    } else if (el.webkitRequestFullscreen){
+      el.webkitRequestFullscreen();
+      ok = true;
+    } else if (el.msRequestFullscreen){
+      el.msRequestFullscreen();
+      ok = true;
+    }
+  }catch(e){ ok = false; }
 
+  if (ok){
+    document.body.classList.add('fs');
+    await lockLandscape();
+    try{
+      if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
+    }catch(e){}
+  }
+  return ok;
+}
 /* ================================================================
    SERVICE WORKER (Offline PWA)
    ================================================================ */
@@ -577,7 +591,20 @@ function registerUserAccount(username, password){
 }
 
 function loginUserAccount(username, password){
-  if (!NET.ready){ ACCOUNT.error = 'Network not ready'; return; }
+  if (!NET.ready){
+    // Firebase load hone ki koshish karo, phir retry
+    ACCOUNT.error = 'Connecting...';
+    try { if (typeof firebase !== 'undefined') initFirebase(); } catch(e){}
+    let tries = 0;
+    const retry = () => {
+      if (NET.ready){ ACCOUNT.error = ''; loginUserAccount(username, password); return; }
+      tries++;
+      if (tries > 15){ ACCOUNT.error = 'No internet — check connection'; ACCOUNT.loading = false; return; }
+      setTimeout(retry, 300);
+    };
+    setTimeout(retry, 300);
+    return;
+  }
   if (!isValidUsername(username)){ ACCOUNT.error = 'Enter a valid username'; return; }
   if (!isValidPassword(password)){ ACCOUNT.error = 'Enter your password'; return; }
   ACCOUNT.error = ''; ACCOUNT.loading = true;
@@ -4652,18 +4679,47 @@ requestAnimationFrame(loop);
 let fsStarted = false;
 async function triggerStart(){
   if (fsStarted) return;
-  if (window.matchMedia('(orientation: portrait) and (pointer: coarse)').matches) return;
-  fsStarted = true;
+
+  // Portrait me rok do (rotate gate handle karega)
+  if (window.matchMedia('(orientation: portrait)').matches){
+    // Koshish karo landscape lock karne ki — agar ho jaye to aage badho
+    try{
+      if (screen.orientation && screen.orientation.lock){
+        await screen.orientation.lock('landscape');
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }catch(e){}
+    if (window.matchMedia('(orientation: portrait)').matches) return;
+  }
+
   const tapText = startGate.querySelector('.sg-tap-text');
+
+  // FULLSCREEN — SYNCHRONOUS user gesture ke andar
+  const fsOk = await enterFullscreen();
+
+  // Agar fullscreen fail hua to user ko bolo phir tap karne ko
+  if (!fsOk){
+    if (tapText) tapText.textContent = 'TAP AGAIN';
+    return;   // fsStarted true nahi kar rahe — next tap pe retry hoga
+  }
+
+  fsStarted = true;
   if (tapText) tapText.textContent = 'LOADING…';
-  await enterFullscreen();
+
+  // Audio unlock
   try{
     if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
     actx.resume();
   }catch(e){}
-  preloadFirebase();
+
+  // Firebase load (agar nahi hua to)
+  try { if (typeof firebase !== 'undefined' && !NET.ready) initFirebase(); } catch(e){}
+
+  // Gate hide
   startGate.classList.add('hide');
   setTimeout(()=>{ startGate.style.display = 'none'; }, 400);
+
+  // Splash fast-forward
   G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.7);
   try{ playSplashChime(); }catch(e){}
 }
@@ -4681,11 +4737,14 @@ if (isStandalone){
     G.splashTimer = Math.max(G.splashTimer, SPLASH_DURATION - 0.5);
   }, 100);
 } else {
-  startGate.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    triggerStart();
-  }, { passive: false });
-}
+ // 'click' use karo — Chrome mobile me fullscreen gesture 'click' pe better kaam karta hai
+startGate.addEventListener('click', (e) => {
+  triggerStart();
+});
+// Aur touch ke liye bhi (double trigger nahi hoga — fsStarted check hai)
+startGate.addEventListener('touchend', (e) => {
+  triggerStart();
+}, { passive: true });
 
 document.addEventListener('fullscreenchange', () => {
   if (document.fullscreenElement){
