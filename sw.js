@@ -1,14 +1,6 @@
-/* ============================================================
-   GULLI DANDA — SERVICE WORKER
-   Offline cache + auto update
-   ============================================================ */
-
+/* GULLI DANDA — SERVICE WORKER (Offline PWA) */
 const CACHE_NAME = 'gulli-danda-v3';
-const CORE_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json'
-];
+const CORE_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -32,9 +24,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const req = event.request;
   const url = new URL(req.url);
-
   if (req.method !== 'GET') return;
-
   if (
     url.hostname.includes('firebase') ||
     url.hostname.includes('googleapis') ||
@@ -44,7 +34,6 @@ self.addEventListener('fetch', event => {
     url.hostname.includes('google-analytics') ||
     url.hostname.includes('pagead')
   ) return;
-
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
@@ -57,7 +46,6 @@ self.addEventListener('fetch', event => {
     );
     return;
   }
-
   if (url.origin === location.origin) {
     event.respondWith(
       caches.match(req).then(hit => {
@@ -73,7 +61,6 @@ self.addEventListener('fetch', event => {
     );
     return;
   }
-
   event.respondWith(
     caches.match(req).then(hit => {
       const netFetch = fetch(req).then(res => {
