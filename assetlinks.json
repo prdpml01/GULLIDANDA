@@ -1,8 +1,0 @@
-[{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "in.co.gullidanda.app",
-        "sha256_cert_fingerprints": ["0C:4C:E3:32:7E:C8:86:2C:4F:85:15:9F:61:4F:E4:A6:97:D1:42:C4:65:CD:24:79:62:49:8E:83:94:CB:01:5F"]
-      }
-    }]
