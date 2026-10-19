@@ -175,8 +175,60 @@
     display:none; align-items:center; justify-content:center; padding:0 4px;
   }
   #chatUnread.show{ display:flex; }
+
+  /* ============ GLOBAL BACK BUTTON ============ */
+  .gd-back-btn{
+    position:absolute; left:14px; top:14px; z-index:60;
+    width:56px; height:56px; border-radius:16px; border:2px solid rgba(255,255,255,0.35);
+    background:rgba(20,25,40,0.92); backdrop-filter:blur(8px);
+    color:#fff; font-size:26px; cursor:pointer; font-weight:900;
+    display:none; align-items:center; justify-content:center;
+    box-shadow:0 6px 20px rgba(0,0,0,0.5);
+    transition:transform .15s ease;
+  }
+  .gd-back-btn:active{ transform:scale(0.9); }
+  .gd-back-btn.show{ display:flex; }
+  .gd-back-btn:hover{ background:rgba(40,50,72,0.95); border-color:#ffd166; }
+
+  /* ============ FRONT SHARE BUTTON ============ */
+  #frontShareBtn{
+    position:absolute; right:14px; top:14px; z-index:55;
+    padding:10px 18px; border-radius:14px; border:0; cursor:pointer;
+    background:linear-gradient(180deg,#25D366,#128C7E);
+    color:#fff; font-weight:900; font-size:14px;
+    display:none; align-items:center; gap:8px;
+    box-shadow:0 6px 20px rgba(37,211,102,0.5), 0 0 0 2px rgba(255,255,255,0.15);
+    transition:transform .15s ease, box-shadow .2s ease;
+    animation:sharePulse 2.4s ease-in-out infinite;
+  }
+  #frontShareBtn.show{ display:flex; }
+  #frontShareBtn:active{ transform:scale(0.94); }
+  #frontShareBtn .bonus-badge{
+    background:#ffd166; color:#1a1206; border-radius:8px;
+    padding:2px 8px; font-size:11px; font-weight:900;
+    margin-left:4px;
+  }
+  @keyframes sharePulse{
+    0%,100%{ box-shadow:0 6px 20px rgba(37,211,102,0.5), 0 0 0 2px rgba(255,255,255,0.15); }
+    50%{ box-shadow:0 6px 28px rgba(37,211,102,0.9), 0 0 0 3px rgba(255,209,102,0.5); }
+  }
+
+  .sh-btn-return{
+    background:linear-gradient(180deg,#ffd166,#e0a82e);
+    color:#1a1206; font-weight:900;
+  }
+  .sh-bonus-line{
+    margin-top:8px; padding:8px 12px; border-radius:10px;
+    background:rgba(255,209,102,0.15); border:1px dashed rgba(255,209,102,0.6);
+    color:#ffd166; font-weight:900; font-size:13px;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+
   @media (max-width: 700px){
     #chatPanel{ width:250px; bottom:64px; }
+    #frontShareBtn{ padding:8px 14px; font-size:12px; }
+    #frontShareBtn .bonus-badge{ font-size:10px; padding:2px 6px; }
+    .gd-back-btn{ width:48px; height:48px; font-size:22px; }
   }
 </style>
 </head>
@@ -221,6 +273,14 @@
     <div id="chatVoiceIndicator">🔴 RECORDING…</div>
   </div>
   <button id="chatToggleBtn">💬<span id="chatUnread">0</span></button>
+
+  <!-- Global Back Button -->
+  <button class="gd-back-btn" id="gdBackBtn" title="Back">←</button>
+
+  <!-- Front Share Button -->
+  <button id="frontShareBtn" title="Share & Earn +50 coins">
+    📤 SHARE <span class="bonus-badge">+50🪙</span>
+  </button>
 </div>
 
 <div id="startGate">
@@ -252,12 +312,64 @@
       <button class="sh-btn sh-btn-primary" id="shWhatsApp"><span style="font-size:20px;">📱</span> Share on WhatsApp</button>
       <button class="sh-btn sh-btn-secondary" id="shMore"><span style="font-size:20px;">🌐</span> Share to Other Apps</button>
       <button class="sh-btn sh-btn-copy" id="shCopy"><span style="font-size:20px;">📋</span> Copy Score</button>
+      <button class="sh-btn sh-btn-return" id="shReturn">▶ Return to Game</button>
     </div>
+    <div class="sh-bonus-line">🎁 Share karo → instant <b>+50 🪙</b> bonus milega!</div>
     <button class="sh-close" id="shClose">Close</button>
   </div>
 </div>
 
 <div class="sh-copied-toast" id="shToast">✅ Copied!</div>
+
+<!-- ============ REWARDED AD OVERLAY ============ -->
+<div id="adOverlay" style="position:fixed;inset:0;z-index:10010;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.95);">
+  <div style="max-width:500px;width:92%;background:linear-gradient(180deg,#1e2740,#0f1420);border:1px solid rgba(255,209,102,0.5);border-radius:20px;padding:20px;text-align:center;">
+    <div style="font-size:11px;color:#ffd166;font-weight:900;letter-spacing:2px;">SPONSORED</div>
+    <div style="position:relative;margin:14px 0;padding-bottom:56%;background:#000;border-radius:12px;overflow:hidden;">
+      <div id="adVideo" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#2b3350,#1a1f33);color:#fff;font-size:20px;font-weight:900;text-align:center;padding:20px;">
+        <div>
+          <div style="font-size:60px;margin-bottom:10px;">📺</div>
+          <div id="adText">Your Ad Here</div>
+          <div style="font-size:12px;opacity:0.6;margin-top:8px;">(This is a placeholder ad)</div>
+        </div>
+      </div>
+      <div id="adTimer" style="position:absolute;bottom:12px;right:12px;background:rgba(0,0,0,0.8);color:#fff;padding:6px 14px;border-radius:20px;font-weight:900;font-size:14px;">5</div>
+    </div>
+    <button id="adSkipBtn" style="width:100%;padding:14px;border:0;border-radius:12px;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);font-weight:900;font-size:14px;cursor:not-allowed;" disabled>
+      Skip in <span id="adSkipCount">5</span>s
+    </button>
+  </div>
+</div>
+
+<!-- ============ BATTLE PASS OVERLAY ============ -->
+<div id="battlePassOverlay" style="position:fixed;inset:0;z-index:10008;display:none;background:rgba(5,7,13,0.95);backdrop-filter:blur(8px);overflow-y:auto;padding:20px;">
+  <div style="max-width:900px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="color:#ffd166;font-weight:900;font-size:28px;margin:0;">🎫 BATTLE PASS</h2>
+      <button id="bpCloseBtn" style="width:40px;height:40px;border:0;border-radius:10px;background:rgba(255,255,255,0.1);color:#fff;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div id="bpProgress" style="margin-bottom:20px;color:#fff;"></div>
+    <div id="bpTiers" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;"></div>
+  </div>
+</div>
+
+<!-- ============ SETTINGS OVERLAY ============ -->
+<div id="settingsOverlay" style="position:fixed;inset:0;z-index:10007;display:none;align-items:center;justify-content:center;background:rgba(5,7,13,0.94);backdrop-filter:blur(8px);padding:20px;">
+  <div style="max-width:440px;width:100%;background:linear-gradient(180deg,#1e2740,#0f1420);border:1px solid rgba(255,209,102,0.4);border-radius:20px;padding:24px;">
+    <h2 style="color:#ffd166;font-weight:900;font-size:24px;margin:0 0 20px 0;text-align:center;">⚙️ SETTINGS</h2>
+    <div id="settingsBody"></div>
+    <button id="settingsCloseBtn" style="width:100%;margin-top:20px;padding:14px;border:0;border-radius:12px;background:rgba(255,255,255,0.15);color:#fff;font-weight:900;font-size:15px;cursor:pointer;">CLOSE</button>
+  </div>
+</div>
+
+<!-- ============ LIVE STREAM INDICATOR ============ -->
+<div id="liveIndicator" style="position:fixed;top:80px;right:20px;z-index:10004;display:none;background:rgba(230,57,70,0.95);color:#fff;padding:6px 14px;border-radius:20px;font-weight:900;font-size:12px;box-shadow:0 4px 16px rgba(230,57,70,0.5);">
+  <span style="display:inline-block;width:8px;height:8px;background:#fff;border-radius:50%;margin-right:6px;animation:livePulse 1.2s infinite;"></span>
+  <span id="liveViewers">LIVE · 0</span>
+</div>
+<style>
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:0.3}}
+</style>
 
 <script>
 var sendEmojiSticker = function(){};
@@ -414,7 +526,8 @@ var ACCOUNT = {
   loading: false, error: '',
   formUsername: '', formPassword: '', formName: '',
   formFocus: 'username', mode: 'login', afterLoginAction: null,
-  pendingRoom: null
+  pendingRoom: null,
+  nextRewardDouble: false
 };
 
 var usernameSuggestions = [];
@@ -435,7 +548,8 @@ function saveSession(){
       ownedSkins: ACCOUNT.ownedSkins || ['red'], ownedDandas: ACCOUNT.ownedDandas || ['brown'],
       ownedBoosts: ACCOUNT.ownedBoosts || ['normal'],
       activeSkin: ACCOUNT.activeSkin || 'red', activeDanda: ACCOUNT.activeDanda || 'brown',
-      activeBoost: ACCOUNT.activeBoost || 'normal'
+      activeBoost: ACCOUNT.activeBoost || 'normal',
+      nextRewardDouble: ACCOUNT.nextRewardDouble || false
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(data));
   } catch(e){}
@@ -466,6 +580,7 @@ function applySessionToAccount(s){
   ACCOUNT.activeSkin  = s.activeSkin  || 'red';
   ACCOUNT.activeDanda = s.activeDanda || 'brown';
   ACCOUNT.activeBoost = s.activeBoost || 'normal';
+  ACCOUNT.nextRewardDouble = s.nextRewardDouble || false;
   ACCOUNT.loggedIn = true;
 }
 function normalizeUsername(u){ return String(u || '').toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 15); }
@@ -823,7 +938,8 @@ var G = {
   marketTab: 'skins', marketMsg: '', marketMsgTimer: 0,
   botScore: 0, botBattingTimer: 0, turnEndTimer: 0,
   shareButtonRect: null, phaseTimer: 0,
-  shareBonusGiven: false
+  shareBonusGiven: false,
+  frontShareBonusGiven: false
 };
 
 var gulli = { x:0, y:0, vx:0, vy:0, rot:0, rotV:0, grounded:true };
@@ -1209,7 +1325,6 @@ function watchRoom(){
     }
   });
 
-  // ============ CHAT LISTENER ============
   var chatRef = ref.child('chat/' + oppRole);
   chatRef.limitToLast(20).on('child_added', function(snap){
     var msg = snap.val();
@@ -1264,6 +1379,7 @@ function beginOnlineTurn(){
   G.gameOverWinner = null; G.gameOverMsg = ''; G.levelCleared = false;
   G.celebrationTimer = 0; G.confettiTimer = 0;
   G.shareBonusGiven = false;
+  G.frontShareBonusGiven = false;
   specReset(); initCrowd(); prepareTurn();
   chatToggleBtn.classList.add('show');
 }
@@ -1323,6 +1439,7 @@ function showOnlineResults(data){
   updateStatsOnline(myScore, myScore > oppScore);
   G.celebrationTimer = 0; G.confettiTimer = 0;
   G.shareBonusGiven = false;
+  G.frontShareBonusGiven = false;
   setPhase('gameOver');
   if (myScore >= oppScore){ crowdExcitement = 2; playCheer(1.4); }
   else { beep(240,0.3,'sawtooth',0.10); }
@@ -1350,7 +1467,6 @@ function cleanupOnline(){
   NET.autopilot = false; NET.autopilotStart = 0; NET.autopilotBot = null;
   NET.joinPopup = null; NET.joinPopupTimer = 0;
   specReset();
-  // chat reset
   CHAT.open = false;
   CHAT.unread = 0;
   CHAT.lastTs = 0;
@@ -1359,6 +1475,7 @@ function cleanupOnline(){
   chatToggleBtn.classList.remove('show');
   chatUnread.classList.remove('show');
   stopRecording(true);
+  if (STREAM.isLive) stopStreaming();
 }
 function startAutopilotMode(){
   if (!NET.searching || NET.autopilotStarting) return;
@@ -1492,18 +1609,10 @@ function finishBotMatch(){
    TEXT + VOICE CHAT (PG-style)
    ================================================================ */
 var CHAT = {
-  open: false,
-  unread: 0,
-  lastTs: 0,
-  voiceMode: false,
-  recording: false,
-  mediaRecorder: null,
-  audioChunks: [],
-  micStream: null,
-  currentAudio: null,
-  recStart: 0,
-  autoStopTimer: null,
-  MAX_VOICE_SEC: 15
+  open: false, unread: 0, lastTs: 0, voiceMode: false,
+  recording: false, mediaRecorder: null, audioChunks: [],
+  micStream: null, currentAudio: null, recStart: 0,
+  autoStopTimer: null, MAX_VOICE_SEC: 15
 };
 
 var chatPanel    = document.getElementById('chatPanel');
@@ -1553,12 +1662,7 @@ function sendTextMessage(text){
     appendChatBubble(NET.myName || 'YOU', text, true, Date.now());
     return;
   }
-  var payload = {
-    type: 'text',
-    text: text,
-    nm: NET.myName || 'YOU',
-    ts: Date.now()
-  };
+  var payload = { type: 'text', text: text, nm: NET.myName || 'YOU', ts: Date.now() };
   NET.roomRef.child('chat/' + NET.role).push(payload).catch(function(){});
   trimChatHistory();
   beep(1200, 0.05, 'triangle', 0.06);
@@ -1591,10 +1695,8 @@ function trimChatHistory(){
 function appendChatBubble(name, content, mine, ts, isVoice){
   var div = document.createElement('div');
   div.className = 'chat-msg ' + (mine ? 'mine' : 'theirs');
-
   var timeStr = new Date(ts || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   var whoStr = (name || (mine ? 'YOU' : 'OPP')) + '<span class="time">' + timeStr + '</span>';
-
   if (isVoice){
     div.innerHTML = '<span class="who">' + whoStr + '</span>' +
       '<div class="chat-voice-msg"><span>▶</span><div class="chat-wave">' +
@@ -1606,7 +1708,6 @@ function appendChatBubble(name, content, mine, ts, isVoice){
   } else {
     div.innerHTML = '<span class="who">' + whoStr + '</span>' + escapeHtml(content);
   }
-
   chatMessages.appendChild(div);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -1626,7 +1727,6 @@ function handleIncomingChat(msg){
   } else if (msg.type === 'text' && msg.text){
     appendChatBubble(msg.nm || 'OPP', msg.text, false, msg.ts);
   } else return;
-
   if (!CHAT.open){
     CHAT.unread++;
     chatUnread.textContent = CHAT.unread > 9 ? '9+' : String(CHAT.unread);
@@ -1648,13 +1748,11 @@ async function startRecording(){
     appendChatBubble('SYSTEM', 'Mic permission denied', false, Date.now());
     return;
   }
-
   var mime = '';
   var candidates = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus'];
   for (var i=0;i<candidates.length;i++){
     if (window.MediaRecorder && MediaRecorder.isTypeSupported(candidates[i])){ mime = candidates[i]; break; }
   }
-
   try{
     CHAT.mediaRecorder = new MediaRecorder(CHAT.micStream, mime ? { mimeType: mime } : undefined);
   } catch(e){
@@ -1662,7 +1760,6 @@ async function startRecording(){
     CHAT.micStream.getTracks().forEach(function(t){ t.stop(); });
     return;
   }
-
   CHAT.audioChunks = [];
   CHAT.mediaRecorder.ondataavailable = function(e){
     if (e.data && e.data.size > 0) CHAT.audioChunks.push(e.data);
@@ -1672,19 +1769,11 @@ async function startRecording(){
     CHAT.audioChunks = [];
     var dur = (Date.now() - CHAT.recStart) / 1000;
     if (dur < 0.5){ return; }
-
     var reader = new FileReader();
     reader.onloadend = function(){
       var base64 = reader.result;
-      var payload = {
-        type: 'voice',
-        audio: base64,
-        nm: NET.myName || 'YOU',
-        ts: Date.now(),
-        dur: Math.round(dur * 10) / 10
-      };
+      var payload = { type: 'voice', audio: base64, nm: NET.myName || 'YOU', ts: Date.now(), dur: Math.round(dur * 10) / 10 };
       appendChatBubble(NET.myName || 'YOU', base64, true, Date.now(), true);
-
       if (NET.roomRef && NET.role && G.mode === 'online'){
         NET.roomRef.child('chat/' + NET.role).push(payload).catch(function(){
           appendChatBubble('SYSTEM', 'Voice msg failed to send', false, Date.now());
@@ -1694,14 +1783,12 @@ async function startRecording(){
     };
     reader.readAsDataURL(blob);
   };
-
   CHAT.recording = true;
   CHAT.recStart = Date.now();
   chatMicBtn.classList.add('recording');
   chatVoiceInd.classList.add('on');
   chatVoiceInd.textContent = '🔴 RECORDING… release to send';
   CHAT.mediaRecorder.start();
-
   CHAT.autoStopTimer = setTimeout(function(){ stopRecording(false); }, CHAT.MAX_VOICE_SEC * 1000);
 }
 
@@ -1720,8 +1807,7 @@ function stopRecording(cancel){
   if (CHAT.micStream){ CHAT.micStream.getTracks().forEach(function(t){ t.stop(); }); CHAT.micStream = null; }
 }
 
-var micHoldStart = 0;
-function onMicDown(e){ e.preventDefault(); micHoldStart = Date.now(); startRecording(); }
+function onMicDown(e){ e.preventDefault(); startRecording(); }
 function onMicUp(e){ e.preventDefault(); if (CHAT.recording) stopRecording(false); }
 chatMicBtn.addEventListener('pointerdown', onMicDown);
 chatMicBtn.addEventListener('pointerup', onMicUp);
@@ -1841,6 +1927,556 @@ function shade(hex, amt){
 function hexA(hex, a){
   var n = parseInt(hex.slice(1),16);
   return 'rgba(' + (n>>16) + ',' + ((n>>8)&0xff) + ',' + (n&0xff) + ',' + a + ')';
+}
+
+/* ================================================================
+   SETTINGS + HAPTICS + ADS + BATTLE PASS + NOTIF + STREAM + GIF
+   ================================================================ */
+var SETTINGS = {
+  sound: localStorage.getItem('gd_sound') !== 'false',
+  music: localStorage.getItem('gd_music') !== 'false',
+  vibration: localStorage.getItem('gd_vibration') !== 'false',
+  haptics: localStorage.getItem('gd_haptics') !== 'false',
+  graphics: localStorage.getItem('gd_graphics') || 'high',
+  language: localStorage.getItem('gd_language') || 'en'
+};
+function saveSettings(){
+  localStorage.setItem('gd_sound', SETTINGS.sound);
+  localStorage.setItem('gd_music', SETTINGS.music);
+  localStorage.setItem('gd_vibration', SETTINGS.vibration);
+  localStorage.setItem('gd_haptics', SETTINGS.haptics);
+  localStorage.setItem('gd_graphics', SETTINGS.graphics);
+  localStorage.setItem('gd_language', SETTINGS.language);
+}
+function vibrate(pattern){
+  if (!SETTINGS.haptics || !SETTINGS.vibration) return;
+  try { if (navigator.vibrate){ navigator.vibrate(pattern); } } catch(e){}
+}
+function hapticHit(power){ vibrate(Math.round(30 + (power||1) * 50)); }
+function hapticOut(){ vibrate([100, 50, 100, 50, 200]); }
+function hapticWin(){ vibrate([50, 30, 50, 30, 50, 30, 200]); }
+function hapticCoin(){ vibrate([20, 20, 20]); }
+function hapticButton(){ vibrate(15); }
+
+var AD = { overlay: document.getElementById('adOverlay'), timer: document.getElementById('adTimer'), skipBtn: document.getElementById('adSkipBtn'), interval: null, onComplete: null, duration: 5 };
+function showRewardedAd(rewardLabel, onComplete){
+  AD.onComplete = onComplete;
+  AD.overlay.style.display = 'flex';
+  document.getElementById('adText').textContent = rewardLabel || 'Watch to earn reward!';
+  var sec = AD.duration;
+  AD.timer.textContent = sec;
+  AD.skipBtn.disabled = true;
+  AD.skipBtn.style.background = 'rgba(255,255,255,0.1)';
+  AD.skipBtn.style.color = 'rgba(255,255,255,0.5)';
+  AD.skipBtn.style.cursor = 'not-allowed';
+  AD.skipBtn.innerHTML = 'Skip in <span id="adSkipCount">' + sec + '</span>s';
+  clearInterval(AD.interval);
+  AD.interval = setInterval(function(){
+    sec--;
+    AD.timer.textContent = Math.max(0, sec);
+    var sc = document.getElementById('adSkipCount');
+    if (sc) sc.textContent = Math.max(0, sec);
+    if (sec <= 0){
+      clearInterval(AD.interval);
+      AD.skipBtn.disabled = false;
+      AD.skipBtn.style.background = 'linear-gradient(180deg,#8affa0,#5fbf7a)';
+      AD.skipBtn.style.color = '#0d2a14';
+      AD.skipBtn.style.cursor = 'pointer';
+      AD.skipBtn.innerHTML = '✅ CLAIM REWARD';
+      AD.skipBtn.onclick = function(){
+        AD.overlay.style.display = 'none';
+        if (AD.onComplete) AD.onComplete();
+        AD.onComplete = null;
+      };
+    }
+  }, 1000);
+}
+function openAdRewardsMenu(){
+  var menu = document.createElement('div');
+  menu.style.cssText = 'position:fixed;inset:0;z-index:10009;display:flex;align-items:center;justify-content:center;background:rgba(5,7,13,0.94);backdrop-filter:blur(8px);padding:20px;';
+  menu.innerHTML = '<div style="max-width:420px;width:100%;background:linear-gradient(180deg,#1e2740,#0f1420);border:1px solid rgba(255,209,102,0.5);border-radius:20px;padding:24px;">' +
+    '<h2 style="color:#ffd166;font-weight:900;font-size:22px;margin:0 0 8px 0;text-align:center;">📺 WATCH & EARN</h2>' +
+    '<p style="color:rgba(255,255,255,0.6);font-size:12px;text-align:center;margin-bottom:20px;">Watch 5s ad → instant reward</p>' +
+    '<div id="adRewardList"></div>' +
+    '<button id="adMenuClose" style="width:100%;margin-top:16px;padding:12px;border:0;border-radius:10px;background:rgba(255,255,255,0.15);color:#fff;font-weight:900;cursor:pointer;">CLOSE</button>' +
+    '</div>';
+  document.body.appendChild(menu);
+  var rewards = [
+    { icon:'🪙', label:'+100 Coins', desc:'Quick coin boost', color:'#ffd166', action:function(){ ACCOUNT.coins += 100; saveSession(); syncAccountStats(); hapticCoin(); beep(1200,0.15,'sine',0.12); G.banner='+100 🪙 AD REWARD!'; G.bannerTimer=3; } },
+    { icon:'❤️', label:'+1 Life', desc:'Extra life for single player', color:'#ff6b8a', action:function(){ ACCOUNT.lives++; saveSession(); syncAccountStats(); hapticWin(); beep(1400,0.15,'triangle',0.12); G.banner='+1 ❤️ AD REWARD!'; G.bannerTimer=3; } },
+    { icon:'⚡', label:'2x Next Reward', desc:'Double your next match coins', color:'#8affa0', action:function(){ ACCOUNT.nextRewardDouble = true; saveSession(); hapticWin(); beep(1600,0.15,'triangle',0.12); G.banner='⚡ 2x NEXT MATCH!'; G.bannerTimer=3; } }
+  ];
+  var list = document.getElementById('adRewardList');
+  rewards.forEach(function(r, i){
+    var btn = document.createElement('button');
+    btn.style.cssText = 'width:100%;display:flex;align-items:center;gap:14px;padding:14px;margin-bottom:10px;border:2px solid ' + r.color + '44;border-radius:12px;background:rgba(255,255,255,0.05);cursor:pointer;text-align:left;';
+    btn.innerHTML = '<span style="font-size:32px;">' + r.icon + '</span><div style="flex:1;"><div style="color:#fff;font-weight:900;font-size:15px;">' + r.label + '</div><div style="color:rgba(255,255,255,0.55);font-size:11px;">' + r.desc + '</div></div><span style="color:' + r.color + ';font-weight:900;font-size:20px;">▶</span>';
+    btn.addEventListener('click', function(){
+      menu.remove();
+      showRewardedAd(r.icon + ' ' + r.label, function(){ r.action(); });
+    });
+    list.appendChild(btn);
+  });
+  document.getElementById('adMenuClose').addEventListener('click', function(){ menu.remove(); });
+}
+
+var BATTLE_PASS = { season: 1, tiers: [], currentTier: 0, xp: 0, xpPerTier: 500, premium: false, claimed: [] };
+function initBattlePass(){
+  try {
+    var saved = JSON.parse(localStorage.getItem('gd_bp') || '{}');
+    BATTLE_PASS.currentTier = saved.currentTier || 0;
+    BATTLE_PASS.xp = saved.xp || 0;
+    BATTLE_PASS.premium = saved.premium || false;
+    BATTLE_PASS.claimed = saved.claimed || [];
+  } catch(e){ BATTLE_PASS.claimed = []; }
+  BATTLE_PASS.tiers = [
+    { free:{icon:'🪙',label:'100 Coins'}, premium:{icon:'🎨',label:'Gold Skin'} },
+    { free:{icon:'❤️',label:'+1 Life'}, premium:{icon:'🪙',label:'500 Coins'} },
+    { free:{icon:'🪙',label:'200 Coins'}, premium:{icon:'🏏',label:'Golden Danda'} },
+    { free:{icon:'⚡',label:'Boost 5%'}, premium:{icon:'🪙',label:'1000 Coins'} },
+    { free:{icon:'🪙',label:'300 Coins'}, premium:{icon:'🎨',label:'Royal Skin'} },
+    { free:{icon:'❤️',label:'+2 Lives'}, premium:{icon:'🪙',label:'1500 Coins'} },
+    { free:{icon:'🪙',label:'500 Coins'}, premium:{icon:'🏏',label:'Diamond Danda'} },
+    { free:{icon:'⚡',label:'Boost 10%'}, premium:{icon:'🎁',label:'Mystery Box'} },
+    { free:{icon:'🪙',label:'750 Coins'}, premium:{icon:'🪙',label:'2000 Coins'} },
+    { free:{icon:'🏆',label:'Season Badge'}, premium:{icon:'👑',label:'Legend Skin'} }
+  ];
+}
+function saveBattlePass(){
+  localStorage.setItem('gd_bp', JSON.stringify({
+    currentTier: BATTLE_PASS.currentTier,
+    xp: BATTLE_PASS.xp,
+    premium: BATTLE_PASS.premium,
+    claimed: BATTLE_PASS.claimed
+  }));
+}
+function addBattlePassXP(amount){
+  BATTLE_PASS.xp += amount;
+  while (BATTLE_PASS.xp >= BATTLE_PASS.xpPerTier && BATTLE_PASS.currentTier < BATTLE_PASS.tiers.length){
+    BATTLE_PASS.xp -= BATTLE_PASS.xpPerTier;
+    BATTLE_PASS.currentTier++;
+    G.banner = '🎫 BATTLE PASS TIER ' + BATTLE_PASS.currentTier + ' UNLOCKED!';
+    G.bannerTimer = 4;
+    hapticWin();
+    beep(1200, 0.15, 'triangle', 0.13);
+    setTimeout(function(){ beep(1600, 0.2, 'triangle', 0.13); }, 180);
+  }
+  saveBattlePass();
+}
+function claimBPTier(tierIdx, isPremium){
+  var key = tierIdx + '_' + (isPremium ? 'p' : 'f');
+  if (BATTLE_PASS.claimed.indexOf(key) >= 0) return false;
+  if (tierIdx > BATTLE_PASS.currentTier) return false;
+  if (isPremium && !BATTLE_PASS.premium) return false;
+  var reward = BATTLE_PASS.tiers[tierIdx - 1];
+  if (!reward) return false;
+  var r = isPremium ? reward.premium : reward.free;
+  if (r.label.indexOf('Coins') >= 0){
+    var amt = parseInt(r.label);
+    if (amt) ACCOUNT.coins += amt;
+  } else if (r.label.indexOf('Life') >= 0){
+    var lv = parseInt(r.label.replace(/[^0-9]/g,'')) || 1;
+    ACCOUNT.lives += lv;
+  }
+  ACCOUNT.ownedSkins = ACCOUNT.ownedSkins || ['red'];
+  ACCOUNT.ownedDandas = ACCOUNT.ownedDandas || ['brown'];
+  if (r.label.indexOf('Gold Skin') >= 0 && ACCOUNT.ownedSkins.indexOf('gold') < 0) ACCOUNT.ownedSkins.push('gold');
+  if (r.label.indexOf('Royal Skin') >= 0 && ACCOUNT.ownedSkins.indexOf('purple') < 0) ACCOUNT.ownedSkins.push('purple');
+  if (r.label.indexOf('Golden Danda') >= 0 && ACCOUNT.ownedDandas.indexOf('gold') < 0) ACCOUNT.ownedDandas.push('gold');
+  if (r.label.indexOf('Diamond Danda') >= 0 && ACCOUNT.ownedDandas.indexOf('diamond') < 0) ACCOUNT.ownedDandas.push('diamond');
+  BATTLE_PASS.claimed.push(key);
+  saveBattlePass();
+  saveSession(); syncAccountStats();
+  hapticCoin();
+  playPurchaseSound();
+  return true;
+}
+var battlePassOverlay = document.getElementById('battlePassOverlay');
+function openBattlePass(){
+  battlePassOverlay.style.display = 'block';
+  renderBattlePass();
+}
+function renderBattlePass(){
+  var prog = document.getElementById('bpProgress');
+  var pct = Math.round((BATTLE_PASS.xp / BATTLE_PASS.xpPerTier) * 100);
+  prog.innerHTML = '<div style="display:flex;justify-content:space-between;color:#fff;font-weight:900;font-size:13px;margin-bottom:8px;">' +
+    '<span>TIER ' + BATTLE_PASS.currentTier + ' / ' + BATTLE_PASS.tiers.length + '</span>' +
+    '<span>' + BATTLE_PASS.xp + ' / ' + BATTLE_PASS.xpPerTier + ' XP</span></div>' +
+    '<div style="height:12px;background:rgba(255,255,255,0.1);border-radius:6px;overflow:hidden;">' +
+    '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#ffd166,#e0a82e);border-radius:6px;"></div></div>' +
+    (BATTLE_PASS.premium ? '<div style="text-align:center;color:#ffd166;font-weight:900;margin-top:10px;">👑 PREMIUM UNLOCKED</div>' : '');
+  var container = document.getElementById('bpTiers');
+  container.innerHTML = '';
+  BATTLE_PASS.tiers.forEach(function(tier, i){
+    var tierNum = i + 1;
+    var unlocked = BATTLE_PASS.currentTier >= tierNum;
+    var freeClaimed = BATTLE_PASS.claimed.indexOf(tierNum + '_f') >= 0;
+    var premClaimed = BATTLE_PASS.claimed.indexOf(tierNum + '_p') >= 0;
+    var card = document.createElement('div');
+    card.style.cssText = 'background:rgba(20,26,42,0.9);border:2px solid ' + (unlocked ? '#ffd166' : 'rgba(255,255,255,0.1)') + ';border-radius:14px;padding:12px;' + (unlocked ? '' : 'opacity:0.5;');
+    card.innerHTML = '<div style="text-align:center;color:#ffd166;font-weight:900;font-size:14px;margin-bottom:8px;">TIER ' + tierNum + '</div>' +
+      '<div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:8px;margin-bottom:6px;text-align:center;">' +
+      '<div style="font-size:24px;">' + tier.free.icon + '</div>' +
+      '<div style="font-size:10px;color:rgba(255,255,255,0.7);">FREE</div>' +
+      '<div style="font-size:11px;color:#fff;font-weight:700;">' + tier.free.label + '</div>' +
+      '<button data-t="' + tierNum + '" data-p="0" style="width:100%;margin-top:6px;padding:5px;border:0;border-radius:6px;font-size:10px;font-weight:900;cursor:pointer;background:' + (freeClaimed ? 'rgba(255,255,255,0.1)' : (unlocked ? '#8affa0' : 'rgba(255,255,255,0.1)')) + ';color:' + (freeClaimed ? 'rgba(255,255,255,0.5)' : (unlocked ? '#0d2a14' : 'rgba(255,255,255,0.3)')) + ';">' + (freeClaimed ? 'CLAIMED' : (unlocked ? 'CLAIM' : 'LOCKED')) + '</button>' +
+      '</div>' +
+      '<div style="background:rgba(255,209,102,0.1);border:1px solid rgba(255,209,102,0.3);border-radius:8px;padding:8px;text-align:center;">' +
+      '<div style="font-size:24px;">' + tier.premium.icon + '</div>' +
+      '<div style="font-size:10px;color:#ffd166;">👑 PREMIUM</div>' +
+      '<div style="font-size:11px;color:#fff;font-weight:700;">' + tier.premium.label + '</div>' +
+      '<button data-t="' + tierNum + '" data-p="1" style="width:100%;margin-top:6px;padding:5px;border:0;border-radius:6px;font-size:10px;font-weight:900;cursor:pointer;background:' + (premClaimed ? 'rgba(255,255,255,0.1)' : (unlocked && BATTLE_PASS.premium ? '#ffd166' : 'rgba(255,255,255,0.1)')) + ';color:' + (premClaimed ? 'rgba(255,255,255,0.5)' : (unlocked && BATTLE_PASS.premium ? '#1a1206' : 'rgba(255,255,255,0.3)')) + ';">' + (premClaimed ? 'CLAIMED' : (!BATTLE_PASS.premium ? '👑 GET' : (unlocked ? 'CLAIM' : 'LOCKED'))) + '</button>' +
+      '</div>';
+    container.appendChild(card);
+  });
+  container.querySelectorAll('button[data-t]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var t = parseInt(btn.getAttribute('data-t'));
+      var isPrem = btn.getAttribute('data-p') === '1';
+      if (isPrem && !BATTLE_PASS.premium){
+        if (confirm('Unlock Premium Battle Pass for 1000 🪙?')){
+          if (ACCOUNT.coins >= 1000){ ACCOUNT.coins -= 1000; BATTLE_PASS.premium = true; saveBattlePass(); saveSession(); syncAccountStats(); renderBattlePass(); hapticWin(); }
+          else { alert('Not enough coins!'); }
+        }
+        return;
+      }
+      if (claimBPTier(t, isPrem)){ G.banner = '🎁 REWARD CLAIMED!'; G.bannerTimer = 2.5; renderBattlePass(); }
+    });
+  });
+}
+document.getElementById('bpCloseBtn').addEventListener('click', function(){ battlePassOverlay.style.display = 'none'; });
+
+var NOTIF = { permission: 'default', supported: 'Notification' in window };
+function initNotifications(){
+  if (!NOTIF.supported) return;
+  if (Notification.permission === 'granted'){ NOTIF.permission = 'granted'; }
+  else if (Notification.permission === 'denied'){ NOTIF.permission = 'denied'; }
+}
+function requestNotifPermission(){
+  if (!NOTIF.supported) return Promise.resolve(false);
+  if (Notification.permission === 'granted'){ NOTIF.permission = 'granted'; return Promise.resolve(true); }
+  return Notification.requestPermission().then(function(p){
+    NOTIF.permission = p;
+    if (p === 'granted'){ sendLocalNotif('🔔 Notifications ON!', 'Aapko ab updates milenge!'); return true; }
+    return false;
+  }).catch(function(){ return false; });
+}
+function sendLocalNotif(title, body, tag){
+  if (!NOTIF.supported || Notification.permission !== 'granted') return;
+  try { new Notification(title, { body: body, icon: '/apple-touch-icon.png', tag: tag || 'gd-general', badge: '/apple-touch-icon.png' }); } catch(e){}
+}
+function notifyFriendOnline(name){ sendLocalNotif('👤 ' + name + ' is online!', 'Challenge them now!', 'friend-online-' + name); }
+function notifyDailyChallenge(){ sendLocalNotif('📅 Daily Challenge Ready!', 'Complete today\'s challenge for bonus rewards!', 'daily-challenge'); }
+function notifyMatchInvite(name){ sendLocalNotif('🏏 Match Invite!', name + ' wants to challenge you!', 'match-invite'); }
+function notifyBattlePassExpiring(){ sendLocalNotif('🎫 Battle Pass Expiring!', 'Claim your rewards before season ends!', 'bp-expiring'); }
+function scheduleNotifications(){
+  setInterval(function(){
+    if (NET.roomRef && NET.role && G.mode === 'online') return;
+    var lastNotif = parseInt(localStorage.getItem('gd_last_notif') || '0', 10);
+    if (Date.now() - lastNotif > 24 * 60 * 60 * 1000){
+      localStorage.setItem('gd_last_notif', String(Date.now()));
+      notifyDailyChallenge();
+    }
+  }, 30 * 60 * 1000);
+}
+
+var STREAM = { isLive: false, viewers: 0, streamRef: null, streamId: null, liveDataRef: null, lastUpdate: 0, publicData: null };
+function startStreaming(){
+  if (!NET.ready || !NET.db) return;
+  if (STREAM.isLive) return;
+  STREAM.isLive = true;
+  STREAM.streamId = NET.roomId + '-' + Date.now();
+  STREAM.streamRef = NET.db.ref('live_streams/' + STREAM.streamId);
+  STREAM.streamRef.set({
+    host: NET.myName || ACCOUNT.name || 'PLAYER',
+    roomId: NET.roomId, startedAt: Date.now(), viewers: 0, active: true,
+    p1: NET.myName, p2: NET.oppName || 'OPPONENT'
+  }).catch(function(){});
+  STREAM.heartbeat = setInterval(function(){
+    if (!STREAM.isLive) return;
+    STREAM.streamRef.child('lastPing').set(Date.now()).catch(function(){});
+  }, 5000);
+  STREAM.liveDataRef = NET.db.ref('live_streams/' + STREAM.streamId + '/data');
+  STREAM.streamRef.child('viewers').on('value', function(snap){
+    STREAM.viewers = snap.val() || 0;
+    var el = document.getElementById('liveViewers');
+    if (el) el.textContent = 'LIVE · ' + STREAM.viewers;
+  });
+  var ind = document.getElementById('liveIndicator');
+  if (ind) ind.style.display = 'block';
+  G.banner = '🔴 LIVE STREAMING!';
+  G.bannerTimer = 3;
+  beep(1400, 0.2, 'triangle', 0.13);
+  hapticWin();
+}
+function stopStreaming(){
+  if (!STREAM.isLive) return;
+  STREAM.isLive = false;
+  if (STREAM.heartbeat) clearInterval(STREAM.heartbeat);
+  if (STREAM.streamRef){
+    STREAM.streamRef.update({ active: false, endedAt: Date.now() }).catch(function(){});
+    setTimeout(function(){ try { STREAM.streamRef.remove(); }catch(e){} }, 5000);
+  }
+  var ind = document.getElementById('liveIndicator');
+  if (ind) ind.style.display = 'none';
+  STREAM.viewers = 0;
+}
+function updateStreamData(){
+  if (!STREAM.isLive || !STREAM.liveDataRef) return;
+  STREAM.lastUpdate = performance.now();
+  var skin = getActiveSkin(), danda = getActiveDanda();
+  STREAM.liveDataRef.update({
+    score: G.score, outs: G.outs, phase: G.phase,
+    gulliX: Math.round(gulli.x), gulliY: Math.round(gulli.y),
+    gulliRot: Math.round(gulli.rot * 100) / 100,
+    playerX: PLAYER_X, camX: Math.round(camX),
+    skinColor: skin.color, dandaColor: danda.color, dandaAccent: danda.accent,
+    banner: G.banner || '', hitDistance: Math.round(G.hitDistance || 0),
+    power: Math.round(G.power), shotType: G.shotType,
+    fielders: fielders.map(function(f){ return { x: Math.round(f.x), moving: f.moving ? 1 : 0, facing: f.facing, color: f.color }; }),
+    ts: Date.now()
+  }).catch(function(){});
+}
+
+var GIF = { frames: [], recording: false, maxFrames: 60, frameInterval: 80, lastCapture: 0 };
+function startGIFRecording(){ GIF.frames = []; GIF.recording = true; GIF.lastCapture = 0; G.banner = '🎥 RECORDING HIGHLIGHT...'; G.bannerTimer = 2; }
+function stopGIFRecording(){ GIF.recording = false; }
+function captureGIFFrame(){
+  if (!GIF.recording) return;
+  if (GIF.frames.length >= GIF.maxFrames) return;
+  var now = performance.now();
+  if (now - GIF.lastCapture < GIF.frameInterval) return;
+  GIF.lastCapture = now;
+  try {
+    var frameCanvas = document.createElement('canvas');
+    frameCanvas.width = 480; frameCanvas.height = 270;
+    var fctx = frameCanvas.getContext('2d');
+    fctx.drawImage(canvas, 0, 0, 480, 270);
+    GIF.frames.push(frameCanvas.toDataURL('image/jpeg', 0.7));
+  } catch(e){}
+}
+function downloadReplayGIF(){
+  if (GIF.frames.length < 5){ alert('Not enough frames. Play a shot first!'); return; }
+  var win = window.open('', '_blank');
+  if (!win) { alert('Please allow popups'); return; }
+  win.document.write('<!DOCTYPE html><html><head><title>Gulli Danda Replay</title>' +
+    '<style>body{margin:0;background:#0a0d15;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:system-ui;}' +
+    'h1{color:#ffd166;font-size:24px;margin-bottom:16px;}canvas{border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.7);}' +
+    '.btns{display:flex;gap:12px;margin-top:20px;}button{padding:12px 24px;border:0;border-radius:12px;font-weight:900;cursor:pointer;font-size:15px;}' +
+    '.dl{background:#ffd166;color:#1a1206;}.share{background:#25D366;color:#fff;}</style></head><body>' +
+    '<h1>🏏 Gulli Danda Replay</h1><canvas id="g" width="480" height="270"></canvas>' +
+    '<div class="btns"><button class="dl" onclick="downloadPNG()">💾 Download</button>' +
+    '<button class="share" onclick="shareReplay()">📱 Share</button></div>' +
+    '<script>var frames=' + JSON.stringify(GIF.frames) + ';var idx=0;var c=document.getElementById("g");var ctx=c.getContext("2d");var imgs=[];var loaded=0;' +
+    'frames.forEach(function(src,i){var img=new Image();img.onload=function(){loaded++;if(loaded===frames.length)play();};img.src=src;imgs[i]=img;});' +
+    'function play(){ctx.drawImage(imgs[idx],0,0);idx=(idx+1)%imgs.length;setTimeout(play,80);}' +
+    'function downloadPNG(){var a=document.createElement("a");a.download="gulli-replay.png";a.href=imgs[idx].src;a.click();}' +
+    'function shareReplay(){if(navigator.share){navigator.share({title:"Gulli Danda Replay",text:"Dekho mera shot! 🏏"});}else{alert("Share not supported");}}' +
+    '<\/script></body></html>');
+  win.document.close();
+  trackEvent('gif_replay_downloaded', { frames: GIF.frames.length });
+}
+
+var settingsOverlay = document.getElementById('settingsOverlay');
+var settingsBody = document.getElementById('settingsBody');
+function openSettings(){
+  settingsOverlay.style.display = 'flex';
+  renderSettings();
+}
+function closeSettings(){ settingsOverlay.style.display = 'none'; }
+document.getElementById('settingsCloseBtn').addEventListener('click', closeSettings);
+function renderSettings(){
+  settingsBody.innerHTML = '';
+  var items = [
+    { key:'sound', label:'🔊 Sound Effects', type:'toggle' },
+    { key:'music', label:'🎵 Background Music', type:'toggle' },
+    { key:'haptics', label:'📳 Haptic Feedback', type:'toggle' },
+    { key:'vibration', label:'📳 Vibration', type:'toggle' },
+    { key:'graphics', label:'🎨 Graphics Quality', type:'select', options:[['low','Low'],['med','Medium'],['high','High']] },
+    { key:'language', label:'🌍 Language', type:'select', options:[['en','English'],['hi','हिन्दी']] }
+  ];
+  items.forEach(function(item){
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08);';
+    var lbl = document.createElement('span');
+    lbl.textContent = item.label;
+    lbl.style.cssText = 'color:#fff;font-weight:700;font-size:14px;';
+    row.appendChild(lbl);
+    if (item.type === 'toggle'){
+      var btn = document.createElement('button');
+      btn.textContent = SETTINGS[item.key] ? 'ON' : 'OFF';
+      btn.style.cssText = 'width:60px;height:32px;border:0;border-radius:16px;font-weight:900;font-size:12px;cursor:pointer;' +
+        (SETTINGS[item.key] ? 'background:#8affa0;color:#0d2a14;' : 'background:rgba(255,255,255,0.2);color:#fff;');
+      btn.addEventListener('click', function(){
+        SETTINGS[item.key] = !SETTINGS[item.key];
+        saveSettings();
+        btn.textContent = SETTINGS[item.key] ? 'ON' : 'OFF';
+        btn.style.background = SETTINGS[item.key] ? '#8affa0' : 'rgba(255,255,255,0.2)';
+        btn.style.color = SETTINGS[item.key] ? '#0d2a14' : '#fff';
+        beep(880, 0.05, 'triangle', 0.06);
+      });
+      row.appendChild(btn);
+    } else if (item.type === 'select'){
+      var sel = document.createElement('select');
+      sel.style.cssText = 'padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.3);background:rgba(20,25,40,0.9);color:#fff;font-weight:700;font-size:13px;';
+      item.options.forEach(function(opt){
+        var o = document.createElement('option');
+        o.value = opt[0]; o.textContent = opt[1];
+        if (SETTINGS[item.key] === opt[0]) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener('change', function(){ SETTINGS[item.key] = sel.value; saveSettings(); });
+      row.appendChild(sel);
+    }
+    settingsBody.appendChild(row);
+  });
+  var rewardRow = document.createElement('div');
+  rewardRow.style.cssText = 'margin-top:20px;display:flex;gap:10px;';
+  rewardRow.innerHTML = '<button id="openBPBtn" style="flex:1;padding:12px;border:0;border-radius:10px;background:linear-gradient(180deg,#ffd166,#e0a82e);color:#1a1206;font-weight:900;cursor:pointer;">🎫 BATTLE PASS</button>' +
+    '<button id="openAdsBtn" style="flex:1;padding:12px;border:0;border-radius:10px;background:linear-gradient(180deg,#8affa0,#5fbf7a);color:#0d2a14;font-weight:900;cursor:pointer;">📺 WATCH ADS</button>';
+  settingsBody.appendChild(rewardRow);
+  document.getElementById('openBPBtn').addEventListener('click', function(){ closeSettings(); openBattlePass(); });
+  document.getElementById('openAdsBtn').addEventListener('click', function(){ closeSettings(); openAdRewardsMenu(); });
+}
+
+/* ================================================================
+   UNIVERSAL BACK NAVIGATION + FRONT SHARE + RETURN TO GAME
+   ================================================================ */
+var gdBackBtn = document.getElementById('gdBackBtn');
+var frontShareBtn = document.getElementById('frontShareBtn');
+var shReturnBtn = document.getElementById('shReturn');
+
+var BACK_MAP = {
+  'levelSelect': 'menu',
+  'playerSelect': 'menu',
+  'market': 'menu',
+  'leaderboard': 'menu',
+  'profileView': 'menu',
+  'login': 'menu',
+  'register': 'login',
+  'guest': 'login',
+  'searching': 'menu'
+};
+var BACK_VISIBLE_PHASES = [
+  'levelSelect','playerSelect','market','leaderboard','profileView',
+  'login','register','guest','searching'
+];
+var SHARE_VISIBLE_PHASES = [
+  'power','air','fly','fielding','throw','result','turnEnd','turnIntro',
+  'gameOver','menu','waitingOpp','botBatting'
+];
+
+function updateNavButtons(){
+  var ph = G.phase;
+  if (BACK_VISIBLE_PHASES.indexOf(ph) >= 0){
+    gdBackBtn.classList.add('show');
+  } else {
+    gdBackBtn.classList.remove('show');
+  }
+  var isGameContext = (G.mode === 'single' || G.mode === 'multi' || G.mode === 'online' || G.mode === 'onlineResults');
+  if (SHARE_VISIBLE_PHASES.indexOf(ph) >= 0 && isGameContext && ph !== 'toss' && ph !== 'tossResult'){
+    frontShareBtn.classList.add('show');
+  } else {
+    frontShareBtn.classList.remove('show');
+  }
+}
+
+function handleBack(){
+  var ph = G.phase;
+  beep(660, 0.06, 'triangle', 0.08);
+  try { hapticButton(); } catch(e){}
+  if (ph === 'searching'){
+    NET.searching = false;
+    try { cleanupOnline(); } catch(e){}
+    setPhase('menu');
+    return;
+  }
+  if (ph === 'gameOver'){ return; }
+  if (ph === 'power' || ph === 'air' || ph === 'fly' || ph === 'fielding' ||
+      ph === 'throw' || ph === 'result' || ph === 'turnEnd' || ph === 'turnIntro' ||
+      ph === 'waitingOpp' || ph === 'botBatting'){
+    if (confirm('Match chhodna chahte ho? Progress lost ho jayega.')){
+      try { cleanupOnline(); } catch(e){}
+      G.mode = 'single';
+      setPhase('menu');
+    }
+    return;
+  }
+  var target = BACK_MAP[ph];
+  if (target){
+    if (target === 'menu'){ try { cleanupOnline(); } catch(e){} }
+    setPhase(target);
+    return;
+  }
+  if (['market','leaderboard','profileView','levelSelect','playerSelect','login','register','guest'].indexOf(ph) >= 0){
+    setPhase('menu');
+    return;
+  }
+}
+
+gdBackBtn.addEventListener('click', handleBack);
+gdBackBtn.addEventListener('touchstart', function(e){ e.preventDefault(); handleBack(); }, { passive: false });
+
+var backHistoryPushed = false;
+function pushBackHistory(){
+  if (!backHistoryPushed){
+    try { history.pushState({ gd: true }, '', location.href); backHistoryPushed = true; } catch(e){}
+  }
+}
+window.addEventListener('popstate', function(){
+  if (backHistoryPushed){ backHistoryPushed = false; pushBackHistory(); }
+  handleBack();
+});
+pushBackHistory();
+
+window.addEventListener('keydown', function(e){
+  if (e.key === 'Escape'){
+    var tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (G.phase !== 'splash' && G.phase !== 'menu'){ handleBack(); e.preventDefault(); }
+  }
+}, true);
+
+function showFloatingBonus(text){
+  var el = document.createElement('div');
+  el.textContent = text;
+  el.style.cssText = 'position:fixed;top:80px;right:20px;z-index:10020;' +
+    'background:linear-gradient(180deg,#ffd166,#e0a82e);color:#1a1206;' +
+    'font-weight:900;font-size:16px;padding:14px 24px;border-radius:14px;' +
+    'box-shadow:0 8px 24px rgba(0,0,0,0.5);transform:translateY(-20px);opacity:0;' +
+    'transition:all .3s ease;pointer-events:none;';
+  document.body.appendChild(el);
+  requestAnimationFrame(function(){ el.style.transform = 'translateY(0)'; el.style.opacity = '1'; });
+  setTimeout(function(){
+    el.style.transform = 'translateY(-20px)';
+    el.style.opacity = '0';
+    setTimeout(function(){ try{ document.body.removeChild(el); }catch(e){} }, 400);
+  }, 2200);
+}
+function giveShareBonus(reason){
+  var BONUS = 50;
+  ACCOUNT.coins += BONUS;
+  saveSession();
+  try { syncAccountStats(); } catch(e){}
+  try { playCoinSound(); } catch(e){}
+  try { hapticCoin(); } catch(e){}
+  showFloatingBonus('+50 🪙 SHARE BONUS!');
+  trackEvent('share_bonus_50', { reason: reason || 'unknown', mode: G.mode });
+  return BONUS;
+}
+
+frontShareBtn.addEventListener('click', function(e){
+  e.preventDefault();
+  try { hapticButton(); } catch(e){}
+  beep(880, 0.06, 'triangle', 0.09);
+  openShareOverlay();
+});
+
+if (shReturnBtn){
+  shReturnBtn.addEventListener('click', function(){
+    closeShare();
+    beep(1200, 0.08, 'triangle', 0.10);
+  });
 }
 
 /* ================================================================
@@ -2057,6 +2693,7 @@ function startSinglePlayer(level){
   G.mode = 'single'; G.level = level;
   G.levelCleared = false;
   G.shareBonusGiven = false;
+  G.frontShareBonusGiven = false;
   var skin = getActiveSkin();
   G.players = [{ name: ACCOUNT.name || 'YOU', color: skin.color, score:0, outs:0 }];
   G.currentPlayer = 0;
@@ -2069,6 +2706,7 @@ function startMultiPlayer(count){
   G.mode = 'multi'; G.level = 1;
   G.levelCleared = false;
   G.shareBonusGiven = false;
+  G.frontShareBonusGiven = false;
   G.players = [];
   for (var i=0; i<count; i++){ G.players.push({ name: PLAYER_NAMES[i], color: PLAYER_COLORS[i], score:0, outs:0 }); }
   G.players[0].name = ACCOUNT.name || PLAYER_NAMES[0];
@@ -2133,6 +2771,7 @@ function swing(){
   var cheerLevel = acc * (G.shotType === 'LOFT' ? 1.4 : G.shotType === 'DRIVE' ? 1.1 : 0.7);
   crowdExcitement = Math.max(crowdExcitement, 0.6 + cheerLevel * 1.0);
   playCheer(0.5 + acc * 0.9);
+  if (acc > 0.5){ hapticHit(acc); if (!GIF.recording) startGIFRecording(); setTimeout(function(){ stopGIFRecording(); }, 3000); }
   if (acc > 0.92) { sweep(900,1800,0.18,'triangle',0.13); G.banner='PERFECT!'; speakVoice("Kamaal ka shot!"); }
   else if (acc > 0.6) { beep(700,0.12,'triangle',0.11); G.banner='GREAT HIT!'; speakVoice("Dhuandaar hit!"); }
   else if (acc > 0.25) { beep(500,0.12,'triangle',0.09); G.banner='HIT'; speakVoice("Badiya shot!"); }
@@ -2149,6 +2788,7 @@ function missGulli(){
   beep(180,0.22,'sawtooth',0.09);
   crowdExcitement = 1.0; playCheer(0.6);
   speakVoice("Chook gaye! Out!");
+  hapticOut();
 }
 function beginFielding(){
   G.hitDistance = Math.max(0, (gulli.x - GULLI_START_X)/PPM);
@@ -2166,6 +2806,7 @@ function finishRound(){
   else { var pts = Math.round(G.hitDistance); G.score += pts; if (G.score > G.best) G.best = G.score; }
   G.phase = 'result';
   G.resultTimer = 2.4;
+  setTimeout(function(){ if (G.phase === 'result') stopGIFRecording(); }, 2500);
 }
 function nextRound(){
   if (G.outcome === 'out'){
@@ -2215,6 +2856,15 @@ function advanceFromTurnEnd(){
       saveSession(); syncAccountStats();
       G.banner = '🎉 +1 LIFE BONUS! (' + ACCOUNT.lives + ' ❤️)';
       G.bannerTimer = 3;
+      addBattlePassXP(50 + Math.floor(G.score / 10));
+      hapticWin();
+      if (ACCOUNT.nextRewardDouble){
+        ACCOUNT.coins += G.coinsEarned || 0;
+        ACCOUNT.nextRewardDouble = false;
+        saveSession(); syncAccountStats();
+        G.banner = '⚡ 2X REWARD APPLIED!';
+        G.bannerTimer = 3;
+      }
     }
     setPhase('gameOver');
     if (G.levelCleared){
@@ -2233,6 +2883,7 @@ function advanceFromTurnEnd(){
       G.celebrationTimer = 0; G.confettiTimer = 0;
       setPhase('gameOver');
       crowdExcitement = 2.0; playCheer(1.6);
+      hapticWin();
     } else { prepareTurn(); }
   }
 }
@@ -2309,6 +2960,13 @@ function update(dt){
       nm: NET.myName, fs: fs, ts: Date.now()
     }).catch(function(){});
   }
+  if (GIF.recording) captureGIFFrame();
+  if (STREAM.isLive && performance.now() - (STREAM.lastUpdate || 0) > 100) updateStreamData();
+  if (G.mode === 'online' && NET.roomRef && !STREAM.isLive && G.phase !== 'searching' && G.phase !== 'waitingOpp'){
+    if (G.phase === 'turnIntro' || G.phase === 'power') startStreaming();
+  }
+  if ((G.phase === 'gameOver' || G.phase === 'menu') && STREAM.isLive){ stopStreaming(); }
+
   if (G.bannerTimer>0) G.bannerTimer -= dt;
   if (G.swingTimer>0) G.swingTimer -= dt;
   if (G.marketMsgTimer>0) G.marketMsgTimer -= dt;
@@ -2338,12 +2996,7 @@ function update(dt){
   }
   NET.forfeitTimer += dt;
   if (NET.forfeitTimer > 1){ NET.forfeitTimer = 0; checkOppForfeit(); }
-
-  // Fix spectator camera on waitingOpp
-  if (G.phase === 'waitingOpp' && NET.oppLiveData){
-    camX = NET.oppLiveData.cx || 0;
-  }
-
+  if (G.phase === 'waitingOpp' && NET.oppLiveData){ camX = NET.oppLiveData.cx || 0; }
   if (G.phase === 'turnEnd' && G.mode === 'online'){
     G.turnEndTimer = (G.turnEndTimer || 0) + dt;
     if (G.turnEndTimer >= 2.2){ G.turnEndTimer = 0; advanceFromTurnEnd(); return; }
@@ -2435,6 +3088,7 @@ function update(dt){
               sweep(500,120,0.35,'sawtooth',0.13);
               crowdExcitement = 1.8; playCheer(1.3);
               speakVoice("Lapak liya! Catch out!");
+              hapticOut();
               finishRound(); return;
             }
           }
@@ -2495,6 +3149,7 @@ function update(dt){
             sweep(760,140,0.38,'sawtooth',0.14); beep(120,0.4,'sawtooth',0.10);
             crowdExcitement = 1.6; playCheer(1.1);
             speakVoice("Seedha dande pe! Wicket!");
+            hapticOut();
           } else {
             G.outcome='safe'; G.outReason=''; G.banner='SAFE!';
             spawnDust(gulli.x, GROUND_Y);
@@ -2632,11 +3287,14 @@ function handleMenuClick(x, y){
     var b = menuButtons[bi];
     if (pointInButton(x, y, b)){
       beep(880, 0.06, 'triangle', 0.09);
+      hapticButton();
       if (b.id === 'single'){ setPhase('levelSelect'); return true; }
       if (b.id === 'multi'){ setPhase('playerSelect'); return true; }
       if (b.id === 'online'){ startOnlineMatchmaking(); return true; }
       if (b.id === 'market'){ setPhase('market'); return true; }
       if (b.id === 'leaderboard'){ LEADERBOARD.data = null; fetchLeaderboard(); setPhase('leaderboard'); return true; }
+      if (b.id === 'settings'){ openSettings(); return true; }
+      if (b.id === 'battlePass'){ openBattlePass(); return true; }
       if (b.id === 'tab_skins'){ G.marketTab = 'skins'; return true; }
       if (b.id === 'tab_dandas'){ G.marketTab = 'dandas'; return true; }
       if (b.id === 'tab_boosts'){ G.marketTab = 'boosts'; return true; }
@@ -2792,6 +3450,7 @@ window.addEventListener('keydown', function(e){
     if (e.key==='5'){ LEADERBOARD.data = null; fetchLeaderboard(); setPhase('leaderboard'); e.preventDefault(); return; }
     if (e.key==='p' || e.key==='P'){ setPhase('profileView'); e.preventDefault(); return; }
     if (e.key==='l' || e.key==='L'){ cleanupOnline(); logoutUser(); e.preventDefault(); return; }
+    if (e.key==='s' || e.key==='S'){ openSettings(); e.preventDefault(); return; }
   }
   if (G.phase === 'market'){
     if (e.key==='Escape'){ setPhase('menu'); e.preventDefault(); return; }
@@ -3520,7 +4179,7 @@ function drawStar(cx, cy, outer, inner, points){
 }
 
 /* ================================================================
-   SCREENS · MASTER DRAW · GAME LOOP
+   SCREENS
    ================================================================ */
 function drawLeaderboard(){
   ctx.fillStyle = 'rgba(12,16,28,0.94)';
@@ -3825,18 +4484,12 @@ function drawWaitingOpp(){
   ctx.restore();
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
-
-/* ============ SPECTATOR VIEW (opponent live game) ============ */
 function drawSpectatorView(){
-  if (!NET.oppLiveData) {
-    drawWaitingOpp();
-    return;
-  }
+  if (!NET.oppLiveData) { drawWaitingOpp(); return; }
   var L = NET.oppLiveData;
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.fillRect(0,0,W,H);
-
   var bw = 440, bh = 54, bx = W/2 - bw/2, by = 14;
   rr(ctx, bx, by, bw, bh, 12);
   ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
@@ -3849,21 +4502,14 @@ function drawSpectatorView(){
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.fillText('SCORE: ' + (L.sc || 0) + '   OUTS: ' + (L.ou || 0) + '/1', W/2, by + 38);
   ctx.restore();
-
   if (L.fs && L.fs.length){
     for (var i = 0; i < L.fs.length; i++){
       var arr = L.fs[i];
       var oppCam = L.cx || 0;
-      var f = {
-        x: arr[0] + oppCam,
-        runPhase: arr[1], moving: !!arr[2], facing: arr[3],
-        speed: arr[4], color: arr[5], skin: arr[6], hair: arr[7],
-        number: arr[8], topSpeed: 600
-      };
+      var f = { x: arr[0] + oppCam, runPhase: arr[1], moving: !!arr[2], facing: arr[3], speed: arr[4], color: arr[5], skin: arr[6], hair: arr[7], number: arr[8], topSpeed: 600 };
       drawFielder(f);
     }
   }
-
   var ox = (L.gx || 0) - camX + (L.cx || 0);
   var oy = L.gy || 0;
   ctx.save();
@@ -3875,7 +4521,6 @@ function drawSpectatorView(){
   rr(ctx, -17, -4.5, 8, 9, 3.5); ctx.fill();
   rr(ctx, 9, -4.5, 8, 9, 3.5); ctx.fill();
   ctx.restore();
-
   var skinColor = L.sk || '#e63946';
   var px = PLAYER_X + (L.cx || 0) - camX;
   ctx.save();
@@ -3896,7 +4541,6 @@ function drawSpectatorView(){
   ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(104, 0); ctx.stroke();
   ctx.restore();
   ctx.restore();
-
   if (L.bd > 0 && L.ph === 'result'){
     ctx.save();
     ctx.font = '900 42px system-ui,sans-serif';
@@ -3905,7 +4549,6 @@ function drawSpectatorView(){
     ctx.fillText('+ ' + L.bd + ' m', W/2, 340);
     ctx.restore();
   }
-
   if (L.pw !== undefined && (L.ph === 'power' || L.ph === 'air')){
     ctx.save();
     var pbw = 300, pbh = 20, pbx = W/2 - pbw/2, pby = H - 90;
@@ -3921,11 +4564,9 @@ function drawSpectatorView(){
     ctx.fillText('OPPONENT POWER', W/2, pby - 8);
     ctx.restore();
   }
-
   ctx.restore();
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
-
 function drawToss(){
   ctx.fillStyle = 'rgba(10,14,24,0.94)';
   ctx.fillRect(0,0,W,H);
@@ -4221,6 +4862,20 @@ function drawGameOver(){
     ctx.restore();
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   }
+  if (GIF.frames.length >= 5){
+    var rx = W/2 - 240, ry = 460 + 68;
+    ctx.save();
+    rr(ctx, rx, ry, 220, 40, 10);
+    ctx.fillStyle = 'rgba(255,209,102,0.9)'; ctx.fill();
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = '900 14px system-ui,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#1a1206';
+    ctx.fillText('🎞️ SHARE REPLAY GIF', rx + 110, ry + 20);
+    ctx.restore();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    G.replayBtnRect = { x: rx, y: ry, w: 220, h: 40 };
+  }
 }
 function drawMenu(){
   var t = performance.now() / 1000;
@@ -4473,13 +5128,16 @@ function setPhase(p){
   if (p === 'levelSelect'){ G.levelPage = Math.max(0, Math.floor((ACCOUNT.highestUnlockedLevel - 1) / 5)); }
   if (p === 'market'){ G.marketTab = 'skins'; G.marketMsg = ''; }
   rebuildMenuButtons();
+  updateNavButtons();
 }
 function rebuildMenuButtons(){
   menuButtons = [];
   var ph = G.phase, cx = W/2;
   if (ph === 'menu'){
     var items = [['single','SINGLE PLAYER'],['multi','LOCAL MULTIPLAYER'],['online','🌐  PLAY ONLINE'],['market','🏪  MARKET'],['leaderboard','🏆  LEADERBOARD']];
-    items.forEach(function(it, i){ menuButtons.push({ id: it[0], label: it[1], x: cx - 190, y: 160 + i*52, w: 380, h: 44 }); });
+    items.forEach(function(it, i){ menuButtons.push({ id: it[0], label: it[1], x: cx - 190, y: 150 + i*46, w: 380, h: 40 }); });
+    menuButtons.push({ id:'settings', label:'⚙️  SETTINGS', x: cx - 190, y: 150 + 5*46 + 8, w: 190, h: 40 });
+    menuButtons.push({ id:'battlePass', label:'🎫  BATTLE PASS', x: cx + 8, y: 150 + 5*46 + 8, w: 182, h: 40 });
   }
   else if (ph === 'levelSelect'){
     if ((G.levelPage || 0) > 0) menuButtons.push({ id:'pagePrev', label:'◀ PREV', x: cx - 260, y: 390, w: 140, h: 42 });
@@ -4557,34 +5215,18 @@ function buildShareText(){
   else if (G.mode === 'multi' && G.players[G.gameOverWinner]){ score = G.players[G.gameOverWinner].score; who = G.players[G.gameOverWinner].name + ' ne '; }
   return '🏏 Gulli Danda me ' + who + 'maine ' + score + ' pts banaye! Tod ke dikhao 👉 ' + SHARE_URL;
 }
-function grantShareBonus(){
-  if (G.shareBonusGiven) return;
-  G.shareBonusGiven = true;
-  var bonus = 0;
-  if (G.mode === 'single' && G.levelCleared) bonus = 50 + G.level * 10;
-  else if (G.mode === 'onlineResults' && G.gameOverWinner === 0) bonus = 100;
-  else if (G.mode === 'multi') bonus = 50;
-  else bonus = 25;
-  if (bonus > 0){
-    ACCOUNT.coins += bonus;
-    G.coinsEarned = (G.coinsEarned || 0) + bonus;
-    saveSession();
-    try { syncAccountStats(); } catch(e){}
-    G.banner = '🎁 SHARE BONUS +' + bonus + ' 🪙';
-    G.bannerTimer = 3.5;
-    playCoinSound();
-    trackEvent('share_bonus', { bonus: bonus, mode: G.mode });
-  }
-}
 function openShareOverlay(){
   shText = buildShareText();
   var s = G.mode === 'single' ? G.score : (G.players[0] ? G.players[0].score : G.score);
   document.getElementById('shScore').textContent = s + ' pts';
   document.getElementById('shTitle').textContent = (G.levelCleared || G.gameOverWinner === 0) ? 'GREAT MATCH!' : 'NICE TRY!';
-  var subEl = document.querySelector('.sh-sub');
-  if (subEl && !G.shareBonusGiven){
-    subEl.innerHTML = 'Share your score with friends<br><span style="color:#ffd166;font-weight:900;">🎁 +50 🪙 LIVE BONUS!</span>';
+  var bonusLine = document.querySelector('.sh-bonus-line');
+  if (bonusLine){
+    bonusLine.style.display = 'flex';
+    if (G.frontShareBonusGiven){ bonusLine.innerHTML = '✅ Bonus already claimed this match'; }
+    else { bonusLine.innerHTML = '🎁 Share karo → instant <b>+50 🪙</b> bonus milega!'; }
   }
+  if (shReturnBtn) shReturnBtn.style.display = 'flex';
   shOverlay.classList.add('show');
   trackEvent('share_open', { mode: G.mode });
 }
@@ -4595,13 +5237,13 @@ function showToast(){
 }
 document.getElementById('shWhatsApp').addEventListener('click', function(){
   window.open('https://wa.me/?text=' + encodeURIComponent(shText), '_blank');
-  grantShareBonus();
+  if (!G.frontShareBonusGiven){ giveShareBonus('whatsapp'); G.frontShareBonusGiven = true; }
   trackEvent('share_whatsapp');
 });
 document.getElementById('shMore').addEventListener('click', function(){
   if (navigator.share){ navigator.share({ title: 'Gulli Danda', text: shText, url: SHARE_URL }).catch(function(){}); }
   else { window.open('https://wa.me/?text=' + encodeURIComponent(shText), '_blank'); }
-  grantShareBonus();
+  if (!G.frontShareBonusGiven){ giveShareBonus('more'); G.frontShareBonusGiven = true; }
 });
 document.getElementById('shCopy').addEventListener('click', function(){
   function fallback(){
@@ -4610,7 +5252,7 @@ document.getElementById('shCopy').addEventListener('click', function(){
   }
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(shText).then(showToast).catch(fallback);
   else fallback();
-  grantShareBonus();
+  if (!G.frontShareBonusGiven){ giveShareBonus('copy'); G.frontShareBonusGiven = true; }
 });
 document.getElementById('shClose').addEventListener('click', closeShare);
 
@@ -4633,7 +5275,7 @@ function draw(){
   if (G.players.length > 0) drawStadium();
   else { ctx.fillStyle = '#2a3142'; ctx.fillRect(0, STADIUM_TOP, W, STADIUM_BOTTOM - STADIUM_TOP); }
   drawField();
-  var f, i;
+  var i;
   if (ph === 'menu') drawMenu();
   else if (ph === 'levelSelect') drawLevelSelect();
   else if (ph === 'playerSelect') drawPlayerSelect();
@@ -4692,6 +5334,7 @@ function updateHUD(){
   var showChat = G.mode === 'online' && ['power','air','fly','fielding','throw','result','waitingOpp'].indexOf(G.phase) >= 0;
   chatBar.style.display = showChat ? 'flex' : 'none';
   updateChatVisibility();
+  updateNavButtons();
 }
 var last = performance.now(), roomJoinTried = false;
 function loop(now){
@@ -4709,7 +5352,7 @@ setTimeout(function(){ try{ playSplashChime(); }catch(e){} }, 120);
 requestAnimationFrame(loop);
 
 /* ================================================================
-   START GATE — fullscreen + landscape lock
+   START GATE
    ================================================================ */
 var startGate = document.getElementById('startGate');
 var isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
@@ -4787,6 +5430,21 @@ document.addEventListener('fullscreenchange', function(){
 document.addEventListener('visibilitychange', function(){
   if (document.visibilityState === 'visible' && 'wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){});
 });
+
+/* ================================================================
+   INIT
+   ================================================================ */
+initBattlePass();
+initNotifications();
+scheduleNotifications();
+
+window.openSettings = openSettings;
+window.openBattlePass = openBattlePass;
+window.openAdRewardsMenu = openAdRewardsMenu;
+window.downloadReplayGIF = downloadReplayGIF;
+window.requestNotifPermission = requestNotifPermission;
+window.startStreaming = startStreaming;
+window.stopStreaming = stopStreaming;
 
 })();
 </script>
