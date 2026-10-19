@@ -102,6 +102,82 @@
       transform:translate(-50%,-50%) rotate(90deg);
     }
   }
+
+  /* ============ CHAT PANEL (TEXT + VOICE) ============ */
+  #chatPanel{
+    position:absolute; right:14px; bottom:70px; width:290px;
+    display:none; flex-direction:column; z-index:40;
+    background:rgba(15,20,32,0.95); backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,0.22); border-radius:16px;
+    box-shadow:0 12px 40px rgba(0,0,0,0.7); overflow:hidden;
+    max-height:340px;
+  }
+  #chatPanel.open{ display:flex; }
+  #chatHeader{
+    display:flex; align-items:center; gap:6px; padding:8px 10px;
+    background:rgba(255,209,102,0.15); border-bottom:1px solid rgba(255,255,255,0.12);
+    flex-shrink:0;
+  }
+  #chatHeaderTitle{ flex:1; font-weight:900; font-size:12px; color:#ffd166; letter-spacing:1px; }
+  #chatVoiceBtn, #chatCloseBtn{
+    background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2);
+    border-radius:8px; width:28px; height:28px; cursor:pointer; color:#fff; font-size:14px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #chatVoiceBtn.active{ background:#25D366; border-color:#25D366; }
+  #chatMessages{
+    flex:1; max-height:200px; min-height:100px; overflow-y:auto; padding:8px;
+    display:flex; flex-direction:column; gap:6px; scrollbar-width:thin;
+  }
+  .chat-msg{
+    max-width:85%; padding:6px 10px; border-radius:12px; font-size:12px;
+    line-height:1.35; word-wrap:break-word; animation:chatPop .2s ease;
+  }
+  @keyframes chatPop{ from{transform:scale(0.85);opacity:0} to{transform:scale(1);opacity:1} }
+  .chat-msg.mine{ align-self:flex-end; background:rgba(255,209,102,0.85); color:#1a1206; border-bottom-right-radius:3px; }
+  .chat-msg.theirs{ align-self:flex-start; background:rgba(255,255,255,0.1); color:#fff; border-bottom-left-radius:3px; }
+  .chat-msg .who{ font-size:9px; font-weight:900; opacity:0.7; margin-bottom:2px; display:block; }
+  .chat-msg .time{ font-size:9px; opacity:0.55; margin-left:6px; font-weight:600; }
+  .chat-voice-msg{ display:flex; align-items:center; gap:6px; cursor:pointer; padding:2px 0; }
+  .chat-voice-msg.playing{ background:rgba(255,209,102,0.25) !important; }
+  .chat-wave{ display:flex; gap:2px; align-items:center; height:16px; }
+  .chat-wave span{ width:2px; background:currentColor; border-radius:1px; }
+  #chatInputRow{ display:flex; gap:4px; padding:6px; border-top:1px solid rgba(255,255,255,0.1); flex-shrink:0; }
+  #chatInput{
+    flex:1; padding:7px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.2);
+    background:rgba(20,25,40,0.9); color:#fff; font-size:12px; outline:none; min-width:0;
+  }
+  #chatInput:focus{ border-color:#ffd166; }
+  #chatSendBtn, #chatMicBtn{
+    width:34px; height:34px; border-radius:10px; border:0; cursor:pointer;
+    background:rgba(255,255,255,0.1); color:#fff; font-size:15px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #chatSendBtn{ background:#ffd166; color:#1a1206; }
+  #chatMicBtn.recording{ background:#e63946; animation:micPulse 1s infinite; }
+  @keyframes micPulse{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
+  #chatVoiceIndicator{
+    display:none; padding:8px; text-align:center; font-weight:900;
+    font-size:11px; color:#ff8a8a; background:rgba(230,57,70,0.15);
+  }
+  #chatVoiceIndicator.on{ display:block; }
+  #chatToggleBtn{
+    position:absolute; right:14px; bottom:14px; width:52px; height:52px;
+    border-radius:50%; border:0; cursor:pointer; z-index:35;
+    background:linear-gradient(180deg,#ffd166,#e0a82e); color:#1a1206;
+    font-size:22px; box-shadow:0 6px 20px rgba(0,0,0,0.5);
+    display:none; align-items:center; justify-content:center;
+  }
+  #chatToggleBtn.show{ display:flex; }
+  #chatUnread{
+    position:absolute; top:-4px; right:-4px; background:#e63946; color:#fff;
+    font-size:10px; font-weight:900; min-width:18px; height:18px; border-radius:9px;
+    display:none; align-items:center; justify-content:center; padding:0 4px;
+  }
+  #chatUnread.show{ display:flex; }
+  @media (max-width: 700px){
+    #chatPanel{ width:250px; bottom:64px; }
+  }
 </style>
 </head>
 <body>
@@ -128,6 +204,23 @@
     <button class="sticker-btn" onclick="sendEmojiSticker('🎯')">🎯</button>
     <button class="sticker-btn" onclick="sendEmojiSticker('😱')">😱</button>
   </div>
+
+  <!-- ============ TEXT + VOICE CHAT PANEL ============ -->
+  <div id="chatPanel">
+    <div id="chatHeader">
+      <span id="chatHeaderTitle">💬 CHAT</span>
+      <button id="chatVoiceBtn" title="Voice chat">🎤</button>
+      <button id="chatCloseBtn" title="Close">✕</button>
+    </div>
+    <div id="chatMessages"></div>
+    <div id="chatInputRow">
+      <button id="chatMicBtn" title="Hold to talk">🎙️</button>
+      <input id="chatInput" type="text" maxlength="80" placeholder="Message..." autocomplete="off">
+      <button id="chatSendBtn">➤</button>
+    </div>
+    <div id="chatVoiceIndicator">🔴 RECORDING…</div>
+  </div>
+  <button id="chatToggleBtn">💬<span id="chatUnread">0</span></button>
 </div>
 
 <div id="startGate">
@@ -187,7 +280,6 @@ var SPLASH_DURATION = 2.6, TOSS_DURATION = 2500, TOSS_RESULT_DURATION = 2400;
 var COIN_DIVISOR = 10;
 var SHARE_URL = 'https://gullidanda.co.in';
 
-// ✅ FIX: Missing constants
 var PLAYER_NAMES = ['YOU','P1','P2','P3','P4'];
 var PLAYER_COLORS = ['#e63946','#3a86ff','#06d6a0','#ffbe0b','#a06bff'];
 var CONFETTI_COLORS = ['#ffd166','#ff6b8a','#8affa0','#3a86ff','#ffbe0b','#ffffff','#ff8a8a','#a06bff'];
@@ -730,7 +822,8 @@ var G = {
   splashTimer: 0, coinsEarned: 0, coinsBonus: false,
   marketTab: 'skins', marketMsg: '', marketMsgTimer: 0,
   botScore: 0, botBattingTimer: 0, turnEndTimer: 0,
-  shareButtonRect: null, phaseTimer: 0
+  shareButtonRect: null, phaseTimer: 0,
+  shareBonusGiven: false
 };
 
 var gulli = { x:0, y:0, vx:0, vy:0, rot:0, rotV:0, grounded:true };
@@ -757,9 +850,9 @@ var NET = {
   ready: false, db: null, roomId: null, role: null,
   myName: '', oppName: '', oppScore: null,
   oppDone: false, myDone: false,
-  roomRef: null, listener: null,
+  roomRef: null, listener: null, chatRef: null,
   searching: false, searchStart: 0, statusMsg: 'Searching...',
-  oppLive: null, liveRef: null, lastSync: 0,
+  oppLive: null, oppLiveData: null, liveRef: null, lastSync: 0,
   tossWinner: null, currentBatsman: null,
   tossStartTime: 0, tossResultStart: 0,
   tossDecided: false, turnHandedOver: false,
@@ -871,7 +964,7 @@ function startOnlineMatchmaking(){
   }
   NET.myName = ACCOUNT.name;
   NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppName = '';
-  NET.oppLive = null; NET.tossWinner = null; NET.currentBatsman = null;
+  NET.oppLive = null; NET.oppLiveData = null; NET.tossWinner = null; NET.currentBatsman = null;
   NET.tossDecided = false; NET.turnHandedOver = false;
   NET.autopilot = false; NET.autopilotStart = 0; NET.autopilotBot = null;
   NET.joinPopup = null; NET.joinPopupTimer = 0;
@@ -919,6 +1012,8 @@ function detachRoomListeners(){
   if (NET.listener && NET.roomRef){ try{ NET.roomRef.off('value', NET.listener); }catch(e){} }
   NET.listener = null;
   if (NET.liveRef){ try{ NET.liveRef.off(); }catch(e){} NET.liveRef = null; }
+  if (NET.chatRef){ try{ NET.chatRef.off(); }catch(e){} NET.chatRef = null; }
+  if (CHAT.currentAudio){ try{ CHAT.currentAudio.pause(); }catch(e){} CHAT.currentAudio = null; }
 }
 function armLeaveFlag(){
   try{
@@ -963,7 +1058,7 @@ function onJoined(id, room){
   NET.searching = false;
   NET.tossDecided = false; NET.tossWinner = null; NET.currentBatsman = null;
   NET.round = room.round || 1;
-  NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppLive = null; NET.oppLeft = false;
+  NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppLive = null; NET.oppLiveData = null; NET.oppLeft = false;
   NET.statusMsg = 'Joined ' + (NET.oppName || 'player') + '...';
   NET.leaveArmed = true; armLeaveFlag();
   specReset(); watchRoom();
@@ -1070,7 +1165,7 @@ function watchRoom(){
         if (!cur.p1 || !cur.p2 || cur.p2.isBot) return;
         var w = Math.random() < 0.5 ? 'p1' : 'p2';
         cur.round = myRound + 1; cur.tossWinner = w; cur.currentBatsman = w;
-        cur.skipToss = null; cur.live = null; cur.rematch = null;
+        cur.skipToss = null; cur.live = null; cur.rematch = null; cur.chat = null;
         cur.p1.score = 0; cur.p1.done = false; cur.p1.left = null;
         cur.p2.score = 0; cur.p2.done = false; cur.p2.left = null;
         return cur;
@@ -1105,6 +1200,7 @@ function watchRoom(){
   NET.liveRef.on('value', function(snap){
     var val = snap.val();
     NET.oppLive = val;
+    NET.oppLiveData = val;
     NET.oppLiveAt = performance.now();
     if (val && val.sticker && (!NET.lastStickerTime || val.sticker.ts > NET.lastStickerTime)){
       NET.lastStickerTime = val.sticker.ts;
@@ -1112,10 +1208,18 @@ function watchRoom(){
       beep(980, 0.08, 'triangle', 0.1);
     }
   });
+
+  // ============ CHAT LISTENER ============
+  var chatRef = ref.child('chat/' + oppRole);
+  chatRef.limitToLast(20).on('child_added', function(snap){
+    var msg = snap.val();
+    if (msg && window.__handleIncomingChat) window.__handleIncomingChat(msg);
+  });
+  NET.chatRef = chatRef;
 }
 function startNextRound(data, dr){
   NET.round = dr;
-  NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppLive = null;
+  NET.myDone = false; NET.oppDone = false; NET.oppScore = null; NET.oppLive = null; NET.oppLiveData = null;
   NET.turnHandedOver = false; NET.rematchSent = false; NET.oppRematch = false;
   NET.roundStarting = false; NET.botResult = false; NET.forfeitWin = false;
   NET.tossWinner = data.tossWinner || 'p1';
@@ -1159,7 +1263,9 @@ function beginOnlineTurn(){
   G.currentPlayer = 0;
   G.gameOverWinner = null; G.gameOverMsg = ''; G.levelCleared = false;
   G.celebrationTimer = 0; G.confettiTimer = 0;
+  G.shareBonusGiven = false;
   specReset(); initCrowd(); prepareTurn();
+  chatToggleBtn.classList.add('show');
 }
 function reportOnlineScore(score){
   if (!NET.roomRef && !NET.autopilot) return;
@@ -1216,6 +1322,7 @@ function showOnlineResults(data){
   if (G.gameOverWinner === 0) NET.series.me++; else if (G.gameOverWinner === 1) NET.series.opp++;
   updateStatsOnline(myScore, myScore > oppScore);
   G.celebrationTimer = 0; G.confettiTimer = 0;
+  G.shareBonusGiven = false;
   setPhase('gameOver');
   if (myScore >= oppScore){ crowdExcitement = 2; playCheer(1.4); }
   else { beep(240,0.3,'sawtooth',0.10); }
@@ -1236,13 +1343,22 @@ function cleanupOnline(){
     }).catch(function(){});
   }
   resetMatchFlags();
-  NET.oppLive = null; NET.roomId = null; NET.role = null; NET.oppName = '';
+  NET.oppLive = null; NET.oppLiveData = null; NET.roomId = null; NET.role = null; NET.oppName = '';
   NET.oppScore = null; NET.oppDone = false; NET.myDone = false; NET.roomRef = null;
   NET.tossWinner = null; NET.currentBatsman = null;
   NET.tossDecided = false; NET.turnHandedOver = false;
   NET.autopilot = false; NET.autopilotStart = 0; NET.autopilotBot = null;
   NET.joinPopup = null; NET.joinPopupTimer = 0;
   specReset();
+  // chat reset
+  CHAT.open = false;
+  CHAT.unread = 0;
+  CHAT.lastTs = 0;
+  chatPanel.classList.remove('open');
+  chatMessages.innerHTML = '';
+  chatToggleBtn.classList.remove('show');
+  chatUnread.classList.remove('show');
+  stopRecording(true);
 }
 function startAutopilotMode(){
   if (!NET.searching || NET.autopilotStarting) return;
@@ -1307,13 +1423,12 @@ function watchAutopilotRoom(){
     }
   });
 }
-// ✅ FIX: Added result and turnEnd to BATTING_PHASES
 var BATTING_PHASES = ['turnIntro','power','air','fly','fielding','throw','result','turnEnd'];
 function autoAcceptJoin(name){
   if (!NET.autopilot) return;
   NET.autopilot = false; NET.autopilotBot = null;
   NET.oppName = name;
-  NET.oppDone = false; NET.oppScore = null; NET.oppLive = null; NET.oppLeft = false;
+  NET.oppDone = false; NET.oppScore = null; NET.oppLive = null; NET.oppLiveData = null; NET.oppLeft = false;
   NET.tossDecided = true; NET.botResult = false;
   NET.series = { me: 0, opp: 0 };
   NET.round = NET.round || 1;
@@ -1372,6 +1487,266 @@ function finishBotMatch(){
   if (myScore >= oppScore){ crowdExcitement = 2; playCheer(1.4); }
   else { beep(240,0.3,'sawtooth',0.10); }
 }
+
+/* ================================================================
+   TEXT + VOICE CHAT (PG-style)
+   ================================================================ */
+var CHAT = {
+  open: false,
+  unread: 0,
+  lastTs: 0,
+  voiceMode: false,
+  recording: false,
+  mediaRecorder: null,
+  audioChunks: [],
+  micStream: null,
+  currentAudio: null,
+  recStart: 0,
+  autoStopTimer: null,
+  MAX_VOICE_SEC: 15
+};
+
+var chatPanel    = document.getElementById('chatPanel');
+var chatMessages = document.getElementById('chatMessages');
+var chatInput    = document.getElementById('chatInput');
+var chatSendBtn  = document.getElementById('chatSendBtn');
+var chatMicBtn   = document.getElementById('chatMicBtn');
+var chatVoiceBtn = document.getElementById('chatVoiceBtn');
+var chatCloseBtn = document.getElementById('chatCloseBtn');
+var chatToggleBtn= document.getElementById('chatToggleBtn');
+var chatUnread   = document.getElementById('chatUnread');
+var chatVoiceInd = document.getElementById('chatVoiceIndicator');
+
+function openChat(){
+  CHAT.open = true;
+  chatPanel.classList.add('open');
+  chatToggleBtn.classList.remove('show');
+  CHAT.unread = 0;
+  chatUnread.classList.remove('show');
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+function closeChat(){
+  CHAT.open = false;
+  chatPanel.classList.remove('open');
+  if (G.mode === 'online') chatToggleBtn.classList.add('show');
+  stopRecording(true);
+}
+chatCloseBtn.addEventListener('click', closeChat);
+chatToggleBtn.addEventListener('click', openChat);
+
+function updateChatVisibility(){
+  var online = (G.mode === 'online');
+  var activePhase = ['power','air','fly','fielding','throw','result','turnEnd','turnIntro','waitingOpp','botBatting','toss','tossResult'].indexOf(G.phase) >= 0;
+  if (online && activePhase){
+    chatToggleBtn.classList.add('show');
+  } else {
+    chatToggleBtn.classList.remove('show');
+    if (CHAT.open) closeChat();
+  }
+}
+
+function sendTextMessage(text){
+  if (!text) return;
+  text = text.trim().slice(0, 80);
+  if (!text) return;
+  if (!NET.roomRef || !NET.role || G.mode !== 'online'){
+    appendChatBubble(NET.myName || 'YOU', text, true, Date.now());
+    return;
+  }
+  var payload = {
+    type: 'text',
+    text: text,
+    nm: NET.myName || 'YOU',
+    ts: Date.now()
+  };
+  NET.roomRef.child('chat/' + NET.role).push(payload).catch(function(){});
+  trimChatHistory();
+  beep(1200, 0.05, 'triangle', 0.06);
+}
+chatSendBtn.addEventListener('click', function(){
+  sendTextMessage(chatInput.value);
+  chatInput.value = '';
+  chatInput.focus();
+});
+chatInput.addEventListener('keydown', function(e){
+  if (e.key === 'Enter'){ sendTextMessage(chatInput.value); chatInput.value = ''; e.preventDefault(); }
+  e.stopPropagation();
+});
+
+function trimChatHistory(){
+  if (!NET.roomRef || !NET.role) return;
+  NET.roomRef.child('chat/' + NET.role).limitToLast(40).once('value').then(function(snap){
+    var count = 0;
+    snap.forEach(function(){ count++; });
+    if (count > 40){
+      var toDelete = count - 40;
+      var i = 0;
+      snap.forEach(function(child){
+        if (i++ < toDelete) NET.roomRef.child('chat/' + NET.role + '/' + child.key).remove().catch(function(){});
+      });
+    }
+  }).catch(function(){});
+}
+
+function appendChatBubble(name, content, mine, ts, isVoice){
+  var div = document.createElement('div');
+  div.className = 'chat-msg ' + (mine ? 'mine' : 'theirs');
+
+  var timeStr = new Date(ts || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  var whoStr = (name || (mine ? 'YOU' : 'OPP')) + '<span class="time">' + timeStr + '</span>';
+
+  if (isVoice){
+    div.innerHTML = '<span class="who">' + whoStr + '</span>' +
+      '<div class="chat-voice-msg"><span>▶</span><div class="chat-wave">' +
+      '<span style="height:60%"></span><span style="height:100%"></span><span style="height:40%"></span>' +
+      '<span style="height:80%"></span><span style="height:55%"></span></div><span>🎤</span></div>';
+    div.querySelector('.chat-voice-msg').addEventListener('click', function(){
+      playVoiceMessage(content, div.querySelector('.chat-voice-msg'));
+    });
+  } else {
+    div.innerHTML = '<span class="who">' + whoStr + '</span>' + escapeHtml(content);
+  }
+
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+function handleIncomingChat(msg){
+  if (!msg || !msg.ts) return;
+  if (msg.ts <= CHAT.lastTs) return;
+  CHAT.lastTs = msg.ts;
+  if (msg.type === 'voice' && msg.audio){
+    appendChatBubble(msg.nm || 'OPP', msg.audio, false, msg.ts, true);
+  } else if (msg.type === 'text' && msg.text){
+    appendChatBubble(msg.nm || 'OPP', msg.text, false, msg.ts);
+  } else return;
+
+  if (!CHAT.open){
+    CHAT.unread++;
+    chatUnread.textContent = CHAT.unread > 9 ? '9+' : String(CHAT.unread);
+    chatUnread.classList.add('show');
+    chatToggleBtn.classList.add('show');
+  }
+  beep(1600, 0.06, 'triangle', 0.08);
+}
+
+async function startRecording(){
+  if (CHAT.recording) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    appendChatBubble('SYSTEM', 'Voice not supported on this device', false, Date.now());
+    return;
+  }
+  try{
+    CHAT.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(err){
+    appendChatBubble('SYSTEM', 'Mic permission denied', false, Date.now());
+    return;
+  }
+
+  var mime = '';
+  var candidates = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus'];
+  for (var i=0;i<candidates.length;i++){
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(candidates[i])){ mime = candidates[i]; break; }
+  }
+
+  try{
+    CHAT.mediaRecorder = new MediaRecorder(CHAT.micStream, mime ? { mimeType: mime } : undefined);
+  } catch(e){
+    appendChatBubble('SYSTEM', 'Recorder error', false, Date.now());
+    CHAT.micStream.getTracks().forEach(function(t){ t.stop(); });
+    return;
+  }
+
+  CHAT.audioChunks = [];
+  CHAT.mediaRecorder.ondataavailable = function(e){
+    if (e.data && e.data.size > 0) CHAT.audioChunks.push(e.data);
+  };
+  CHAT.mediaRecorder.onstop = async function(){
+    var blob = new Blob(CHAT.audioChunks, { type: mime || 'audio/webm' });
+    CHAT.audioChunks = [];
+    var dur = (Date.now() - CHAT.recStart) / 1000;
+    if (dur < 0.5){ return; }
+
+    var reader = new FileReader();
+    reader.onloadend = function(){
+      var base64 = reader.result;
+      var payload = {
+        type: 'voice',
+        audio: base64,
+        nm: NET.myName || 'YOU',
+        ts: Date.now(),
+        dur: Math.round(dur * 10) / 10
+      };
+      appendChatBubble(NET.myName || 'YOU', base64, true, Date.now(), true);
+
+      if (NET.roomRef && NET.role && G.mode === 'online'){
+        NET.roomRef.child('chat/' + NET.role).push(payload).catch(function(){
+          appendChatBubble('SYSTEM', 'Voice msg failed to send', false, Date.now());
+        });
+        trimChatHistory();
+      }
+    };
+    reader.readAsDataURL(blob);
+  };
+
+  CHAT.recording = true;
+  CHAT.recStart = Date.now();
+  chatMicBtn.classList.add('recording');
+  chatVoiceInd.classList.add('on');
+  chatVoiceInd.textContent = '🔴 RECORDING… release to send';
+  CHAT.mediaRecorder.start();
+
+  CHAT.autoStopTimer = setTimeout(function(){ stopRecording(false); }, CHAT.MAX_VOICE_SEC * 1000);
+}
+
+function stopRecording(cancel){
+  if (!CHAT.recording) return;
+  CHAT.recording = false;
+  clearTimeout(CHAT.autoStopTimer);
+  chatMicBtn.classList.remove('recording');
+  chatVoiceInd.classList.remove('on');
+  try{
+    if (CHAT.mediaRecorder && CHAT.mediaRecorder.state !== 'inactive'){
+      if (cancel){ CHAT.audioChunks = []; CHAT.mediaRecorder.onstop = null; }
+      CHAT.mediaRecorder.stop();
+    }
+  }catch(e){}
+  if (CHAT.micStream){ CHAT.micStream.getTracks().forEach(function(t){ t.stop(); }); CHAT.micStream = null; }
+}
+
+var micHoldStart = 0;
+function onMicDown(e){ e.preventDefault(); micHoldStart = Date.now(); startRecording(); }
+function onMicUp(e){ e.preventDefault(); if (CHAT.recording) stopRecording(false); }
+chatMicBtn.addEventListener('pointerdown', onMicDown);
+chatMicBtn.addEventListener('pointerup', onMicUp);
+chatMicBtn.addEventListener('pointerleave', function(e){ if (CHAT.recording) stopRecording(true); });
+chatMicBtn.addEventListener('pointercancel', function(e){ if (CHAT.recording) stopRecording(true); });
+
+function playVoiceMessage(base64, el){
+  if (CHAT.currentAudio){ try{ CHAT.currentAudio.pause(); }catch(e){} }
+  if (!base64 || !base64.startsWith('data:audio')) return;
+  var audio = new Audio(base64);
+  CHAT.currentAudio = audio;
+  el.classList.add('playing');
+  audio.play().catch(function(){});
+  audio.onended = function(){ el.classList.remove('playing'); CHAT.currentAudio = null; };
+  audio.onerror = function(){ el.classList.remove('playing'); CHAT.currentAudio = null; };
+}
+
+chatVoiceBtn.addEventListener('click', function(){
+  var on = !chatVoiceBtn.classList.contains('active');
+  chatVoiceBtn.classList.toggle('active', on);
+  if (on){ chatVoiceInd.classList.add('on'); chatVoiceInd.textContent = '🎤 Hold mic to talk'; }
+  else if (!CHAT.recording){ chatVoiceInd.classList.remove('on'); }
+});
+
+window.__handleIncomingChat = handleIncomingChat;
 
 /* ================================================================
    SHOT BUTTONS + AUDIO
@@ -1674,15 +2049,14 @@ function buildFielders(){
     });
   }
 }
-// ✅ FIX: startSinglePlayer resets levelCleared and handles lock properly
 function startSinglePlayer(level){
   level = Math.max(1, Math.floor(level));
-  // Agar level clear ho chuka hai, toh lock check skip karo
   if (level > ACCOUNT.highestUnlockedLevel && !G.levelCleared){
     G.banner = 'LOCKED!'; G.bannerTimer = 2.2; beep(200, 0.2, 'sawtooth', 0.10); return;
   }
   G.mode = 'single'; G.level = level;
-  G.levelCleared = false; // ✅ Reset levelCleared
+  G.levelCleared = false;
+  G.shareBonusGiven = false;
   var skin = getActiveSkin();
   G.players = [{ name: ACCOUNT.name || 'YOU', color: skin.color, score:0, outs:0 }];
   G.currentPlayer = 0;
@@ -1694,6 +2068,7 @@ function startSinglePlayer(level){
 function startMultiPlayer(count){
   G.mode = 'multi'; G.level = 1;
   G.levelCleared = false;
+  G.shareBonusGiven = false;
   G.players = [];
   for (var i=0; i<count; i++){ G.players.push({ name: PLAYER_NAMES[i], color: PLAYER_COLORS[i], score:0, outs:0 }); }
   G.players[0].name = ACCOUNT.name || PLAYER_NAMES[0];
@@ -1951,7 +2326,6 @@ function update(dt){
     if (G.splashTimer >= SPLASH_DURATION){ bootAccount(); }
     return;
   }
-  // ✅ FIX: searching phase — forfeit check after searching block
   if (G.phase === 'searching' && NET.searching){
     var elapsed = performance.now() - NET.searchStart;
     var remaining = Math.max(0, 30 - Math.floor(elapsed / 1000));
@@ -1962,9 +2336,14 @@ function update(dt){
     NET.joinPopupTimer -= dt;
     if (NET.joinPopupTimer <= 0){ NET.joinPopup = null; NET.joinPopupTimer = 0; }
   }
-  // ✅ FIX: forfeit check runs regardless of phase (except splash)
   NET.forfeitTimer += dt;
   if (NET.forfeitTimer > 1){ NET.forfeitTimer = 0; checkOppForfeit(); }
+
+  // Fix spectator camera on waitingOpp
+  if (G.phase === 'waitingOpp' && NET.oppLiveData){
+    camX = NET.oppLiveData.cx || 0;
+  }
+
   if (G.phase === 'turnEnd' && G.mode === 'online'){
     G.turnEndTimer = (G.turnEndTimer || 0) + dt;
     if (G.turnEndTimer >= 2.2){ G.turnEndTimer = 0; advanceFromTurnEnd(); return; }
@@ -2210,7 +2589,6 @@ function marketBuyLife(){
   playPurchaseSound(); G.marketMsg = 'Life purchased! Total: ' + ACCOUNT.lives; G.marketMsgTimer = 1.8;
 }
 function handleMenuClick(x, y){
-  // ✅ FIX: nameEntry — click anywhere commits name
   if (G.phase === 'nameEntry'){ commitName(); return true; }
   if (G.phase === 'gameOver' && G.shareButtonRect){
     if (pointInButton(x, y, G.shareButtonRect)){ beep(880, 0.06, 'triangle', 0.09); openShareOverlay(); return true; }
@@ -2285,7 +2663,6 @@ function handleMenuClick(x, y){
       if (b.id === 'back'){ setPhase('menu'); return true; }
       if (b.id === 'startBat'){ beginBatting(); return true; }
       if (b.id === 'continue'){ advanceFromTurnEnd(); return true; }
-      // ✅ FIX: nextLevel — level clear hone ke baad lock check skip
       if (b.id === 'nextLevel'){
         var next = G.level + 1;
         if (!G.levelCleared && next > ACCOUNT.highestUnlockedLevel){
@@ -2399,6 +2776,7 @@ function handleAuthKey(e){
   }
 }
 window.addEventListener('keydown', function(e){
+  if (e.target === chatInput || e.target === chatInput.parentElement) return;
   if (G.phase === 'splash'){ if (e.code==='Space'||e.code==='Enter'||e.key===' '){ onInput(null); e.preventDefault(); } return; }
   if (G.phase === 'login' || G.phase === 'register' || G.phase === 'guest'){ handleAuthKey(e); return; }
   if (G.phase === 'toss' || G.phase === 'tossResult'){ return; }
@@ -3447,6 +3825,107 @@ function drawWaitingOpp(){
   ctx.restore();
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
+
+/* ============ SPECTATOR VIEW (opponent live game) ============ */
+function drawSpectatorView(){
+  if (!NET.oppLiveData) {
+    drawWaitingOpp();
+    return;
+  }
+  var L = NET.oppLiveData;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(0,0,W,H);
+
+  var bw = 440, bh = 54, bx = W/2 - bw/2, by = 14;
+  rr(ctx, bx, by, bw, bh, 12);
+  ctx.fillStyle = 'rgba(20,25,40,0.9)'; ctx.fill();
+  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.font = '900 14px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffd166';
+  ctx.fillText('👁  WATCHING: ' + (NET.oppName || 'OPPONENT') + '  •  ' + (L.lb || L.ph || ''), W/2, by + 18);
+  ctx.font = '800 13px system-ui,sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillText('SCORE: ' + (L.sc || 0) + '   OUTS: ' + (L.ou || 0) + '/1', W/2, by + 38);
+  ctx.restore();
+
+  if (L.fs && L.fs.length){
+    for (var i = 0; i < L.fs.length; i++){
+      var arr = L.fs[i];
+      var oppCam = L.cx || 0;
+      var f = {
+        x: arr[0] + oppCam,
+        runPhase: arr[1], moving: !!arr[2], facing: arr[3],
+        speed: arr[4], color: arr[5], skin: arr[6], hair: arr[7],
+        number: arr[8], topSpeed: 600
+      };
+      drawFielder(f);
+    }
+  }
+
+  var ox = (L.gx || 0) - camX + (L.cx || 0);
+  var oy = L.gy || 0;
+  ctx.save();
+  ctx.translate(ox, oy);
+  ctx.rotate(L.gr || 0);
+  ctx.fillStyle = L.dn || '#c08544';
+  rr(ctx, -17, -4.5, 34, 9, 4.5); ctx.fill();
+  ctx.fillStyle = L.da || '#8a5a2b';
+  rr(ctx, -17, -4.5, 8, 9, 3.5); ctx.fill();
+  rr(ctx, 9, -4.5, 8, 9, 3.5); ctx.fill();
+  ctx.restore();
+
+  var skinColor = L.sk || '#e63946';
+  var px = PLAYER_X + (L.cx || 0) - camX;
+  ctx.save();
+  ctx.translate(px, GROUND_Y);
+  ctx.fillStyle = skinColor;
+  ctx.fillRect(-9, -70, 18, 60);
+  ctx.beginPath();
+  ctx.arc(0, -100, 19, 0, Math.PI * 2);
+  ctx.fillStyle = '#f0c49a'; ctx.fill();
+  ctx.fillStyle = '#2d3142';
+  ctx.beginPath();
+  ctx.arc(0, -103, 19, Math.PI * 1.05, Math.PI * 2.05); ctx.fill();
+  ctx.save();
+  ctx.translate(8, -90);
+  ctx.rotate(0.72);
+  ctx.strokeStyle = L.dn || '#b07c42';
+  ctx.lineWidth = 11;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(104, 0); ctx.stroke();
+  ctx.restore();
+  ctx.restore();
+
+  if (L.bd > 0 && L.ph === 'result'){
+    ctx.save();
+    ctx.font = '900 42px system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText('+ ' + L.bd + ' m', W/2, 340);
+    ctx.restore();
+  }
+
+  if (L.pw !== undefined && (L.ph === 'power' || L.ph === 'air')){
+    ctx.save();
+    var pbw = 300, pbh = 20, pbx = W/2 - pbw/2, pby = H - 90;
+    rr(ctx, pbx, pby, pbw, pbh, 10);
+    ctx.fillStyle = 'rgba(10,14,24,0.7)'; ctx.fill();
+    rr(ctx, pbx, pby, pbw * (L.pw / 100), pbh, 10);
+    ctx.fillStyle = '#ffd166'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = '700 12px system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText('OPPONENT POWER', W/2, pby - 8);
+    ctx.restore();
+  }
+
+  ctx.restore();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+
 function drawToss(){
   ctx.fillStyle = 'rgba(10,14,24,0.94)';
   ctx.fillRect(0,0,W,H);
@@ -3984,7 +4463,6 @@ function drawJoinPopup(){
    ================================================================ */
 function setPhase(p){
   G.phase = p;
-  // ✅ FIX: shareButtonRect only for onlineResults/single gameOver
   if (p === 'gameOver'){
     G.shareButtonRect = (G.mode === 'single' || G.mode === 'onlineResults') ? { x: W - 160, y: 18, w: 130, h: 44 } : null;
   } else {
@@ -4079,11 +4557,34 @@ function buildShareText(){
   else if (G.mode === 'multi' && G.players[G.gameOverWinner]){ score = G.players[G.gameOverWinner].score; who = G.players[G.gameOverWinner].name + ' ne '; }
   return '🏏 Gulli Danda me ' + who + 'maine ' + score + ' pts banaye! Tod ke dikhao 👉 ' + SHARE_URL;
 }
+function grantShareBonus(){
+  if (G.shareBonusGiven) return;
+  G.shareBonusGiven = true;
+  var bonus = 0;
+  if (G.mode === 'single' && G.levelCleared) bonus = 50 + G.level * 10;
+  else if (G.mode === 'onlineResults' && G.gameOverWinner === 0) bonus = 100;
+  else if (G.mode === 'multi') bonus = 50;
+  else bonus = 25;
+  if (bonus > 0){
+    ACCOUNT.coins += bonus;
+    G.coinsEarned = (G.coinsEarned || 0) + bonus;
+    saveSession();
+    try { syncAccountStats(); } catch(e){}
+    G.banner = '🎁 SHARE BONUS +' + bonus + ' 🪙';
+    G.bannerTimer = 3.5;
+    playCoinSound();
+    trackEvent('share_bonus', { bonus: bonus, mode: G.mode });
+  }
+}
 function openShareOverlay(){
   shText = buildShareText();
   var s = G.mode === 'single' ? G.score : (G.players[0] ? G.players[0].score : G.score);
   document.getElementById('shScore').textContent = s + ' pts';
   document.getElementById('shTitle').textContent = (G.levelCleared || G.gameOverWinner === 0) ? 'GREAT MATCH!' : 'NICE TRY!';
+  var subEl = document.querySelector('.sh-sub');
+  if (subEl && !G.shareBonusGiven){
+    subEl.innerHTML = 'Share your score with friends<br><span style="color:#ffd166;font-weight:900;">🎁 +50 🪙 LIVE BONUS!</span>';
+  }
   shOverlay.classList.add('show');
   trackEvent('share_open', { mode: G.mode });
 }
@@ -4092,10 +4593,15 @@ function showToast(){
   var t = document.getElementById('shToast'); t.classList.add('show');
   setTimeout(function(){ t.classList.remove('show'); }, 1500);
 }
-document.getElementById('shWhatsApp').addEventListener('click', function(){ window.open('https://wa.me/?text=' + encodeURIComponent(shText), '_blank'); trackEvent('share_whatsapp'); });
+document.getElementById('shWhatsApp').addEventListener('click', function(){
+  window.open('https://wa.me/?text=' + encodeURIComponent(shText), '_blank');
+  grantShareBonus();
+  trackEvent('share_whatsapp');
+});
 document.getElementById('shMore').addEventListener('click', function(){
   if (navigator.share){ navigator.share({ title: 'Gulli Danda', text: shText, url: SHARE_URL }).catch(function(){}); }
   else { window.open('https://wa.me/?text=' + encodeURIComponent(shText), '_blank'); }
+  grantShareBonus();
 });
 document.getElementById('shCopy').addEventListener('click', function(){
   function fallback(){
@@ -4104,6 +4610,7 @@ document.getElementById('shCopy').addEventListener('click', function(){
   }
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(shText).then(showToast).catch(fallback);
   else fallback();
+  grantShareBonus();
 });
 document.getElementById('shClose').addEventListener('click', closeShare);
 
@@ -4141,6 +4648,10 @@ function draw(){
     drawPlayer(); drawEffects();
     if (ph === 'turnIntro') drawTurnIntro(); else if (ph === 'turnEnd') drawTurnEnd(); else drawGameOver();
   }
+  else if (ph === 'waitingOpp'){
+    drawDistanceMarkers();
+    drawSpectatorView();
+  }
   else {
     drawDistanceMarkers();
     if (ph === 'fielding' || ph === 'throw' || ph === 'result') drawDandaOnGround();
@@ -4148,7 +4659,6 @@ function draw(){
     for (i=0;i<fielders.length;i++) drawFielder(fielders[i]);
     drawGulli(); drawPlayer(); drawEffects();
     drawPowerMeter(); drawShotSelector(false); drawCurrentPlayerBadge(); drawOverlays();
-    if (ph === 'waitingOpp') drawWaitingOpp();
   }
   drawStickers(frameDt);
   ctx.restore();
@@ -4181,6 +4691,7 @@ function updateHUD(){
   }
   var showChat = G.mode === 'online' && ['power','air','fly','fielding','throw','result','waitingOpp'].indexOf(G.phase) >= 0;
   chatBar.style.display = showChat ? 'flex' : 'none';
+  updateChatVisibility();
 }
 var last = performance.now(), roomJoinTried = false;
 function loop(now){
